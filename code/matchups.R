@@ -64,12 +64,37 @@ matchups_count("~/pCloudDrive/Documents/OMTAB/HYPERNETS/MATCHUPS_in-situ_dm_10_L
 matchups_count("~/pCloudDrive/Documents/OMTAB/HYPERNETS/MATCHUPS_in-situ_dm_10_LW/all_metrics_min_350_max_800_L1C_LW.xlsx", remote = FALSE)
 
 
+# List of Rw matchups -----------------------------------------------------
+
+# Find all of the Rhow matchups and remove Ed and Lw that didn't pass QC to Rhow
+RW_files <- list.files("~/pCloudDrive/Documents/OMTAB/HYPERNETS/MATCHUPS_in-situ_dm_10_RHOW", pattern = "*.csv", full.names = TRUE)
+RW_files <- RW_files[!grepl("all", RW_files)]
+
+# There is an issue with some day or time values being non-numeric
+RW_load <- function(file_name){
+  suppressMessages(
+    df <- read_delim(file_name, delim = ";") |> 
+      mutate(day = as.character(day),
+             time = as.character(time))
+  )
+  colnames(df)[1] <- "sensor"
+  df <- dplyr::select(df, sensor, day, time, longitude, latitude) |> 
+    mutate(sensor = gsub(" 1$| 2$| 3$| 4$| 5$| 6$| 7$| 8$| 9$", "", sensor)) |> 
+    distinct()
+  return(df)
+}
+# RW_all <- purrr::map_dfr(RW_files, RW_load)
+# RW_all <- RW_all |> distinct() |> arrange(sensor, day, time)
+# write_csv(RW_all, "meta/all_in-situ_dm_10_RHOW_stations.csv")
+RW_all <- read_csv("meta/all_in-situ_dm_10_RHOW_stations.csv", col_types = "cccdd")
+
+
 # Individual matchup stats ------------------------------------------------
 
 # Function that interrogates each matchup file to produce the needed output for all following comparisons
 # file_path <- "~/pCloudDrive/Documents/OMTAB/HYPERNETS/MATCHUPS_in-situ_dm_10_ED/HYPERNETS_W_TAFR_L1C_ED_20240808T0657_270_vs_TRIOS_350_800.csv"
 # file_path <- file_list[1]
-process_matchup_file <- function(file_path){
+process_matchup_file <- function(file_path, filter_table = NULL){
   
   # Load the data
   suppressMessages(
@@ -79,12 +104,24 @@ process_matchup_file <- function(file_path){
   
   # Removes 1,2,3 etc. from sensor column values
   df_mean <- df_base |> 
-    mutate(sensor = gsub(" 1$| 2$| 3$| 4$| 5$| 6$| 7$| 8$| 9$", "", sensor)) |> 
+    mutate(sensor = gsub(" 1$| 2$| 3$| 4$| 5$| 6$| 7$| 8$| 9$", "", sensor),
+           day = as.character(day),
+           time = as.character(time)) |> 
     # mutate(dateTime = as.POSIXct(paste(day, time), format = "%Y%m%d %H%M%S")) |> # make this later
     group_by(sensor, day, time, longitude, latitude) |>
     summarise_all(mean, na.rm = TRUE) |> 
     ungroup()
   # print(df_mean[,1:10])
+  
+  # Filter based on filter_table if provided
+  if(!is.null(filter_table)){
+    df_mean <- semi_join(df_mean, filter_table, by = c("sensor", "day", "time", "longitude", "latitude"))
+  }
+  
+  if(nrow(df_mean) < 2){
+    print(paste("Not enough data in", basename(file_path), "after filtering, skipping..."))
+    return(NULL)
+  }
   
   # Sensors to be compared
   sensors <- unique(df_mean$sensor)
@@ -174,7 +211,7 @@ process_matchup_file <- function(file_path){
 
 # Function that runs this over all matchup files in a directory
 # dir_path <- "~/pCloudDrive/Documents/OMTAB/HYPERNETS/MATCHUPS_in-situ_dm_10_ED"
-process_matchup_folder <- function(dir_path){
+process_matchup_folder <- function(dir_path, filter_table = NULL){
   
   # List all files in directory
   file_list <- list.files(dir_path, pattern = "*.csv", full.names = TRUE)
@@ -183,18 +220,27 @@ process_matchup_folder <- function(dir_path){
   file_list <- file_list[!grepl("all", file_list)]
   
   # Initialise results data.frame
-  df_results <- plyr::ldply(file_list, process_matchup_file, .parallel = TRUE)
+  df_results <- plyr::ldply(file_list, process_matchup_file, .parallel = TRUE, 
+                            filter_table = filter_table)
   
   # Save results and exit
-  file_name <- paste0("all_",basename(dir_path),"_matchup_stats.csv")
+  if(is.null(filter_table)){
+    file_name <- paste0("all_",basename(dir_path),"_matchup_stats.csv")
+  }  else {
+    file_name <- paste0("all_",basename(dir_path),"_matchup_stats_filtered.csv")
+  }
   write_csv(df_results, file.path(dir_path, file_name))
 }
 
 # Run for all folders
 ## In situ matchups
+### NB: The RW_all onject used here was created below, which is not ideal...
 process_matchup_folder("~/pCloudDrive/Documents/OMTAB/HYPERNETS/MATCHUPS_in-situ_dm_10_ED")
+process_matchup_folder("~/pCloudDrive/Documents/OMTAB/HYPERNETS/MATCHUPS_in-situ_dm_10_ED", filter_table = RW_all) # Filter based on RW passed QC
 process_matchup_folder("~/pCloudDrive/Documents/OMTAB/HYPERNETS/MATCHUPS_in-situ_dm_10_LD")
+process_matchup_folder("~/pCloudDrive/Documents/OMTAB/HYPERNETS/MATCHUPS_in-situ_dm_10_LD", filter_table = RW_all) # Filter based on RW passed QC
 process_matchup_folder("~/pCloudDrive/Documents/OMTAB/HYPERNETS/MATCHUPS_in-situ_dm_10_LW")
+process_matchup_folder("~/pCloudDrive/Documents/OMTAB/HYPERNETS/MATCHUPS_in-situ_dm_10_LW", filter_table = RW_all) # Filter based on RW passed QC
 process_matchup_folder("~/pCloudDrive/Documents/OMTAB/HYPERNETS/MATCHUPS_in-situ_dm_10_RHOW")
 ## Satellite matchups
 process_matchup_folder("~/pCloudDrive/Documents/OMTAB/HYPERNETS/MATCHUPS_dm_120_min_350_max_800/MODIS")
@@ -230,7 +276,7 @@ in_situ_LW_dup <- n_matchup_dup("~/pCloudDrive/Documents/OMTAB/HYPERNETS/MATCHUP
 in_situ_RW_dup <- n_matchup_dup("~/pCloudDrive/Documents/OMTAB/HYPERNETS/MATCHUPS_in-situ_dm_10_RHOW/all_MATCHUPS_in-situ_dm_10_RHOW_matchup_stats.csv")
 
 # Plot Ed duplicates (all duplicates are same except Ld)
-in_situ_ED_dup |> 
+in_situ_ED_dup_map <- in_situ_ED_dup |> 
   filter(sensor_X == "HYPERPRO") |> 
   ggplot(aes(x = lon_X, y = lat_X)) +
   annotation_borders("world", colour = "gray80", fill = "gray80") +
@@ -244,6 +290,7 @@ in_situ_ED_dup |>
   theme_minimal() +
   theme(legend.position = "bottom",
         panel.border = element_rect(fill = NA, color = "black"))
+ggsave("figures/test_HYPERPRO_matchup_duplicates.png", in_situ_ED_dup_map, width = 8, height = 6, dpi = 600)
 
 
 # Global statistics --------------------------------------------------------
@@ -372,9 +419,85 @@ VIIRS_J2_stats <- global_stats("~/pCloudDrive/Documents/OMTAB/HYPERNETS/MATCHUPS
 
 # Filter global stats based on MAPE ---------------------------------------
 
+# Load Ed
+# Plot difference in Rw filtered vs unfiltered matchups
+in_situ_ED_matchups <- read_csv("~/pCloudDrive/Documents/OMTAB/HYPERNETS/MATCHUPS_in-situ_dm_10_ED/all_MATCHUPS_in-situ_dm_10_ED_matchup_stats.csv") |> 
+  mutate(sensor_pair = paste(sensor_X, "vs", sensor_Y), .before = sensor_X,
+         date = as.Date(dateTime_X)) |> 
+  filter(sensor_pair %in% c("HYPERPRO vs Hyp", "HYPERPRO vs TRIOS", "Hyp vs TRIOS"))
+in_situ_ED_matchups_filt <- read_csv("~/pCloudDrive/Documents/OMTAB/HYPERNETS/MATCHUPS_in-situ_dm_10_ED/all_MATCHUPS_in-situ_dm_10_ED_matchup_stats_filtered.csv") |> 
+  mutate(sensor_pair = paste(sensor_X, "vs", sensor_Y), .before = sensor_X,
+         date = as.Date(dateTime_X)) |> 
+  filter(sensor_pair %in% c("HYPERPRO vs Hyp", "HYPERPRO vs TRIOS", "Hyp vs TRIOS"))
+
 # Plot how the number of matchups is reduced with increasing MAPE threshold
+plot_MAPE_hist <- function(df, var_name, extra_title = ""){
+  ggplot(df, aes(x = MAPE)) +
+    geom_histogram(binwidth = 0.5, fill = "darkblue", color = "black", alpha = 0.7) +
+    geom_vline(xintercept = 5, color = "red", linetype = "dashed", linewidth = 1) +
+    labs(title = paste0(var_name, " matchup MAPE Distribution",extra_title),
+         x = "MAPE (%)",
+         y = "Count") +
+    theme_minimal()
+}
+plot_MAPE_hist(in_situ_ED_matchups, "Ed")
+plot_MAPE_hist(in_situ_ED_matchups_filt, "Ed", "; Rw filter")
+
+# Save
+plot_ed_MAPE_hist <- ggpubr::ggarrange(plot_MAPE_hist(in_situ_ED_matchups, "ED"),
+                                       plot_MAPE_hist(in_situ_ED_matchups_filt, "ED", "; Rw filter"),
+                                       ncol = 2, nrow = 1, labels = c("a)", "b)"))
+ggsave("figures/test_Ed_MAPE_hist.png", plot_ed_MAPE_hist, width = 9, height = 4.5, dpi = 600)
 
 # Also how this reduces the matchups on the map
+plot_insitu_map_MAPE <- function(df, var_name, MAPE_filt, extra_title = ""){
+  
+  # Number of samples for label
+  n_samples <- nrow(filter(df, MAPE <= MAPE_filt))
+  
+  # Plot
+  df |> 
+    filter(MAPE <= MAPE_filt) |> 
+    ggplot(aes(x = lon_X, y = lat_X)) +
+    annotation_borders("world", colour = "gray80", fill = "gray80") +
+    geom_point(aes(colour = MAPE), size = 3) +
+    annotate("label", x = min(df$lon_X)-1, y = max(df$lat_X)+1,
+             label = paste0("n = ", n_samples),
+             fill = "white", color = "black", size = 5, fontface = "bold") +
+    scale_colour_viridis_c(option = "plasma") +
+    # geom_point(aes(size = MAPE, colour = sensor_pair), alpha = 0.7) +
+    # scale_colour_manual(values = c("HYPERPRO vs Hyp" = "darkblue",
+    #                                "HYPERPRO vs TRIOS" = "darkgreen",
+    #                                "Hyp vs TRIOS" = "darkred")) +
+    coord_quickmap(xlim = c(min(df$lon_X)-2, max(df$lon_X)+2),
+                   ylim = c(min(df$lat_X)-2, max(df$lat_X))+1) +
+    labs(title = paste0("In situ ", var_name," Matchups (MAPE ≤ ", MAPE_filt, "%",extra_title,")"),
+         x = "Longitude (°E)",
+         y = "Latitude (°N)",
+         # colour = "Sensor Pair",
+         colour = "MAPE (%)") +
+    theme_minimal() +
+    theme(legend.position = "bottom",
+          panel.border = element_rect(fill = NA, color = "black"))
+}
+plot_insitu_map_MAPE(in_situ_ED_matchups, "ED", 5)
+plot_insitu_map_MAPE(in_situ_ED_matchups_filt, "ED", 5, "; Rw filter")
+plot_insitu_map_MAPE(in_situ_ED_matchups, "ED", 50)
+plot_insitu_map_MAPE(in_situ_ED_matchups_filt, "ED", 50, "; Rw filter")
+
+# Save
+plot_ed_MAPE_filt <- ggpubr::ggarrange(plot_insitu_map_MAPE(in_situ_ED_matchups, "ED", 5),
+                                       plot_insitu_map_MAPE(in_situ_ED_matchups, "ED", 50),
+                                       plot_MAPE_hist(in_situ_ED_matchups),
+                                       ncol = 3, nrow = 1, labels = c("a)", "b)", "c)"))
+ggsave("figures/test_Ed_MAPE_filt.png", plot_ed_MAPE_filt, width = 18, height = 4.5, dpi = 600)
+plot_ed_MAPE_RW_filt <- ggpubr::ggarrange(plot_insitu_map_MAPE(in_situ_ED_matchups, "ED", 5),
+                                       plot_insitu_map_MAPE(in_situ_ED_matchups_filt, "ED", 5, "; Rw filter"),
+                                       plot_insitu_map_MAPE(in_situ_ED_matchups, "ED", 50),
+                                       plot_insitu_map_MAPE(in_situ_ED_matchups_filt, "ED", 50, "; Rw filter"),
+                                       ncol = 2, nrow = 2, labels = c("a)", "b)", "c)", "d)"), align = "hv")
+ggsave("figures/test_Ed_MAPE_RW_filt.png", plot_ed_MAPE_RW_filt, width = 12, height = 8.7, dpi = 600)
+
 
 # And how this affects the other statistical results
 
@@ -382,11 +505,35 @@ VIIRS_J2_stats <- global_stats("~/pCloudDrive/Documents/OMTAB/HYPERNETS/MATCHUPS
 # List of bad matchups ----------------------------------------------------
 
 # This is based on all of the high MAPE values detected above
+# NB: This is just an example of what an output could look like
+# One could then act on the bias value to decide whether to block the use of sensor X or Y
 in_situ_ED_bad <- read_csv("~/pCloudDrive/Documents/OMTAB/HYPERNETS/MATCHUPS_in-situ_dm_10_ED/all_MATCHUPS_in-situ_dm_10_ED_matchup_stats.csv") |> 
   mutate(sensor_pair = paste(sensor_X, "vs", sensor_Y), .before = sensor_X,
          date = as.Date(dateTime_X)) |> 
   filter(sensor_pair %in% c("HYPERPRO vs Hyp", "HYPERPRO vs TRIOS", "Hyp vs TRIOS")) |> 
   filter(MAPE > 5)
+
+# Or rather find all of the Rhow matchups and remove Ed and Lw that didn't pass QC to Rhow
+RW_files <- list.files("~/pCloudDrive/Documents/OMTAB/HYPERNETS/MATCHUPS_in-situ_dm_10_RHOW", pattern = "*.csv", full.names = TRUE)
+RW_files <- RW_files[!grepl("all", RW_files)]
+
+# There is an issue with some day or time values being non-numeric
+RW_load <- function(file_name){
+  suppressMessages(
+  df <- read_delim(file_name, delim = ";") |> 
+    mutate(day = as.character(day),
+           time = as.character(time))
+  )
+  colnames(df)[1] <- "sensor"
+  df <- dplyr::select(df, sensor, day, time, longitude, latitude) |> 
+    mutate(sensor = gsub(" 1$| 2$| 3$| 4$| 5$| 6$| 7$| 8$| 9$", "", sensor)) |> 
+    distinct()
+  return(df)
+}
+# RW_all <- purrr::map_dfr(RW_files, RW_load)
+# RW_all <- RW_all |> distinct() |> arrange(sensor, day, time)
+write_csv(RW_all, "meta/all_in-situ_dm_10_RHOW_stations.csv")
+RW_all <- read_csv("meta/all_in-situ_dm_10_RHOW_stations.csv")
 
 
 # Plot matchups -----------------------------------------------------------
