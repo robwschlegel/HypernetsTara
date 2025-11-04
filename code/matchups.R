@@ -4,6 +4,7 @@
 # Libraries ---------------------------------------------------------------
 
 library(tidyverse)
+library(readxl)
 library(geosphere) # For determining distance between points
 library(doParallel); registerDoParallel(cores = detectCores() - 2)
 
@@ -234,7 +235,6 @@ process_matchup_folder <- function(dir_path, filter_table = NULL){
 
 # Run for all folders
 ## In situ matchups
-### NB: The RW_all onject used here was created below, which is not ideal...
 process_matchup_folder("~/pCloudDrive/Documents/OMTAB/HYPERNETS/MATCHUPS_in-situ_dm_10_ED")
 process_matchup_folder("~/pCloudDrive/Documents/OMTAB/HYPERNETS/MATCHUPS_in-situ_dm_10_ED", filter_table = RW_all) # Filter based on RW passed QC
 process_matchup_folder("~/pCloudDrive/Documents/OMTAB/HYPERNETS/MATCHUPS_in-situ_dm_10_LD")
