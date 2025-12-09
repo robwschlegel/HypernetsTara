@@ -19,7 +19,7 @@ library(ncdf4)
 # Extract and compare the different PACE versions
 
 # Basic structure
-ncdump::NetCDF("~/Downloads/Netcdf_PACE/V2.0/PACE_OCI.20240809T105059.L2.OC_AOP.V2_0.NRT.nc")
+info_PACE <- ncdump::NetCDF("~/Downloads/Netcdf_PACE/V2.0/PACE_OCI.20240809T105059.L2.OC_AOP.V2_0.NRT.nc")
 
 # Variables
 list_vars <- ncdump::NetCDF("~/Downloads/Netcdf_PACE/V2.0/PACE_OCI.20240809T105059.L2.OC_AOP.V2_0.NRT.nc")$variable
@@ -28,7 +28,17 @@ list_vars <- ncdump::NetCDF("~/Downloads/Netcdf_PACE/V2.0/PACE_OCI.20240809T1050
 # PACE_v2 <- tidync("~/Downloads/Netcdf_PACE/V2.0/PACE_OCI.20240809T105059.L2.OC_AOP.V2_0.NRT.nc") |> 
   # hyper_tibble()
 nc_data <- nc_open("~/Downloads/Netcdf_PACE/V2.0/PACE_OCI.20240809T105059.L2.OC_AOP.V2_0.NRT.nc")
-print(nc_data)
+print(nc_data$var)
+nm_3d <- nc_data$dim[["wavelength_3d"]]
+nm_3d <- ncvar_get(nc_data, "wavelength_3d", verbose = TRUE)
+# nm_data <- ncvar_get(nc_data, "sensor_band_parameters/wavelength_3d")
 nm_data <- ncvar_get(nc_data, "sensor_band_parameters/wavelength")
 aw_data <- ncvar_get(nc_data, "sensor_band_parameters/aw")
+rrs_data <- ncvar_get(nc_data, "geophysical_data/Rrs")
+rrs_l2f_data <- ncvar_get(nc_data, "geophysical_data/l2_flags")
+lon_data <- ncvar_get(nc_data, "navigation_data/longitude")
+lat_data <- ncvar_get(nc_data, "navigation_data/latitude")
 
+# test for wavelengths
+rrs_data_1 <- as.vector(rrs_data[28,,])
+range(rrs_data_1, na.rm = TRUE)
