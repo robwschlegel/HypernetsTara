@@ -17,10 +17,10 @@ import rasterio as rio
 import xarray as xr
 # import rioxarray
 # import cartopy
-import cartopy.crs as ccrs
+# import cartopy.crs as ccrs
 
 import numpy as np
-import pandas as pd
+# import pandas as pd
 
 # import matplotlib.pyplot as plt
 # import holoviews as hv
@@ -52,7 +52,7 @@ def process_pace_data(file_path, wavelength, print_nm = False):
     )
     
     # Check the wavelengths available for PACE
-    if print_nm
+    if print_nm:
         print(ds["wavelength_3d"])
 
     # Extract wavelength
@@ -79,10 +79,15 @@ def process_pace_data(file_path, wavelength, print_nm = False):
     sr_df.to_csv(output_file, index=False)
     
     return
-    # return sr_df
 
 
-# Usage example
+# Process data
+# V2.0
+### Rrs 413 gives the most contrasted image. Using this for the other versions.
 process_pace_data("~/Downloads/Netcdf_PACE/V2.0/PACE_OCI.20240809T105059.L2.OC_AOP.V2_0.NRT.nc", 413)
 process_pace_data("~/Downloads/Netcdf_PACE/V2.0/PACE_OCI.20240809T105059.L2.OC_AOP.V2_0.NRT.nc", 450)
 process_pace_data("~/Downloads/Netcdf_PACE/V2.0/PACE_OCI.20240809T105059.L2.OC_AOP.V2_0.NRT.nc", 480)
+# V3.0
+process_pace_data("~/Downloads/Netcdf_PACE/V3.0/PACE_OCI.20240809T105059.L2.OC_AOP.V3_0.nc", 413)
+# V3.1
+process_pace_data("~/Downloads/Netcdf_PACE/V3.1/PACE_OCI.20240809T105059.L2.OC_AOP.V3_1.nc", 413)

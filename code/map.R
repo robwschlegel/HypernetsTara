@@ -54,3 +54,11 @@ v2_480 <- read_csv("data/PACE_OCI.20240809T105059.L2.OC_AOP.V2_0.NRT_rrs_480.csv
 map_PACE(v2_413)
 map_PACE(v2_450)
 map_PACE(v2_480)
+
+v3_413 <- read_csv("data/PACE_OCI.20240809T105059.L2.OC_AOP.V3_0_rrs_413.csv") |> filter(!is.na(Rrs))
+v31_413 <- read_csv("data/PACE_OCI.20240809T105059.L2.OC_AOP.V3_1_rrs_413.csv") |> filter(!is.na(Rrs))
+
+map_PACE(v2_413)
+map_PACE(v3_413)
+map_PACE(v31_413)
+
