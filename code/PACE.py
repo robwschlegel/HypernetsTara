@@ -5,30 +5,30 @@
 # https://nasa.github.io/VITALS/python/Exploring_PACE_OCI_L2_SFRFL.html
 
 # Import required libraries
-import csv
-import math
-from io import BytesIO
+# import csv
+# import math
+# from io import BytesIO
 import pathlib
 
-import netCDF4
-import cf_xarray
-import earthaccess
+# import netCDF4
+# import cf_xarray
+# import earthaccess
 import rasterio as rio
 import xarray as xr
-import rioxarray
-import cartopy
+# import rioxarray
+# import cartopy
 import cartopy.crs as ccrs
 
 import numpy as np
 import pandas as pd
 
-import matplotlib.pyplot as plt
-import holoviews as hv
-import geoviews as gv
-import hvplot.xarray
+# import matplotlib.pyplot as plt
+# import holoviews as hv
+# import geoviews as gv
+# import hvplot.xarray
 
 # Process one wavelength from an L@ PACE NetCDF file
-def process_pace_data(file_path, wavelength):
+def process_pace_data(file_path, wavelength, print_nm = False):
     """
     Process PACE OCI data and extract reflectance at specified wavelength.
     
@@ -51,6 +51,10 @@ def process_pace_data(file_path, wavelength):
         )
     )
     
+    # Check the wavelengths available for PACE
+    if print_nm
+        print(ds["wavelength_3d"])
+
     # Extract wavelength
     rrs = ds["Rrs"].sel({"wavelength_3d": wavelength}, method="nearest")
     
@@ -74,8 +78,11 @@ def process_pace_data(file_path, wavelength):
     output_file = f'data/{base_name}_rrs_{wavelength}.csv'
     sr_df.to_csv(output_file, index=False)
     
-    return sr_df
+    return
+    # return sr_df
 
 
 # Usage example
+process_pace_data("~/Downloads/Netcdf_PACE/V2.0/PACE_OCI.20240809T105059.L2.OC_AOP.V2_0.NRT.nc", 413)
+process_pace_data("~/Downloads/Netcdf_PACE/V2.0/PACE_OCI.20240809T105059.L2.OC_AOP.V2_0.NRT.nc", 450)
 process_pace_data("~/Downloads/Netcdf_PACE/V2.0/PACE_OCI.20240809T105059.L2.OC_AOP.V2_0.NRT.nc", 480)
