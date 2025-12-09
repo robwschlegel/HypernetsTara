@@ -5,7 +5,6 @@
 # Libraries ---------------------------------------------------------------
 
 library(tidyverse)
-# library(tidync) # Not able to open PACE file structure
 library(ncdf4)
 
 
@@ -18,27 +17,29 @@ library(ncdf4)
 
 # Extract and compare the different PACE versions
 
-# Basic structure
-info_PACE <- ncdump::NetCDF("~/Downloads/Netcdf_PACE/V2.0/PACE_OCI.20240809T105059.L2.OC_AOP.V2_0.NRT.nc")
+# Load data extracted via Python script
+v2_all <- read_csv("data/rrs.csv")
+v2_all_full <- v2_all |> 
+  # dplyr::select(wavelength_3d) |> 
+  # distinct()
+  # filter(wavelength_3d == 380) |> 
+  filter(!is.na(Rrs)) |> 
+  filter(Rrs != 0) #|> 
+  # mutate(longitude = plyr::round_any(longitude, 0.05), 
+         # latitude = plyr::round_any(latitude, 0.05)) |> 
+  # summarise(Rrs = mean(Rrs, na.rm = TRUE), .by = c("longitude", "latitude"))
 
-# Variables
-list_vars <- ncdump::NetCDF("~/Downloads/Netcdf_PACE/V2.0/PACE_OCI.20240809T105059.L2.OC_AOP.V2_0.NRT.nc")$variable
+v2_480 <- read_csv("data/rrs_480.csv")
+v2_480_full <- filter(v2_480, !is.na(Rrs)) |> 
+  mutate(longitude = plyr::round_any(longitude, 0.05), 
+         latitude = plyr::round_any(latitude, 0.05)) |> 
+  summarise(Rrs = mean(Rrs, na.rm = TRUE), .by = c("longitude", "latitude"))
 
-# v2.0
-# PACE_v2 <- tidync("~/Downloads/Netcdf_PACE/V2.0/PACE_OCI.20240809T105059.L2.OC_AOP.V2_0.NRT.nc") |> 
-  # hyper_tibble()
-nc_data <- nc_open("~/Downloads/Netcdf_PACE/V2.0/PACE_OCI.20240809T105059.L2.OC_AOP.V2_0.NRT.nc")
-print(nc_data$var)
-nm_3d <- nc_data$dim[["wavelength_3d"]]
-nm_3d <- ncvar_get(nc_data, "wavelength_3d", verbose = TRUE)
-# nm_data <- ncvar_get(nc_data, "sensor_band_parameters/wavelength_3d")
-nm_data <- ncvar_get(nc_data, "sensor_band_parameters/wavelength")
-aw_data <- ncvar_get(nc_data, "sensor_band_parameters/aw")
-rrs_data <- ncvar_get(nc_data, "geophysical_data/Rrs")
-rrs_l2f_data <- ncvar_get(nc_data, "geophysical_data/l2_flags")
-lon_data <- ncvar_get(nc_data, "navigation_data/longitude")
-lat_data <- ncvar_get(nc_data, "navigation_data/latitude")
-
-# test for wavelengths
-rrs_data_1 <- as.vector(rrs_data[28,,])
-range(rrs_data_1, na.rm = TRUE)
+# Plot
+ggplot(data = v2_all_full) +
+  borders() +
+  # geom_point(aes(x = longitude, y = latitude, colour = Rrs)) +
+  geom_tile(aes(x = longitude, y = latitude, fill = Rrs)) +
+  scale_colour_viridis_c(aesthetics = c("colour", "fill")) +
+  coord_quickmap(xlim = c(min(v2_all_full$longitude), max(v2_all_full$longitude)),
+                 ylim = c(min(v2_all_full$latitude), max(v2_all_full$latitude)))

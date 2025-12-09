@@ -8,12 +8,14 @@
 import csv
 import math
 from io import BytesIO
+import pathlib
 
 import netCDF4
 import cf_xarray
 import earthaccess
 import rasterio as rio
 import xarray as xr
+import rioxarray
 import cartopy
 import cartopy.crs as ccrs
 
@@ -25,32 +27,55 @@ import holoviews as hv
 import geoviews as gv
 import hvplot.xarray
 
-
-datatree = xr.open_datatree("~/Downloads/Netcdf_PACE/V2.0/PACE_OCI.20240809T105059.L2.OC_AOP.V2_0.NRT.nc", decode_timedelta=False)
-datatree
-
-ds = xr.merge(
-    (
-        datatree.ds,
-        datatree["geophysical_data"].ds[["Rrs", "l2_flags"]],
-        datatree["sensor_band_parameters"].coords,
-        datatree["navigation_data"].ds.set_coords(("longitude", "latitude")).coords,
+# Process one wavelength from an L@ PACE NetCDF file
+def process_pace_data(file_path, wavelength):
+    """
+    Process PACE OCI data and extract reflectance at specified wavelength.
+    
+    Args:
+        file_path: Path to the NetCDF PACE OCI file
+        wavelength: Wavelength value to extract from wavelength_3d
+    
+    Returns:
+        DataFrame with processed reflectance data
+    """
+    # Open and merge data
+    datatree = xr.open_datatree(file_path, decode_timedelta=False)
+    
+    ds = xr.merge(
+        (
+            datatree.ds,
+            datatree["geophysical_data"].ds[["Rrs", "l2_flags"]],
+            datatree["sensor_band_parameters"].coords,
+            datatree["navigation_data"].ds.set_coords(("longitude", "latitude")).coords,
+        )
     )
-)
-ds
+    
+    # Extract wavelength
+    rrs = ds["Rrs"].sel({"wavelength_3d": wavelength}, method="nearest")
+    
+    # Grid the data
+    sr_src = rrs.rio.set_spatial_dims("pixels_per_line", "number_of_lines").rio.write_crs("epsg:4326")
+    sr_dst = sr_src.rio.reproject(
+        dst_crs=sr_src.rio.crs,
+        src_geoloc_array=(
+            sr_src.coords["longitude"],
+            sr_src.coords["latitude"],
+        ),
+        nodata=np.nan,
+        resampling=rio.warp.Resampling.nearest,
+    ).rename({'y': 'latitude', 'x': 'longitude'})
+    
+    # Convert to DataFrame
+    sr_df = sr_dst.to_dataframe().reset_index()
+    
+    # Generate output filename based on input file path
+    base_name = pathlib.Path(file_path).stem
+    output_file = f'data/{base_name}_rrs_{wavelength}.csv'
+    sr_df.to_csv(output_file, index=False)
+    
+    return sr_df
 
-# Check the wavelengths available for PACE 
-ds["wavelength_3d"]
 
-rrs_480 = ds["Rrs"].sel({"wavelength_3d": 480}, method="nearest")
-
-plot = rrs_480.plot(x="longitude", y="latitude", cmap="viridis", vmin=0)
-
-fig = plt.figure()
-ax = plt.axes(projection=ccrs.PlateCarree())
-ax.coastlines()
-ax.gridlines(draw_labels={"left": "y", "bottom": "x"})
-plot = rrs_480.plot(x="longitude", y="latitude", cmap="viridis", vmin=0, ax=ax)
-plt.show()
-
-rrs_480
+# Usage example
+process_pace_data("~/Downloads/Netcdf_PACE/V2.0/PACE_OCI.20240809T105059.L2.OC_AOP.V2_0.NRT.nc", 480)
