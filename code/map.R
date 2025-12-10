@@ -60,12 +60,18 @@ pl_map <- ggplot(data = station_HP) +
   scale_colour_date(guide = "legend", low = "pink", high = "purple") +
   # scale_colour_viridis_c(option = "A", guide = "legend") +
   scale_fill_viridis_c() +
+  guides(fill = guide_colorbar(barwidth = 20, barheight = 2)) +
   labs(x = "Longitude (°E)", y = "Latitude (°N)", 
-       colour = "Sampling date", fill = "Water Leaving Reflectance (Rhow; 413 nm)") +
+       colour = "Sampling date", fill = "Remote sensing reflectance\n(Rrs; 413 nm)") +
   coord_quickmap(xlim = c(7, 25), ylim = c(35, 42)) +
   theme(panel.border = element_rect(colour = "black", fill = NA),
-        legend.position = "top")
-ggsave("figures/fig_1.png", pl_map, height = 9, width = 16)
+        legend.position = "top", 
+        legend.box = "vertical",
+        legend.title = element_text(size = 20),
+        legend.text = element_text(size = 18),
+        axis.title = element_text(size = 20),
+        axis.text = element_text(size = 18))
+ggsave("figures/fig_1.png", pl_map, height = 9, width = 14)
 
 
 # PACE --------------------------------------------------------------------
@@ -158,10 +164,10 @@ pl_left <- v_comp_long |>
 
 # Plot spectra differences
 pl_right <- ggplot(v_all_spectra_long) +
-  geom_path(aes(x = nm, y = value, colour = version), 
+  geom_path(aes(x = nm, y = value, colour = version),
             linewidth = 2, alpha = 0.8) +
   geom_vline(xintercept = 413) +
-  labs(x = "Wavelength (nm)", y = "Water Leaving Reflectance (Rhow)") +
+  labs(x = "Wavelength (nm)", y = "Remote sensing reflectance (Rrs)") +
   scale_color_brewer(palette = "YlGnBu") +
   # scale_colour_viridis_d(option = "B") + # yuck
   scale_y_continuous(expand = c(-0.1, 0.005)) +
