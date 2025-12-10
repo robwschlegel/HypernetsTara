@@ -103,12 +103,12 @@ vall_413 <- left_join(v2_413, v3_413, by = join_by(latitude, longitude)) |>
   mutate(v2_v3 = (v2_Rrs / v3_Rrs)*100,
          v2_v31 = (v2_Rrs / v31_Rrs)*100,
          v3_v31 = (v3_Rrs / v31_Rrs)*100) |> 
-  # mutate(v2_v3 = ifelse(v2_v3 > 2, 2, v2_v3),
-  #        v2_v31 = ifelse(v2_v31 > 2, 2, v2_v3),
-  #        v3_v31 = ifelse(v3_v31 > 2, 2, v2_v3),
-  #        v2_v3 = ifelse(v2_v3 < -2, -2, v2_v3),
-  #        v2_v31 = ifelse(v2_v31 < -2, -2, v2_v3),
-  #        v3_v31 = ifelse(v3_v31 < -2, -2, v2_v3)) |>
+  mutate(v2_v3 = ifelse(v2_v3 > 200, 200, v2_v3),
+         v2_v31 = ifelse(v2_v31 > 200, 200, v2_v31),
+         v3_v31 = ifelse(v3_v31 > 200, 200, v3_v31),
+         v2_v3 = ifelse(v2_v3 < -200, -200, v2_v3),
+         v2_v31 = ifelse(v2_v31 < -200, -200, v2_v31),
+         v3_v31 = ifelse(v3_v31 < -200, -200, v3_v31)) |>
   # mutate(v2_v3 = cut(v2_v3, seq(-200, 200, 50)),
   #        v2_v31 = cut(v2_v31, seq(-200, 200, 50)),
   #        v3_v31 = cut(v3_v31, seq(-200, 200, 50)))
@@ -169,6 +169,7 @@ pl_right <- ggplot(v_all_spectra_long) +
         legend.position = "bottom")
 
 # Put it all together
-pl_all <- pl_top / (pl_left + pl_right)
+pl_all <- (pl_top / (pl_left + pl_right)) +
+  plot_annotation(tag_levels = 'a', tag_suffix = ')')
 ggsave("figures/fig_S1.png", pl_all, height = 9, width = 14)
 
