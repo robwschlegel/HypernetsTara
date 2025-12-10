@@ -92,3 +92,7 @@ process_pace_data("~/Downloads/Netcdf_PACE/V2.0/PACE_OCI.20240809T105059.L2.OC_A
 process_pace_data("~/Downloads/Netcdf_PACE/V3.0/PACE_OCI.20240809T105059.L2.OC_AOP.V3_0.nc", 413)
 # V3.1
 process_pace_data("~/Downloads/Netcdf_PACE/V3.1/PACE_OCI.20240809T105059.L2.OC_AOP.V3_1.nc", 413)
+process_pace_data("~/Downloads/Netcdf_PACE/V3.1/PACE_OCI.20240812T105611.L2.OC_AOP.V3_1.nc", 413)
+process_pace_data("~/Downloads/Netcdf_PACE/V3.1/PACE_OCI.20240813T113041.L2.OC_AOP.V3_1.nc", 413)
+process_pace_data("~/Downloads/Netcdf_PACE/V3.1/PACE_OCI.20240814T120512.L2.OC_AOP.V3_1.nc", 413)
+process_pace_data("~/Downloads/Netcdf_PACE/V3.1/PACE_OCI.20240815T110624.L2.OC_AOP.V3_1.nc", 413)
