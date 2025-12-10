@@ -72,6 +72,7 @@ def process_pace_data(file_path, wavelength, print_nm = False):
     
     # Convert to DataFrame
     sr_df = sr_dst.to_dataframe().reset_index()
+    sr_df = sr_df[["latitude", "longitude", "Rrs"]]
     
     # Generate output filename based on input file path
     base_name = pathlib.Path(file_path).stem
