@@ -1,6 +1,7 @@
 # code/matchups.R
 # Get the stats for all matchups and visualise results
 
+
 # Libraries ---------------------------------------------------------------
 
 library(tidyverse)
@@ -50,7 +51,10 @@ matchups_count <- function(file_path, remote = TRUE){
 
 # Check matchups
 ## Satellite
-matchups_count("~/pCloudDrive/Documents/OMTAB/HYPERNETS/MATCHUPS_dm_120_min_350_max_800/MODIS/all_metrics_MODIS_AQUA_L2A_RHOW.xlsx")
+### MODIS AQUA
+matchups_count("~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results/RHOW_HYPERNETS_vs_AQUA/RHOW_HYPERNETS_vs_AQUA_metrics.xlsx")
+matchups_count("~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results/RHOW_TRIOS_vs_AQUA/RHOW_TRIOS_vs_AQUA_metrics.xlsx")
+
 matchups_count("~/pCloudDrive/Documents/OMTAB/HYPERNETS/MATCHUPS_dm_120_min_350_max_800/OLCI/all_metrics_min_350_max_800_OLCI_S3B_L2A_RHOW.xlsx")
 # matchups_count("~/pCloudDrive/Documents/OMTAB/HYPERNETS/MATCHUPS_dm_120_min_350_max_800/OLCI_S3A/all_metrics_min_350_max_800_OLCI_S3A_L2A_RHOW.xlsx")
 # matchups_count("~/pCloudDrive/Documents/OMTAB/HYPERNETS/MATCHUPS_dm_120_min_350_max_800/OLCI_S3B/all_metrics_min_350_max_800_OLCI_S3B_L2A_RHOW.xlsx")
@@ -68,7 +72,9 @@ matchups_count("~/pCloudDrive/Documents/OMTAB/HYPERNETS/MATCHUPS_in-situ_dm_10_L
 # List of Rw matchups -----------------------------------------------------
 
 # Find all of the Rhow matchups and remove Ed and Lw that didn't pass QC to Rhow
-RW_files <- list.files("~/pCloudDrive/Documents/OMTAB/HYPERNETS/MATCHUPS_in-situ_dm_10_RHOW", pattern = "*.csv", full.names = TRUE)
+# TODO : Run this on the three individual files and combine them
+RW_files <- list.files("~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results/RHOW_HYPERNETS_vs_TRIOS_vs_HYPERPRO/", 
+                       pattern = "*.csv", full.names = TRUE, recursive = TRUE)
 RW_files <- RW_files[!grepl("all", RW_files)]
 
 # There is an issue with some day or time values being non-numeric
@@ -85,9 +91,12 @@ RW_load <- function(file_name){
   return(df)
 }
 # RW_all <- purrr::map_dfr(RW_files, RW_load)
-# RW_all <- RW_all |> distinct() |> arrange(sensor, day, time)
-# write_csv(RW_all, "meta/all_in-situ_dm_10_RHOW_stations.csv")
-RW_all <- read_csv("meta/all_in-situ_dm_10_RHOW_stations.csv", col_types = "cccdd")
+# RW_all <- RW_all |> 
+#   mutate(day = as.integer(day),
+#          time = as.integer(time)) |> 
+#   distinct() |> arrange(sensor, day, time)
+# write_csv(RW_all, "meta/all_in-situ_RHOW_stations.csv")
+RW_all <- read_csv("meta/all_in-situ_RHOW_stations.csv", col_types = "ciidd")
 
 
 # Individual matchup stats ------------------------------------------------
@@ -105,11 +114,14 @@ process_matchup_file <- function(file_path, filter_table = NULL){
   
   # Removes 1,2,3 etc. from sensor column values
   df_mean <- df_base |> 
+    dplyr::select(-radiometer_id) |> 
     mutate(sensor = gsub(" 1$| 2$| 3$| 4$| 5$| 6$| 7$| 8$| 9$", "", sensor),
            day = as.character(day),
            time = as.character(time)) |> 
+    # Remove HyperNets pre-processed data
+    filter(sensor != "Hyp_nosc") |> 
     # mutate(dateTime = as.POSIXct(paste(day, time), format = "%Y%m%d %H%M%S")) |> # make this later
-    group_by(sensor, day, time, longitude, latitude) |>
+    group_by(sensor, type, day, time, longitude, latitude) |>
     summarise_all(mean, na.rm = TRUE) |> 
     ungroup()
   # print(df_mean[,1:10])
@@ -129,7 +141,7 @@ process_matchup_file <- function(file_path, filter_table = NULL){
   
   # For loop that cycles through the requested wavelengths and calculates stats
   # TODO: The chunk of code that calculates statistics should be modularised into its own function
-  # This would then be shared with the matchups_stats() function above
+  # This would then be shared with the global_stats() function below
   df_results <- data.frame()
   for(i in 1:length(sensors)){
     for(j in 1:length(sensors)){
@@ -154,7 +166,7 @@ process_matchup_file <- function(file_path, filter_table = NULL){
         # Melt it for additional stats
         df_sensor_long <- df_sensor_sub |> 
           pivot_longer(cols = matches("1|2|3|4|5|6|7|8|9"), names_to = "Wavelength", values_to = "Value") |> 
-          dplyr::select(-day, -time, -longitude, -latitude) |> 
+          dplyr::select(-day, -time, -longitude, -latitude, -data_id, -type) |> 
           pivot_wider(names_from = sensor, values_from = Value) |> 
           # TODO: Check this against a satellite matchup to ensure behaviour is correct
           na.omit()
@@ -211,7 +223,7 @@ process_matchup_file <- function(file_path, filter_table = NULL){
 }
 
 # Function that runs this over all matchup files in a directory
-# dir_path <- "~/pCloudDrive/Documents/OMTAB/HYPERNETS/MATCHUPS_in-situ_dm_10_ED"
+# dir_path <- "~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results/ED_HYPERNETS_vs_HYPERPRO"
 process_matchup_folder <- function(dir_path, filter_table = NULL){
   
   # List all files in directory
@@ -235,7 +247,7 @@ process_matchup_folder <- function(dir_path, filter_table = NULL){
 
 # Run for all folders
 ## In situ matchups
-process_matchup_folder("~/pCloudDrive/Documents/OMTAB/HYPERNETS/MATCHUPS_in-situ_dm_10_ED")
+process_matchup_folder("~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results/ED_HYPERNETS_vs_HYPERPRO")
 process_matchup_folder("~/pCloudDrive/Documents/OMTAB/HYPERNETS/MATCHUPS_in-situ_dm_10_ED", filter_table = RW_all) # Filter based on RW passed QC
 process_matchup_folder("~/pCloudDrive/Documents/OMTAB/HYPERNETS/MATCHUPS_in-situ_dm_10_LD")
 process_matchup_folder("~/pCloudDrive/Documents/OMTAB/HYPERNETS/MATCHUPS_in-situ_dm_10_LD", filter_table = RW_all) # Filter based on RW passed QC
