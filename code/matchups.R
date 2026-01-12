@@ -14,59 +14,9 @@ labels_nm <- c("350-400", "400-450", "450-500", "500-550", "550-600", "600-650",
 colour_nm <- c('darkviolet', 'violet', 'blue', 'darkgreen', 'yellow', 'orange', 'red', "firebrick", 'sienna')
 names(colour_nm) <- labels_nm
 
-
-# Matchups count ----------------------------------------------------------
-
-# Convenience wrapper to get counts
-matchups_count <- function(folder_path){
-  
-  # Load data
-  match_base <- read_excel(file_path)
-  
-  # The two sensors being compared
-  sensor_X <- unique(match_base$X_data)
-  sensor_Y <- unique(match_base$Y_data)
-
-  # Calculate matchups based on number of .csv files in folder
-  file_list <- list.files(folder_path, pattern = "*.csv", full.names = TRUE)
-  
-  # Remove files with 'all' in the name
-  file_list <- file_list[!grepl("all", file_list)]
-  
-  # Load files to get unique time stamps
-  suppressMessages(
-  matchup_base <- map_dfr(file_list, read_delim, delim = ";")
-  )
-  
-}
-
-# Check matchups
-## In situ
-matchups_count("~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results/RHOW_HYPERNETS_vs_HYPERPRO")
-matchups_count("~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results/RHOW_HYPERNETS_vs_TRIOS/RHOW_HYPERNETS_vs_TRIOS_metrics.xlsx", remote = FALSE)
-matchups_count("~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results/RHOW_TRIOS_vs_HYPERPRO/RHOW_TRIOS_vs_HYPERPRO_metrics.xlsx", remote = FALSE)
-## Satellite
-### OCI
-#### PACE v2
-##### Missing
-#### PACE v3
-##### Missing
-#### PACE v3.1
-matchups_count("~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results/RHOW_HYPERNETS_vs_PACE_V31/RHOW_HYPERNETS_vs_PACE_V31_metrics.xlsx")
-matchups_count("~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results/RHOW_TRIOS_vs_PACE_V31/RHOW_TRIOS_vs_PACE_V31_metrics.xlsx")
-matchups_count("~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results/RHOW_HYPERPRO_vs_PACE_V31/RHOW_HYPERPRO_vs_PACE_V31_metrics.xlsx")
-
-### MODIS AQUA
-matchups_count("~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results/RHOW_HYPERNETS_vs_AQUA/RHOW_HYPERNETS_vs_AQUA_metrics.xlsx")
-matchups_count("~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results/RHOW_TRIOS_vs_AQUA/RHOW_TRIOS_vs_AQUA_metrics.xlsx")
-
-matchups_count("~/pCloudDrive/Documents/OMTAB/HYPERNETS/MATCHUPS_dm_120_min_350_max_800/OLCI/all_metrics_min_350_max_800_OLCI_S3B_L2A_RHOW.xlsx")
-# matchups_count("~/pCloudDrive/Documents/OMTAB/HYPERNETS/MATCHUPS_dm_120_min_350_max_800/OLCI_S3A/all_metrics_min_350_max_800_OLCI_S3A_L2A_RHOW.xlsx")
-# matchups_count("~/pCloudDrive/Documents/OMTAB/HYPERNETS/MATCHUPS_dm_120_min_350_max_800/OLCI_S3B/all_metrics_min_350_max_800_OLCI_S3B_L2A_RHOW.xlsx")
-matchups_count("~/pCloudDrive/Documents/OMTAB/HYPERNETS/MATCHUPS_dm_120_min_350_max_800/PACEV3/all_metrics_min_350_max_800_PACE_OCI_L2A_RHOW.xlsx")
-matchups_count("~/pCloudDrive/Documents/OMTAB/HYPERNETS/MATCHUPS_dm_120_min_350_max_800/VIIRS_J1/all_metrics_min_350_max_800_VIIRS_JPSS1_L2A_RHOW.xlsx")
-matchups_count("~/pCloudDrive/Documents/OMTAB/HYPERNETS/MATCHUPS_dm_120_min_350_max_800/VIIRS_J2/all_metrics_min_350_max_800_VIIRS_JPSS2_L2A_RHOW.xlsx")
-matchups_count("~/pCloudDrive/Documents/OMTAB/HYPERNETS/MATCHUPS_dm_120_min_350_max_800/VIIRS_N/all_metrics_min_350_max_800_VIIRS_SNPP_L2A_RHOW.xlsx")
+# Disable scientific notation
+# NB: Necessary for correct time stamp conversion
+options(scipen = 9999)
 
 
 # List of Rw matchups -----------------------------------------------------
@@ -101,72 +51,37 @@ RW_all <- read_csv("meta/all_in-situ_RHOW_stations.csv", col_types = "ciidd")
 
 # Individual matchup stats ------------------------------------------------
 
-# Function that interrogates each matchup file to produce the needed output for all following comparisons
-# file_path <- "~/pCloudDrive/Documents/OMTAB/HYPERNETS/MATCHUPS_in-situ_dm_10_ED/HYPERNETS_W_TAFR_L1C_ED_20240808T0657_270_vs_TRIOS_350_800.csv"
-# file_path <- file_list[1]
-process_matchup_file <- function(file_path, filter_table = NULL){
-  
-  # Load the data
-  suppressMessages(
-    df_base <- read_delim(file_path, delim = ";")
-  )
-  colnames(df_base)[1] <- "sensor"
-  
-  # Removes 1,2,3 etc. from sensor column values
-  df_mean <- df_base |> 
-    dplyr::select(-radiometer_id) |> 
-    mutate(sensor = gsub(" 1$| 2$| 3$| 4$| 5$| 6$| 7$| 8$| 9$", "", sensor),
-           day = as.character(day),
-           time = as.character(time)) |> 
-    # Remove HyperNets pre-processed data
-    filter(sensor != "Hyp_nosc") |> 
-    # mutate(dateTime = as.POSIXct(paste(day, time), format = "%Y%m%d %H%M%S")) |> # make this later
-    group_by(sensor, type, day, time, longitude, latitude) |>
-    summarise_all(mean, na.rm = TRUE) |> 
-    ungroup()
-  # print(df_mean[,1:10])
-  
-  # Filter based on filter_table if provided
-  if(!is.null(filter_table)){
-    df_mean <- semi_join(df_mean, filter_table, by = c("sensor", "day", "time", "longitude", "latitude"))
-  }
-  
-  if(nrow(df_mean) < 2){
-    print(paste("Not enough data in", basename(file_path), "after filtering, skipping..."))
-    return(NULL)
-  }
+# Function that calculates stats for each matchup. Works with 2+ sensors.
+# df <- df_mean
+process_matchup_stats <- function(df){
   
   # Sensors to be compared
-  sensors <- unique(df_mean$sensor)
+  sensors <- unique(df$sensor)
   
-  # For loop that cycles through the requested wavelengths and calculates stats
-  # TODO: The chunk of code that calculates statistics should be modularised into its own function
-  # This would then be shared with the global_stats() function below
+  # Prep empty df for 2+ sensor comparisons
   df_results <- data.frame()
+  
+  # The double loop
   for(i in 1:length(sensors)){
     for(j in 1:length(sensors)){
       if(sensors[j] != sensors[i]){
         
         # Get data.frame for matchup based on the two sensors being compared
-        df_sensor_sub <- df_mean |> 
-          filter(sensor %in% c(sensors[i], sensors[j]))
+        df_sensor_sub <- df |> 
+          filter(sensor %in% c(sensors[i], sensors[j])) |> 
+          mutate(dateTime = as.POSIXct(paste(day, time), format = "%Y%m%d %H%M%S"), .after = "type", .keep = "unused")
         
         # get distances
         hav_dist <- round(distHaversine(df_sensor_sub[c("longitude", "latitude")])/1000, 2) # distance in km
         
         # Time differences
-        # TODO: Optimise this...
-        df_sensor_sub_dateTime <- df_sensor_sub |> 
-          mutate(dateTime = as.POSIXct(paste(day, time), format = "%Y%m%d %H%M%S")) |> 
-          dplyr::select(sensor, dateTime)
-        time_diff <- round(as.numeric(abs(difftime(df_sensor_sub_dateTime$dateTime[[1]],
-                                                   df_sensor_sub_dateTime$dateTime[[2]],
-                                                   units = "mins"))))
+        time_diff <- round(as.numeric(abs(difftime(df_sensor_sub$dateTime[[1]],
+                                                   df_sensor_sub$dateTime[[2]], units = "mins"))))
         
         # Melt it for additional stats
         df_sensor_long <- df_sensor_sub |> 
           pivot_longer(cols = matches("1|2|3|4|5|6|7|8|9"), names_to = "Wavelength", values_to = "Value") |> 
-          dplyr::select(-day, -time, -longitude, -latitude, -data_id, -type) |> 
+          dplyr::select(-dateTime, -longitude, -latitude, -type) |> 
           pivot_wider(names_from = sensor, values_from = Value) |> 
           # TODO: Check this against a satellite matchup to ensure behaviour is correct
           na.omit()
@@ -178,7 +93,7 @@ process_matchup_file <- function(file_path, filter_table = NULL){
         mape <- mean(abs((df_sensor_long[[sensors[j]]] - df_sensor_long[[sensors[i]]]) / df_sensor_long[[sensors[i]]]), na.rm = TRUE) * 100
         
         # Calculate MSA (Mean Squared Adjustment)
-        msa <- mean(abs(df_sensor_long[[sensors[j]]] - df_sensor_long[[sensors[i]]]), na.rm = TRUE)
+        # msa <- mean(abs(df_sensor_long[[sensors[j]]] - df_sensor_long[[sensors[i]]]), na.rm = TRUE)
         
         # Calculate linear slope
         lin_fit <- lm(df_sensor_long[[sensors[j]]] ~ df_sensor_long[[sensors[i]]])
@@ -198,18 +113,18 @@ process_matchup_file <- function(file_path, filter_table = NULL){
         df_res <- data.frame(row.names = NULL,
                              sensor_X = sensors[i],
                              sensor_Y = sensors[j],
-                             lon_X = df_sensor_sub$longitude[[1]],
-                             lat_X = df_sensor_sub$latitude[[1]],
-                             lon_Y = df_sensor_sub$longitude[[2]],
-                             lat_Y = df_sensor_sub$latitude[[2]],
+                             lon_X = df_sensor_sub$longitude[[i]],
+                             lat_X = df_sensor_sub$latitude[[i]],
+                             lon_Y = df_sensor_sub$longitude[[j]],
+                             lat_Y = df_sensor_sub$latitude[[j]],
                              dist = hav_dist,
-                             dateTime_X = df_sensor_sub_dateTime$dateTime[[1]],
-                             dateTime_Y = df_sensor_sub_dateTime$dateTime[[2]],
+                             dateTime_X = df_sensor_sub$dateTime[[i]],
+                             dateTime_Y = df_sensor_sub$dateTime[[j]],
                              diff_time = time_diff,
                              n = nrow(df_sensor_long),
                              Slope = round(slope, 2),
                              RMSE = round(rmse, 4),
-                             MSA = round(msa, 4),
+                             # MSA = round(msa, 4),
                              MAPE = round(mape, 1),
                              Bias = round(bias_pahlevan_final_perc, 1),
                              Error = round(error_pahlevan_final_in_perc, 1)
@@ -218,12 +133,52 @@ process_matchup_file <- function(file_path, filter_table = NULL){
       }
     }
   }
-  df_results <- mutate(df_results, file_name = basename(file_path), .before = sensor_X)
+  return(df_results)
+}
+
+# Function that interrogates each matchup file to produce the needed output for all following comparisons
+# file_path <- "~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results/RHOW_HYPERNETS_vs_HYPERPRO/HYPERNETS_vs_HYPERPRO_vs_20240809T073700_RHOW.csv"
+# file_path <- file_list[1]
+process_matchup_file <- function(file_path, filter_table = NULL){
+  
+  # Load the data
+  suppressMessages(
+    df_base <- read_delim(file_path, delim = ";")
+  )
+  colnames(df_base)[1] <- "sensor"
+  
+  # Removes 1,2,3 etc. from sensor column values
+  df_mean <- df_base |> 
+    dplyr::select(-radiometer_id, -data_id) |> 
+    mutate(sensor = gsub(" 1$| 2$| 3$| 4$| 5$| 6$| 7$| 8$| 9$", "", sensor),
+           day = as.character(day),
+           time = as.character(time)) |> 
+    # Remove HyperNets pre-processed data
+    filter(sensor != "Hyp_nosc") |> 
+    # mutate(dateTime = as.POSIXct(paste(day, time), format = "%Y%m%d %H%M%S")) |> # make this later
+    group_by(sensor, type, day, time, longitude, latitude) |>
+    summarise_all(mean, na.rm = TRUE) |> 
+    ungroup()
+  # print(df_mean[,1:10])
+  
+  # Filter based on filter_table if provided
+  if(!is.null(filter_table)){
+    df_mean <- semi_join(df_mean, filter_table, by = c("sensor", "type", "day", "time", "longitude", "latitude"))
+  }
+  
+  if(nrow(df_mean) < 2){
+    print(paste("Not enough data in", basename(file_path), "after filtering, skipping..."))
+    return(NULL)
+  }
+
+  # For loop that cycles through the requested wavelengths and calculates stats
+  df_results <- process_matchup_stats(df_mean) |> 
+    mutate(file_name = basename(file_path), .before = sensor_X)
   return(df_results)
 }
 
 # Function that runs this over all matchup files in a directory
-# dir_path <- "~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results/ED_HYPERNETS_vs_HYPERPRO"
+# dir_path <-"~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results/RHOW_HYPERNETS_vs_HYPERPRO"
 process_matchup_folder <- function(dir_path, filter_table = NULL){
   
   # List all files in directory
@@ -247,20 +202,53 @@ process_matchup_folder <- function(dir_path, filter_table = NULL){
 
 # Run for all folders
 ## In situ matchups
-process_matchup_folder("~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results/ED_HYPERNETS_vs_HYPERPRO")
-process_matchup_folder("~/pCloudDrive/Documents/OMTAB/HYPERNETS/MATCHUPS_in-situ_dm_10_ED", filter_table = RW_all) # Filter based on RW passed QC
-process_matchup_folder("~/pCloudDrive/Documents/OMTAB/HYPERNETS/MATCHUPS_in-situ_dm_10_LD")
-process_matchup_folder("~/pCloudDrive/Documents/OMTAB/HYPERNETS/MATCHUPS_in-situ_dm_10_LD", filter_table = RW_all) # Filter based on RW passed QC
-process_matchup_folder("~/pCloudDrive/Documents/OMTAB/HYPERNETS/MATCHUPS_in-situ_dm_10_LW")
-process_matchup_folder("~/pCloudDrive/Documents/OMTAB/HYPERNETS/MATCHUPS_in-situ_dm_10_LW", filter_table = RW_all) # Filter based on RW passed QC
-process_matchup_folder("~/pCloudDrive/Documents/OMTAB/HYPERNETS/MATCHUPS_in-situ_dm_10_RHOW")
-## Satellite matchups
-process_matchup_folder("~/pCloudDrive/Documents/OMTAB/HYPERNETS/MATCHUPS_dm_120_min_350_max_800/MODIS")
-process_matchup_folder("~/pCloudDrive/Documents/OMTAB/HYPERNETS/MATCHUPS_dm_120_min_350_max_800/OLCI") # NB: This should process both S3A and S3B
-process_matchup_folder("~/pCloudDrive/Documents/OMTAB/HYPERNETS/MATCHUPS_dm_120_min_350_max_800/PACEV3")
-process_matchup_folder("~/pCloudDrive/Documents/OMTAB/HYPERNETS/MATCHUPS_dm_120_min_350_max_800/VIIRS_J1")
-process_matchup_folder("~/pCloudDrive/Documents/OMTAB/HYPERNETS/MATCHUPS_dm_120_min_350_max_800/VIIRS_J2")
-process_matchup_folder("~/pCloudDrive/Documents/OMTAB/HYPERNETS/MATCHUPS_dm_120_min_350_max_800/VIIRS_N/")
+### RHOW
+process_matchup_folder("~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results/RHOW_HYPERNETS_vs_HYPERPRO")
+process_matchup_folder("~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results/RHOW_HYPERNETS_vs_TRIOS")
+process_matchup_folder("~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results/RHOW_TRIOS_vs_HYPERPRO")
+### ED
+#### To confirm that RHOW filter table works
+### LD
+#### To confirm that RHOW filter table works
+### LU
+#### To confirm that RHOW filter table works
+## Satellite
+### OCI
+#### PACE v2
+##### Missing
+#### PACE v3
+##### Missing
+#### PACE v3.1
+process_matchup_folder("~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results/RHOW_HYPERNETS_vs_PACE_V31")
+process_matchup_folder("~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results/RHOW_TRIOS_vs_PACE_V31")
+process_matchup_folder("~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results/RHOW_HYPERPRO_vs_PACE_V31")
+### MODIS
+#### AQUA
+process_matchup_folder("~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results/RHOW_HYPERNETS_vs_AQUA")
+process_matchup_folder("~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results/RHOW_TRIOS_vs_AQUA")
+process_matchup_folder("~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results/RHOW_HYPERPRO_vs_AQUA")
+### VIIRS
+#### SNPP
+process_matchup_folder("~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results/RHOW_HYPERNETS_vs_VIIRS_N")
+process_matchup_folder("~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results/RHOW_TRIOS_vs_VIIRS_N")
+process_matchup_folder("~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results/RHOW_HYPERPRO_vs_VIIRS_N")
+#### JPSS1
+process_matchup_folder("~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results/RHOW_HYPERNETS_vs_VIIRS_J1")
+process_matchup_folder("~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results/RHOW_TRIOS_vs_VIIRS_J1")
+process_matchup_folder("~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results/RHOW_HYPERPRO_vs_VIIRS_J1")
+#### JPSS2
+process_matchup_folder("~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results/RHOW_HYPERNETS_vs_VIIRS_J2")
+process_matchup_folder("~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results/RHOW_TRIOS_vs_VIIRS_J2")
+process_matchup_folder("~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results/RHOW_HYPERPRO_vs_VIIRS_J2")
+### OLCI
+#### S3A
+process_matchup_folder("~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results/RHOW_HYPERNETS_vs_S3A")
+process_matchup_folder("~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results/RHOW_TRIOS_vs_S3A")
+process_matchup_folder("~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results/RHOW_HYPERPRO_vs_S3A")
+#### S3B
+process_matchup_folder("~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results/RHOW_HYPERNETS_vs_S3B")
+process_matchup_folder("~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results/RHOW_TRIOS_vs_S3B")
+process_matchup_folder("~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results/RHOW_HYPERPRO_vs_S3B")
 
 
 # Duplicated matchups -----------------------------------------------------
@@ -270,7 +258,7 @@ n_matchup_dup <- function(file_path){
   
   # Load data
   suppressMessages(
-  match_base <- read_csv(file_path)
+    match_base <- read_csv(file_path)
   )
   
   # Group by lon/lat and sensor and count
@@ -365,7 +353,7 @@ global_stats <- function(file_path, MAPE_limit = NULL, remote = TRUE, W_nm = c(4
           mape <- mean(abs((matchup_filt[[y_col]] - matchup_filt[[x_col]]) / matchup_filt[[x_col]]), na.rm = TRUE) * 100
           
           # Calculate MSA (Mean Squared Adjustment)
-          msa <- mean(abs(matchup_filt[[y_col]] - matchup_filt[[x_col]]), na.rm = TRUE)
+          # msa <- mean(abs(matchup_filt[[y_col]] - matchup_filt[[x_col]]), na.rm = TRUE)
           
           # Calculate linear slope
           lin_fit <- lm(matchup_filt[[y_col]] ~ matchup_filt[[x_col]])
@@ -389,7 +377,7 @@ global_stats <- function(file_path, MAPE_limit = NULL, remote = TRUE, W_nm = c(4
                                 n = n_match,
                                 Slope = round(slope, 2),
                                 RMSE = round(rmse, 4),
-                                MSA = round(msa, 4),
+                                # MSA = round(msa, 4),
                                 MAPE = round(mape, 1),
                                 Bias = round(bias_pahlevan_final_perc, 1),
                                 Error = round(error_pahlevan_final_in_perc, 1)
