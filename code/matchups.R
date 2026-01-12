@@ -57,7 +57,7 @@ process_matchup_file <- function(file_path, filter_table = NULL){
   
   # Filter based on filter_table if provided
   if(!is.null(filter_table)){
-    df_mean <- semi_join(df_mean, filter_table, by = c("sensor", "type", "day", "time", "longitude", "latitude"))
+    df_mean <- semi_join(df_mean, filter_table, by = c("sensor", "day", "time", "longitude", "latitude"))
   }
   
   if(nrow(df_mean) < 2){
@@ -277,7 +277,7 @@ ggsave("figures/test_HYPERPRO_matchup_duplicates.png", in_situ_RW_dup_map, width
 
 # Convenience wrapper to count number of unique matchups
 # var_name = "rhow"; sensor_X = "HYPERPRO"; sensor_Y = "PACE_v31"
-n_matchup_uniq <- function(var_name, sensor_X, sensor_Y){
+n_matchup_uniq <- function(var_name, sensor_X, sensor_Y, basic = TRUE){
   
   # Create file path
   folder_path <- file_path_build(var_name, sensor_X, sensor_Y)
@@ -316,17 +316,26 @@ n_matchup_uniq <- function(var_name, sensor_X, sensor_Y){
             filter(as.character(dateTime_Y) != "2024-08-16 07:58:00")
           # filter(dateTime_X != "2024-08-16 08:05:00")
         }
-        df_sensor_uniq <- df_sensor_uniq |> 
-          dplyr::select(-dateTime_Y) |> 
-          distinct() |> 
-          summarise(uniq = n(), .by = c("sensor_X", "sensor_Y"))
-        
-        # Add to dataframe of results
-        df_uniq_res <- rbind(df_uniq_res, df_sensor_uniq)
+        if(basic){
+          df_sensor_uniq <- df_sensor_uniq |> 
+            dplyr::select(-dateTime_Y) |> 
+            distinct() |> 
+            summarise(uniq = n(), .by = c("sensor_X", "sensor_Y"))
+          
+          # Add to dataframe of results
+          df_uniq_res <- rbind(df_uniq_res, df_sensor_uniq)
+        } else { 
+          df_sensor_uniq <- df_sensor_uniq |> 
+            dplyr::select(-dateTime_Y) |> 
+            distinct()
+          
+          # Add to dataframe of results
+          df_uniq_res <- rbind(df_uniq_res, df_sensor_uniq)
+        }
       }
     }
   }
-  print(df_uniq_res)
+  return(df_uniq_res)
 }
 
 # TODO: Wrap this into a single call/table
@@ -334,7 +343,7 @@ n_matchup_uniq <- function(var_name, sensor_X, sensor_Y){
 # In situ
 ## Ed
 ## NB: These counts are very different from Rhow
-n_matchup_uniq("ED", "HYPERNETS", "TRIOS")
+n_matchup_uniq("ED", "HYPERNETS", "TRIOS", basic = FALSE)
 n_matchup_uniq("ED", "HYPERNETS", "HYPERPRO")
 n_matchup_uniq("ED", "TRIOS", "HYPERPRO")
 ## Rhow
@@ -384,64 +393,107 @@ n_matchup_uniq("RHOW", "HYPERPRO", "S3B")
 # List of Rw matchups -----------------------------------------------------
 
 # Find all of the Rhow matchups and remove Ed and Lw that didn't pass QC to Rhow
-# TODO : Run this on the three individual files and combine them
-RW_files <- list.files("~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results/RHOW_HYPERNETS_vs_TRIOS_vs_HYPERPRO/", 
-                       pattern = "*.csv", full.names = TRUE, recursive = TRUE)
-RW_files <- RW_files[!grepl("all", RW_files)]
+# RW_files <- list.files(c("~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results/RHOW_HYPERNETS_vs_TRIOS",
+#                          "~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results/RHOW_HYPERNETS_vs_HYPERPRO",
+#                          "~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results/RHOW_TRIOS_vs_HYPERPRO"), 
+#                        pattern = "*.csv", full.names = TRUE, recursive = TRUE)
+# RW_files <- RW_files[!grepl("all", RW_files)]
 
 # There is an issue with some day or time values being non-numeric
-RW_load <- function(file_name){
-  suppressMessages(
-    df <- read_delim(file_name, delim = ";") |> 
-      mutate(day = as.character(day),
-             time = as.character(time))
-  )
-  colnames(df)[1] <- "sensor"
-  df <- dplyr::select(df, sensor, day, time, longitude, latitude) |> 
-    mutate(sensor = gsub(" 1$| 2$| 3$| 4$| 5$| 6$| 7$| 8$| 9$", "", sensor)) |> 
-    distinct()
-  return(df)
-}
-# RW_all <- purrr::map_dfr(RW_files, RW_load)
-# RW_all <- RW_all |> 
-#   mutate(day = as.integer(day),
-#          time = as.integer(time)) |> 
+# RW_load <- function(file_name){
+#   suppressMessages(
+#     df <- read_delim(file_name, delim = ";") |> 
+#       mutate(day = as.character(day),
+#              time = as.character(time))
+#   )
+#   colnames(df)[1] <- "sensor"
+#   df <- dplyr::select(df, sensor, day, time, longitude, latitude) |> 
+#     mutate(sensor = gsub(" 1$| 2$| 3$| 4$| 5$| 6$| 7$| 8$| 9$", "", sensor)) |> 
+#     distinct()
+#   return(df)
+# }
+# RW_all <- plyr::ldply(RW_files, RW_load, .parallel = TRUE) |>
 #   distinct() |> arrange(sensor, day, time)
 # write_csv(RW_all, "meta/all_in-situ_RHOW_stations.csv")
-RW_all <- read_csv("meta/all_in-situ_RHOW_stations.csv", col_types = "ciidd")
+RW_all <- read_csv("meta/all_in-situ_RHOW_stations.csv", col_types = "cccdd") |> 
+  filter(sensor != "Hyp_nosc") |> 
+  filter(!(sensor == "HYPERPRO" & time == "095800")) # Remove near duplicate HyperPRO station
+  # mutate(dateTime = as.POSIXct(paste(day, time), format = "%Y%m%d %H%M%S"), .after = "sensor", .keep = "unused")
 
 
 # Global statistics --------------------------------------------------------
 
+# Load a single matchup file directly into long format
+# file_name <- file.path(folder_path, file_uniq_list$file_name)[1]
+load_matchup_long <- function(file_name){
+  suppressMessages(
+    df_match <- read_delim(file_name, delim = ";", col_types = "ciccnnic")
+  )
+  colnames(df_match)[1] <- "sensor"
+  
+  # Get means per file
+  df_mean <- df_match |> 
+    dplyr::select(-radiometer_id, -data_id, -type) |> 
+    mutate(sensor = gsub(" 1$| 2$| 3$| 4$| 5$| 6$| 7$| 8$| 9$", "", sensor)) |> 
+    # Remove HyperNets pre-processed data
+    filter(sensor != "Hyp_nosc") |> 
+    # mutate(dateTime = as.POSIXct(paste(day, time), format = "%Y%m%d %H%M%S")) |> # make this later
+    group_by(sensor, day, time, longitude, latitude) |>
+    summarise_all(mean, na.rm = TRUE) |> 
+    ungroup()
+  
+  # Pivot longer
+  # Melt it for additional stats
+  df_long <- df_mean |> 
+    pivot_longer(cols = matches("1|2|3|4|5|6|7|8|9"), names_to = "Wavelength", values_to = "Value") |> 
+    dplyr::select(-day, -time, -longitude, -latitude) |>
+    pivot_wider(names_from = sensor, values_from = Value) |>
+    # TODO: Check the NA row removal against a satellite matchup to ensure behaviour is correct
+    na.omit() |> 
+    mutate(file_name = file_name, .before = "Wavelength")
+}
+
 # Global stats per matchup wavelength
 # testers..
-# file_path = "~/pCloudDrive/Documents/OMTAB/HYPERNETS/MATCHUPS_in-situ_dm_10_ED/all_metrics_min_350_max_800_L1C_ED.xlsx"
-# remote = FALSE; W_nm = c(400, 412, 443, 490, 510, 560, 620, 673)
-# file_path = "~/pCloudDrive/Documents/OMTAB/HYPERNETS/MATCHUPS_dm_120_min_350_max_800/MODIS/all_metrics_MODIS_AQUA_L2A_RHOW.xlsx"
-# remote = TRUE; W_nm = c(412, 443, 488, 531, 555, 667)
-global_stats <- function(var_name, sensor_X, sensor_Y, 
+# var_name = "rhow"; sensor_X = "HYPERPRO"; sensor_Y = "PACE_V31"
+# MAPE_limit = NULL; remote = TRUE; W_nm = c(412, 443, 488, 531, 555, 667)
+global_stats <- function(var_name, sensor_X, sensor_Y, filter_table = NULL,
                          MAPE_limit = NULL, remote = TRUE, W_nm = c(400, 412, 443, 490, 510, 560, 620, 673)){
+  
+  # Get unique matchups
+  uniq_base <- n_matchup_uniq(var_name, sensor_X, sensor_Y, basic = FALSE)
+  uniq_base <- uniq_base[uniq_base$sensor_X == sensor_Y,] # NB: This X to Y cross is intentional
   
   # Create file path
   folder_path <- file_path_build(var_name, sensor_X, sensor_Y)
-  file_path <- dir(folder_path, pattern = "all_", full.names = TRUE)
+  
+  # List all files in directory
+  file_list <- list.files(folder_path, pattern = "*.csv", full.names = TRUE)
+  
+  # Load processed results for further filtering
+  file_all <- read_csv(file_list[grepl("all_", file_list)])
+
+  # List files that respect unique matchups
+  file_uniq_list <- right_join(file_all, uniq_base, by = c("sensor_X", "sensor_Y", "dateTime_X"))
   
   # Load data
-  suppressMessages(
-    match_base <- read_csv(file_path)
-  )
+  wave_base <- map_dfr(file.path(folder_path, file_uniq_list$file_name), load_matchup_long)
   
-  # Load data
-  match_base <- read_excel(file_path)
-  
-  # Sensors X
-  sensors_X <- unique(match_base$X_data)
+  # Sensors
+  # TODO: Here down needs to be corrected for how the sensors are indexed
+  sensors <- unique(df_mean$sensor)
   
   # Sensors Y
   if(remote){
     sensors_Y <- unique(match_base$Y_data)[!unique(match_base$Y_data) %in% unique(match_base$X_data)]
   } else {
     sensors_Y <- unique(match_base$Y_data)
+  }
+  
+  # Filter based on filter_table if provided
+  # TODO: Check that this works with an ED file
+  if(!is.null(filter_table)){
+    df_mean <- semi_join(df_mean, filter_table, by = c("sensor", "day", "time", "longitude", "latitude"))
   }
   
   # Print sensors to make sure everything is good
