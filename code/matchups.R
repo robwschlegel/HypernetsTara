@@ -18,39 +18,44 @@ names(colour_nm) <- labels_nm
 # Matchups count ----------------------------------------------------------
 
 # Convenience wrapper to get counts
-matchups_count <- function(file_path, remote = TRUE){
+matchups_count <- function(folder_path){
   
   # Load data
   match_base <- read_excel(file_path)
   
-  # In situ sensors
-  sensors_X <- unique(match_base$X_data)
+  # The two sensors being compared
+  sensor_X <- unique(match_base$X_data)
+  sensor_Y <- unique(match_base$Y_data)
+
+  # Calculate matchups based on number of .csv files in folder
+  file_list <- list.files(folder_path, pattern = "*.csv", full.names = TRUE)
   
-  # Remote sensor(s)
-  if(remote){
-    sensors_Y <- unique(match_base$Y_data)[!unique(match_base$Y_data) %in% unique(match_base$X_data)]
-  } else {
-    sensors_Y <- unique(match_base$Y_data)
-  }
+  # Remove files with 'all' in the name
+  file_list <- file_list[!grepl("all", file_list)]
   
+  # Load files to get unique time stamps
+  suppressMessages(
+  matchup_base <- map_dfr(file_list, read_delim, delim = ";")
+  )
   
-  # Print sensors to make sure everything is good
-  print(paste("In situ sensors:", paste(sensors_X, collapse = ", ")))
-  print(paste("Remote sensors:", paste(sensors_Y, collapse = ", ")))
-  
-  # Print out matchups via nested for loop
-  for(i in 1:length(sensors_Y)){
-    for(j in 1:length(sensors_X)){
-      if(sensors_X[j] != sensors_Y[i]){
-        n_match <- filter(match_base, X_data == sensors_X[j], Y_data == sensors_Y[i], !is.na(dateTime)) |> nrow()
-        print(paste(sensors_X[j], "vs", sensors_Y[i], "=", n_match))
-      }
-    }
-  }
 }
 
 # Check matchups
+## In situ
+matchups_count("~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results/RHOW_HYPERNETS_vs_HYPERPRO")
+matchups_count("~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results/RHOW_HYPERNETS_vs_TRIOS/RHOW_HYPERNETS_vs_TRIOS_metrics.xlsx", remote = FALSE)
+matchups_count("~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results/RHOW_TRIOS_vs_HYPERPRO/RHOW_TRIOS_vs_HYPERPRO_metrics.xlsx", remote = FALSE)
 ## Satellite
+### OCI
+#### PACE v2
+##### Missing
+#### PACE v3
+##### Missing
+#### PACE v3.1
+matchups_count("~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results/RHOW_HYPERNETS_vs_PACE_V31/RHOW_HYPERNETS_vs_PACE_V31_metrics.xlsx")
+matchups_count("~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results/RHOW_TRIOS_vs_PACE_V31/RHOW_TRIOS_vs_PACE_V31_metrics.xlsx")
+matchups_count("~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results/RHOW_HYPERPRO_vs_PACE_V31/RHOW_HYPERPRO_vs_PACE_V31_metrics.xlsx")
+
 ### MODIS AQUA
 matchups_count("~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results/RHOW_HYPERNETS_vs_AQUA/RHOW_HYPERNETS_vs_AQUA_metrics.xlsx")
 matchups_count("~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results/RHOW_TRIOS_vs_AQUA/RHOW_TRIOS_vs_AQUA_metrics.xlsx")
@@ -62,11 +67,6 @@ matchups_count("~/pCloudDrive/Documents/OMTAB/HYPERNETS/MATCHUPS_dm_120_min_350_
 matchups_count("~/pCloudDrive/Documents/OMTAB/HYPERNETS/MATCHUPS_dm_120_min_350_max_800/VIIRS_J1/all_metrics_min_350_max_800_VIIRS_JPSS1_L2A_RHOW.xlsx")
 matchups_count("~/pCloudDrive/Documents/OMTAB/HYPERNETS/MATCHUPS_dm_120_min_350_max_800/VIIRS_J2/all_metrics_min_350_max_800_VIIRS_JPSS2_L2A_RHOW.xlsx")
 matchups_count("~/pCloudDrive/Documents/OMTAB/HYPERNETS/MATCHUPS_dm_120_min_350_max_800/VIIRS_N/all_metrics_min_350_max_800_VIIRS_SNPP_L2A_RHOW.xlsx")
-## In situ
-matchups_count("~/pCloudDrive/Documents/OMTAB/HYPERNETS/MATCHUPS_in-situ_dm_10_RHOW/all_metrics_min_350_max_800_L2A_RHOW.xlsx", remote = FALSE)
-matchups_count("~/pCloudDrive/Documents/OMTAB/HYPERNETS/MATCHUPS_in-situ_dm_10_ED/all_metrics_min_350_max_800_L1C_ED.xlsx", remote = FALSE)
-matchups_count("~/pCloudDrive/Documents/OMTAB/HYPERNETS/MATCHUPS_in-situ_dm_10_LD/all_metrics_min_350_max_800_L1C_LD.xlsx", remote = FALSE)
-matchups_count("~/pCloudDrive/Documents/OMTAB/HYPERNETS/MATCHUPS_in-situ_dm_10_LW/all_metrics_min_350_max_800_L1C_LW.xlsx", remote = FALSE)
 
 
 # List of Rw matchups -----------------------------------------------------
