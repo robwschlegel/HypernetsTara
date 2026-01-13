@@ -1,6 +1,8 @@
 # code/map.R
 # Code used to create the map of the Tara voyage, sampling sites, and a PACE overhead pass
 
+# TODO: Replace PACE data with MODIS, or something that covers the full mapped region
+
 
 # Libraries ---------------------------------------------------------------
 
@@ -26,7 +28,7 @@ map_PACE <- function(df){
 # Map of Tara mission -----------------------------------------------------
 
 # Load HyperPRO sampling stations
-station_HP <- read_csv("meta/all_in-situ_dm_10_RHOW_stations.csv") |> 
+station_HP <- read_csv("meta/all_in-situ_RHOW_stations.csv") |> 
   filter(sensor != "Hyp_nosc") |> 
   mutate(date = parse_date(as.character(day), format = "%Y%m%d"))
 

@@ -27,6 +27,44 @@ file_path_build <- function(var_name, sensor_X, sensor_Y){
                       toupper(var_name),"_",toupper(sensor_X),"_vs_", toupper(sensor_Y))
 }
 
+# Basic statistic calculations
+# Expects data as two vectors of equal length sampled at the same time/space
+base_stats <- function(x_vec, y_vec){
+  
+  # Calculate RMSE (Root Mean Square Error)
+  rmse <- sqrt(mean((y_vec - x_vec)^2, na.rm = TRUE))
+  
+  # Calculate MAPE (Mean Absolute Percentage Error)
+  mape <- mean(abs((y_vec - x_vec) / x_vec), na.rm = TRUE) * 100
+  
+  # Calculate MSA (Mean Squared Adjustment)
+  msa <- mean(abs(y_vec - x_vec), na.rm = TRUE)
+  
+  # Calculate linear slope
+  lin_fit <- lm(y_vec ~ x_vec)
+  slope <- coef(lin_fit)[2]
+  
+  # Calculate Bias and Error (Pahlevan's method)
+  log_ratio <- log10(y_vec / x_vec)
+  bias_pahlevan <- median(log_ratio, na.rm = TRUE)
+  bias_pahlevan_final <- sign(bias_pahlevan) * (10^abs(bias_pahlevan) - 1)
+  bias_pahlevan_final_perc <- bias_pahlevan_final * 100
+  
+  error_pahlevan <- median(abs(log_ratio), na.rm = TRUE)
+  error_pahlevan_final <- 10^error_pahlevan - 1
+  error_pahlevan_final_in_perc <- error_pahlevan_final * 100
+  
+  # Combine int data.frame and exit
+  df_stats <- data.frame(row.names = NULL,
+                         Slope = round(slope, 2),
+                         RMSE = round(rmse, 4),
+                         MSA = round(msa, 4),
+                         MAPE = round(mape, 1),
+                         Bias = round(bias_pahlevan_final_perc, 1),
+                         Error = round(error_pahlevan_final_in_perc, 1))
+  return(df_stats)
+}
+
 
 # Individual matchup stats ------------------------------------------------
 
@@ -43,14 +81,14 @@ process_matchup_file <- function(file_path, filter_table = NULL){
   
   # Removes 1,2,3 etc. from sensor column values
   df_mean <- df_base |> 
-    dplyr::select(-radiometer_id, -data_id) |> 
+    dplyr::select(-radiometer_id, -data_id) |>
     mutate(sensor = gsub(" 1$| 2$| 3$| 4$| 5$| 6$| 7$| 8$| 9$", "", sensor),
            day = as.character(day),
            time = as.character(time)) |> 
     # Remove HyperNets pre-processed data
     filter(sensor != "Hyp_nosc") |> 
     # mutate(dateTime = as.POSIXct(paste(day, time), format = "%Y%m%d %H%M%S")) |> # make this later
-    group_by(sensor, type, day, time, longitude, latitude) |>
+    group_by(sensor, type, day, time) |> #, longitude, latitude) |>
     summarise_all(mean, na.rm = TRUE) |> 
     ungroup()
   # print(df_mean[,1:10])
@@ -96,28 +134,12 @@ process_matchup_file <- function(file_path, filter_table = NULL){
           # TODO: Check this against a satellite matchup to ensure behaviour is correct
           na.omit()
         
-        # Calculate RMSE (Root Mean Square Error)
-        rmse <- sqrt(mean((df_sensor_long[[sensors[j]]] - df_sensor_long[[sensors[i]]])^2, na.rm = TRUE))
+        # get vectors
+        x_vec <- df_sensor_long[[sensors[i]]]
+        y_vec <- df_sensor_long[[sensors[j]]]
         
-        # Calculate MAPE (Mean Absolute Percentage Error)
-        mape <- mean(abs((df_sensor_long[[sensors[j]]] - df_sensor_long[[sensors[i]]]) / df_sensor_long[[sensors[i]]]), na.rm = TRUE) * 100
-        
-        # Calculate MSA (Mean Squared Adjustment)
-        # msa <- mean(abs(df_sensor_long[[sensors[j]]] - df_sensor_long[[sensors[i]]]), na.rm = TRUE)
-        
-        # Calculate linear slope
-        lin_fit <- lm(df_sensor_long[[sensors[j]]] ~ df_sensor_long[[sensors[i]]])
-        slope <- coef(lin_fit)[2]
-        
-        # Calculate Bias and Error (Pahlevan's method)
-        log_ratio <- log10(df_sensor_long[[sensors[j]]] / df_sensor_long[[sensors[i]]])
-        bias_pahlevan <- median(log_ratio, na.rm = TRUE)
-        bias_pahlevan_final <- sign(bias_pahlevan) * (10^abs(bias_pahlevan) - 1)
-        bias_pahlevan_final_perc <- bias_pahlevan_final * 100
-        
-        error_pahlevan <- median(abs(log_ratio), na.rm = TRUE)
-        error_pahlevan_final <- 10^error_pahlevan - 1
-        error_pahlevan_final_in_perc <- error_pahlevan_final * 100
+        # Base stats
+        df_stats <- base_stats(x_vec, y_vec)
         
         # Create data.frame of results and add them to df_results
         df_res <- data.frame(row.names = NULL,
@@ -132,13 +154,12 @@ process_matchup_file <- function(file_path, filter_table = NULL){
                              dateTime_Y = df_sensor_sub$dateTime[[j]],
                              diff_time = time_diff,
                              n = nrow(df_sensor_long),
-                             Slope = round(slope, 2),
-                             RMSE = round(rmse, 4),
-                             # MSA = round(msa, 4),
-                             MAPE = round(mape, 1),
-                             Bias = round(bias_pahlevan_final_perc, 1),
-                             Error = round(error_pahlevan_final_in_perc, 1)
-        )
+                             Slope = df_stats$Slope,
+                             RMSE = df_stats$RMSE,
+                             # MSA = df_stats$MSA,
+                             MAPE = df_stats$MAPE,
+                             Bias = df_stats$Bias,
+                             Error = df_stats$Error)
         df_results <- rbind(df_results, df_res)
       }
     }
@@ -150,7 +171,7 @@ process_matchup_file <- function(file_path, filter_table = NULL){
 }
 
 # Function that runs this over all matchup files in a directory
-# var_name = "rhow"; sensor_X = "HYPERPRO"; sensor_Y = "PACE_v31"
+# var_name = "RHOW"; sensor_X = "HYPERPRO"; sensor_Y = "PACE_v31"
 process_matchup_folder <- function(var_name, sensor_X, sensor_Y, filter_table = NULL){
   
   # Create file path
@@ -160,7 +181,7 @@ process_matchup_folder <- function(var_name, sensor_X, sensor_Y, filter_table = 
   file_list <- list.files(folder_path, pattern = "*.csv", full.names = TRUE)
   
   # Remove files with 'all' in the name
-  file_list <- file_list[!grepl("all", file_list)]
+  file_list <- file_list[!grepl("all|global", file_list)]
   
   # Initialise results data.frame
   df_results <- plyr::ldply(file_list, process_matchup_file, .parallel = TRUE, 
@@ -343,7 +364,7 @@ n_matchup_uniq <- function(var_name, sensor_X, sensor_Y, basic = TRUE){
 # In situ
 ## Ed
 ## NB: These counts are very different from Rhow
-n_matchup_uniq("ED", "HYPERNETS", "TRIOS", basic = FALSE)
+n_matchup_uniq("ED", "HYPERNETS", "TRIOS")
 n_matchup_uniq("ED", "HYPERNETS", "HYPERPRO")
 n_matchup_uniq("ED", "TRIOS", "HYPERPRO")
 ## Rhow
@@ -445,20 +466,23 @@ load_matchup_long <- function(file_name){
   # Pivot longer
   # Melt it for additional stats
   df_long <- df_mean |> 
-    pivot_longer(cols = matches("1|2|3|4|5|6|7|8|9"), names_to = "Wavelength", values_to = "Value") |> 
+    pivot_longer(cols = matches("1|2|3|4|5|6|7|8|9"), names_to = "wavelength", values_to = "value") |> 
     dplyr::select(-day, -time, -longitude, -latitude) |>
-    pivot_wider(names_from = sensor, values_from = Value) |>
+    pivot_wider(names_from = sensor, values_from = value) |>
     # TODO: Check the NA row removal against a satellite matchup to ensure behaviour is correct
     na.omit() |> 
-    mutate(file_name = file_name, .before = "Wavelength")
+    mutate(file_name = file_name, .before = "wavelength")
 }
 
 # Global stats per matchup wavelength
 # testers..
-# var_name = "rhow"; sensor_X = "HYPERPRO"; sensor_Y = "PACE_V31"
-# MAPE_limit = NULL; remote = TRUE; W_nm = c(412, 443, 488, 531, 555, 667)
-global_stats <- function(var_name, sensor_X, sensor_Y, filter_table = NULL,
-                         MAPE_limit = NULL, remote = TRUE, W_nm = c(400, 412, 443, 490, 510, 560, 620, 673)){
+# var_name = "RHOW"; sensor_X = "HYPERPRO"; sensor_Y = "PACE_V31"
+# var_name = "RHOW"; sensor_X = "HYPERNETS"; sensor_Y = "PACE_V31"; W_nm = c(412, 443, 490, 510, 560, 673)
+# MAPE_limit = NULL; filter_table = NULL;
+# W_nm = c(412, 443, 488, 531, 555, 667)
+global_stats <- function(var_name, sensor_X, sensor_Y, 
+                         filter_table = NULL, MAPE_limit = NULL, 
+                         W_nm = c(400, 412, 443, 490, 510, 560, 620, 673)){
   
   # Get unique matchups
   uniq_base <- n_matchup_uniq(var_name, sensor_X, sensor_Y, basic = FALSE)
@@ -471,130 +495,135 @@ global_stats <- function(var_name, sensor_X, sensor_Y, filter_table = NULL,
   file_list <- list.files(folder_path, pattern = "*.csv", full.names = TRUE)
   
   # Load processed results for further filtering
+  suppressMessages(
   file_all <- read_csv(file_list[grepl("all_", file_list)])
-
+  )
+  
   # List files that respect unique matchups
+  # NB: This allows for multiple in situ matchups against satellites
+  # Ultimately this was considered desirable as otherwise the samples would be very small
   file_uniq_list <- right_join(file_all, uniq_base, by = c("sensor_X", "sensor_Y", "dateTime_X"))
   
-  # Load data
-  wave_base <- map_dfr(file.path(folder_path, file_uniq_list$file_name), load_matchup_long)
-  
-  # Sensors
-  # TODO: Here down needs to be corrected for how the sensors are indexed
-  sensors <- unique(df_mean$sensor)
-  
-  # Sensors Y
-  if(remote){
-    sensors_Y <- unique(match_base$Y_data)[!unique(match_base$Y_data) %in% unique(match_base$X_data)]
-  } else {
-    sensors_Y <- unique(match_base$Y_data)
-  }
-  
   # Filter based on filter_table if provided
-  # TODO: Check that this works with an ED file
+  # TODO: Correct this to work with an ED file
   if(!is.null(filter_table)){
     df_mean <- semi_join(df_mean, filter_table, by = c("sensor", "day", "time", "longitude", "latitude"))
   }
   
-  # Print sensors to make sure everything is good
-  print(paste("In situ sensors:", paste(sensors_X, collapse = ", ")))
-  print(paste("Remote sensors:", paste(sensors_Y, collapse = ", ")))
-  print(colnames(match_base))
+  # Load data
+  match_base <- map_dfr(file.path(folder_path, file_uniq_list$file_name), load_matchup_long)
+  print(unique(match_base$wavelength))
   
   # For loop that cycles through the requested wavelengths and calculates stats
   df_results <- data.frame()
-  for(i in 1:length(sensors_Y)){
-    for(j in 1:length(sensors_X)){
-      for(k in 1:length(W_nm)){
-        
-        # Get data.frame for matchup based on the two sensors being compared
-        matchup_filt <- filter(match_base, X_data == sensors_X[j], Y_data == sensors_Y[i], !is.na(dateTime))
-        # 
-        # if(!is.null(MAPE_limit)){
-        #   matchup_filt <- filter(matchup_filt, MAPE <= MAPE_limit)
-        # }
-        n_match <- nrow(matchup_filt)
-        
-        if(n_match > 0 & sensors_X[j] != sensors_Y[i]){
-          
-          # Get column names for subsetting
-          x_col <- paste0("X_value(", W_nm[k], ")")
-          y_col <- paste0("Y_value(", W_nm[k], ")")
-          
-          if(length(matchup_filt[[y_col]][!is.na(matchup_filt[[y_col]])]) == 0){
-            print(paste("No data for wavelength", W_nm[k], "nm, skipping..."))
-            next
-          }
-          
-          # Calculate RMSE (Root Mean Square Error)
-          rmse <- sqrt(mean((matchup_filt[[y_col]] - matchup_filt[[x_col]])^2, na.rm = TRUE))
-          
-          # Calculate MAPE (Mean Absolute Percentage Error)
-          mape <- mean(abs((matchup_filt[[y_col]] - matchup_filt[[x_col]]) / matchup_filt[[x_col]]), na.rm = TRUE) * 100
-          
-          # Calculate MSA (Mean Squared Adjustment)
-          # msa <- mean(abs(matchup_filt[[y_col]] - matchup_filt[[x_col]]), na.rm = TRUE)
-          
-          # Calculate linear slope
-          lin_fit <- lm(matchup_filt[[y_col]] ~ matchup_filt[[x_col]])
-          slope <- coef(lin_fit)[2]
-          
-          # Calculate Bias and Error (Pahlevan's method)
-          log_ratio <- log10(matchup_filt[[y_col]] / matchup_filt[[x_col]])
-          bias_pahlevan <- median(log_ratio, na.rm = TRUE)
-          bias_pahlevan_final <- sign(bias_pahlevan) * (10^abs(bias_pahlevan) - 1)
-          bias_pahlevan_final_perc <- bias_pahlevan_final * 100
-          
-          error_pahlevan <- median(abs(log_ratio), na.rm = TRUE)
-          error_pahlevan_final <- 10^error_pahlevan - 1
-          error_pahlevan_final_in_perc <- error_pahlevan_final * 100
-          
-          # Create data.frame of results and add them to df_results
-          df_temp <- data.frame(row.names = NULL,
-                                sensor_X = sensors_X[j],
-                                sensor_Y = sensors_Y[i],
-                                Wavelength_nm = W_nm[k],
-                                n = n_match,
-                                Slope = round(slope, 2),
-                                RMSE = round(rmse, 4),
-                                # MSA = round(msa, 4),
-                                MAPE = round(mape, 1),
-                                Bias = round(bias_pahlevan_final_perc, 1),
-                                Error = round(error_pahlevan_final_in_perc, 1)
-          )
-          df_results <- rbind(df_results, df_temp)
-        }
-      }
+  for(i in 1:length(W_nm)){
+    
+    # Get data.frame for matchup based on the wavelength of choice
+    matchup_filt <- filter(match_base, wavelength == W_nm[i])
+     
+    # if(!is.null(MAPE_limit)){
+    #   matchup_filt <- filter(matchup_filt, MAPE <= MAPE_limit)
+    # }
+    n_match <- nrow(matchup_filt)
+    
+    if(n_match > 0){
+      
+      # Get column names for subsetting
+      # x_col <- paste0("X_value(", W_nm[k], ")")
+      # y_col <- paste0("Y_value(", W_nm[k], ")")
+      
+      # if(length(matchup_filt[[y_col]][!is.na(matchup_filt[[y_col]])]) == 0){
+      #   print(paste("No data for wavelength", W_nm[k], "nm, skipping..."))
+      #   next
+      # }
+      
+      # Create vectors from filtered columns
+      x_vec <- matchup_filt[[3]]
+      y_vec <- matchup_filt[[4]]
+      
+      # Calculate statistics
+      df_stats <- base_stats(x_vec, y_vec)
+      
+      # Create data.frame of results and add them to df_results
+      df_temp <- data.frame(row.names = NULL,
+                            sensor_X = sensor_X,
+                            sensor_Y = sensor_Y,
+                            Wavelength_nm = W_nm[i],
+                            n = n_match,
+                            Slope = df_stats$Slope,
+                            RMSE = df_stats$RMSE,
+                            # MSA = df_stats$MSA,
+                            MAPE = df_stats$MAPE,
+                            Bias = df_stats$Bias,
+                            Error = df_stats$Error)
+      df_results <- rbind(df_results, df_temp)
+    } else {
+      print(paste0("No data for wavelength ", W_nm[i]))
     }
   }
   
   # Get file name and save
-  file_name <- strsplit(basename(file_path), split = "\\.")[[1]][1]
-  write_csv(df_results, paste0(dirname(file_path), "/", file_name, "_global_stats.csv"))
+  write_csv(df_results, paste0(folder_path, "/", var_name, "_", sensor_X, "_vs_", sensor_Y, "_global_stats.csv"))
   return(df_results)
 }
 
 # Check stats
-in_situ_Ed_stats <- global_stats("~/pCloudDrive/Documents/OMTAB/HYPERNETS/MATCHUPS_in-situ_dm_10_ED/all_metrics_min_350_max_800_L1C_ED.xlsx", remote = FALSE)
-in_situ_Ld_stats <- global_stats("~/pCloudDrive/Documents/OMTAB/HYPERNETS/MATCHUPS_in-situ_dm_10_LD/all_metrics_min_350_max_800_L1C_LD.xlsx", remote = FALSE)
-in_situ_Lw_stats <- global_stats("~/pCloudDrive/Documents/OMTAB/HYPERNETS/MATCHUPS_in-situ_dm_10_LW/all_metrics_min_350_max_800_L1C_LW.xlsx", remote = FALSE)
-in_situ_Rhow_stats <- global_stats("~/pCloudDrive/Documents/OMTAB/HYPERNETS/MATCHUPS_in-situ_dm_10_RHOW/all_metrics_min_350_max_800_L2A_RHOW.xlsx", remote = FALSE)
-MODIS_stats <- global_stats("~/pCloudDrive/Documents/OMTAB/HYPERNETS/MATCHUPS_dm_120_min_350_max_800/MODIS/all_metrics_MODIS_AQUA_L2A_RHOW.xlsx",
-                              remote = TRUE, W_nm = c(412, 443, 488, 531, 555, 667))
-OLCI_stats <- global_stats("~/pCloudDrive/Documents/OMTAB/HYPERNETS/MATCHUPS_dm_120_min_350_max_800/OLCI/all_metrics_min_350_max_800_OLCI_S3B_L2A_RHOW.xlsx",
-                             remote = TRUE, W_nm = c(413, 443, 490, 560, 665, 709))
-OLCI_S3A_stats <- global_stats("~/pCloudDrive/Documents/OMTAB/HYPERNETS/MATCHUPS_dm_120_min_350_max_800/OLCI_S3A/all_metrics_min_350_max_800_OLCI_S3A_L2A_RHOW.xlsx",
-                                 remote = TRUE, W_nm = c(413, 443, 490, 560, 665, 709))
-OLCI_S3B_stats <- global_stats("~/pCloudDrive/Documents/OMTAB/HYPERNETS/MATCHUPS_dm_120_min_350_max_800/OLCI_S3B/all_metrics_min_350_max_800_OLCI_S3B_L2A_RHOW.xlsx",
-                                 remote = TRUE, W_nm = c(413, 443, 490, 560, 665, 709))
-PACEV3_stats <- global_stats("~/pCloudDrive/Documents/OMTAB/HYPERNETS/MATCHUPS_dm_120_min_350_max_800/PACEV3/all_metrics_min_350_max_800_PACE_OCI_L2A_RHOW.xlsx",
-                               remote = TRUE, W_nm = c(412, 443, 490, 510, 560, 673))
-VIIRS_N_stats <- global_stats("~/pCloudDrive/Documents/OMTAB/HYPERNETS/MATCHUPS_dm_120_min_350_max_800/VIIRS_N/all_metrics_min_350_max_800_VIIRS_SNPP_L2A_RHOW.xlsx",
-                                remote = TRUE, W_nm = c(410, 443, 486, 551, 671))
-VIIRS_J1_stats <- global_stats("~/pCloudDrive/Documents/OMTAB/HYPERNETS/MATCHUPS_dm_120_min_350_max_800/VIIRS_J1/all_metrics_min_350_max_800_VIIRS_JPSS1_L2A_RHOW.xlsx",
-                                 remote = TRUE, W_nm = c(411, 445, 489, 556, 667))
-VIIRS_J2_stats <- global_stats("~/pCloudDrive/Documents/OMTAB/HYPERNETS/MATCHUPS_dm_120_min_350_max_800/VIIRS_J2/all_metrics_min_350_max_800_VIIRS_JPSS2_L2A_RHOW.xlsx",
-                                 remote = TRUE, W_nm = c(411, 445, 489, 556, 667))
+## In situ matchups
+### ED
+global_stats("ED", "HYPERNETS", "HYPERPRO")
+global_stats("ED", "HYPERNETS", "TRIOS")
+global_stats("ED", "TRIOS", "HYPERPRO")
+### LD
+global_stats("LD", "HYPERNETS", "TRIOS")
+### LU
+global_stats("LU", "HYPERNETS", "HYPERPRO")
+global_stats("LU", "HYPERNETS", "TRIOS")
+global_stats("LU", "TRIOS", "HYPERPRO")
+### LW
+global_stats("LW", "HYPERNETS", "HYPERPRO")
+global_stats("LW", "HYPERNETS", "TRIOS")
+global_stats("LW", "TRIOS", "HYPERPRO")
+### Rhow
+global_stats("RHOW", "HYPERNETS", "HYPERPRO")
+global_stats("RHOW", "HYPERNETS", "TRIOS")
+global_stats("RHOW", "TRIOS", "HYPERPRO")
+## Satellite
+### OCI
+#### PACE v2
+##### Missing
+#### PACE v3
+##### Missing
+#### PACE v3.1
+global_stats("RHOW", "HYPERNETS", "PACE_V31", W_nm = c(412, 443, 490, 510, 560, 673))
+global_stats("RHOW", "TRIOS", "PACE_V31", W_nm = c(412, 443, 490, 510, 560, 673))
+global_stats("RHOW", "HYPERPRO", "PACE_V31", W_nm = c(412, 443, 490, 510, 560, 673))
+### MODIS
+#### AQUA
+global_stats("RHOW", "HYPERNETS", "AQUA", W_nm = c(412, 443, 488, 531, 555, 667))
+global_stats("RHOW", "TRIOS", "AQUA", W_nm = c(412, 443, 488, 531, 555, 667))
+global_stats("RHOW", "HYPERPRO", "AQUA", W_nm = c(412, 443, 488, 531, 555, 667))
+### VIIRS
+#### SNPP
+global_stats("RHOW", "HYPERNETS", "VIIRS_N", W_nm = c(410, 443, 486, 551, 671))
+global_stats("RHOW", "TRIOS", "VIIRS_N", W_nm = c(410, 443, 486, 551, 671))
+global_stats("RHOW", "HYPERPRO", "VIIRS_N", W_nm = c(410, 443, 486, 551, 671))
+#### JPSS1
+global_stats("RHOW", "HYPERNETS", "VIIRS_J1", W_nm = c(411, 445, 489, 556, 667))
+global_stats("RHOW", "TRIOS", "VIIRS_J1", W_nm = c(411, 445, 489, 556, 667))
+global_stats("RHOW", "HYPERPRO", "VIIRS_J1", W_nm = c(411, 445, 489, 556, 667))
+#### JPSS2
+global_stats("RHOW", "HYPERNETS", "VIIRS_J2", W_nm = c(411, 445, 489, 556, 667))
+global_stats("RHOW", "TRIOS", "VIIRS_J2", W_nm = c(411, 445, 489, 556, 667))
+global_stats("RHOW", "HYPERPRO", "VIIRS_J2", W_nm = c(411, 445, 489, 556, 667))
+### OLCI
+#### S3A
+global_stats("RHOW", "HYPERNETS", "S3A", W_nm = c(413, 443, 490, 560, 665, 681))
+global_stats("RHOW", "TRIOS", "S3A", W_nm = c(413, 443, 490, 560, 665, 681))
+global_stats("RHOW", "HYPERPRO", "S3A", W_nm = c(413, 443, 490, 560, 665, 681))
+#### S3B
+global_stats("RHOW", "HYPERNETS", "S3B", W_nm = c(413, 443, 490, 560, 665, 681))
+global_stats("RHOW", "TRIOS", "S3B", W_nm = c(413, 443, 490, 560, 665, 681))
+global_stats("RHOW", "HYPERPRO", "S3B", W_nm = c(413, 443, 490, 560, 665, 681))
 
 
 # Filter global stats based on MAPE ---------------------------------------
