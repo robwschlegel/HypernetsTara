@@ -90,7 +90,7 @@ load_matchups_folder <- function(var_name, sensor_X, sensor_Y, long = FALSE){
   # Load data
   if(long){
     match_base <- plyr::ldply(file_list_clean, load_matchup_long, .parallel = TRUE)
-    print(unique(match_base$wavelength))
+    # print(unique(match_base$wavelength))
   } else {
     match_base <- plyr::ldply(file_list_clean, load_matchup_mean, .parallel = TRUE)
   }
@@ -98,7 +98,7 @@ load_matchups_folder <- function(var_name, sensor_X, sensor_Y, long = FALSE){
   # Exit
   return(match_base)
 }
-  
+
 
 # Statistics --------------------------------------------------------------
 

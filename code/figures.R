@@ -47,7 +47,7 @@ plot_matchup_nm <- function(df, var_name, sensor_X, sensor_Y){
          colour = "Wavelength (nm)") +
     scale_colour_manual(values = colour_nm) +
     guides(colour = guide_legend(nrow = 1)) +
-    coord_fixed(xlim = c(0, max_axis)) +
+    coord_fixed(xlim = c(0, max_axis), ylim = c(0, max_axis)) +
     theme_minimal() +
     theme(panel.border = element_rect(fill = NA, color = "black"),
           plot.title = element_text(hjust = 0.5),
@@ -55,17 +55,75 @@ plot_matchup_nm <- function(df, var_name, sensor_X, sensor_Y){
 }
 
 
-# Load data ---------------------------------------------------------------
+# Processing functions ----------------------------------------------------
 
-rhow_hypernets_aqua <- load_matchups_folder("RHOW", "HYPERNETS", "AQUA", long = TRUE)
+# Takes variable and Y sensor as input to automagically create global scatterplot triptych
+# var_name = "RHOW"; sensor_Y = "HYPERPRO"
+global_triptych <- function(var_name, sensor_Y){
+  
+  # Check that in situ data are being requested if variable is anything other than Rhow
+  if(var_name != "RHOW" & sensor_Y != "HYPERPRO") stop("Can only use RHOW with remote data matchups")
+  
+  # Load data based on in situ comparisons or not
+  print("Loading matchups")
+  if(sensor_Y == "HYPERPRO"){
+    if(var_name == "LD"){
+      match_base_1 <- load_matchups_folder(var_name, "HYPERNETS", "TRIOS", long = TRUE)
+    } else {
+      match_base_1 <- load_matchups_folder(var_name, "HYPERNETS", "TRIOS", long = TRUE)
+      match_base_2 <- load_matchups_folder(var_name, "HYPERNETS", "HYPERPRO", long = TRUE)
+      match_base_3 <- load_matchups_folder(var_name, "TRIOS", "HYPERPRO", long = TRUE)
+    }
+  } else {
+    match_base_1 <- load_matchups_folder(var_name, "HYPERNETS", sensor_Y, long = TRUE)
+    match_base_2 <- load_matchups_folder(var_name, "TRIOS", sensor_Y, long = TRUE)
+    match_base_3 <- load_matchups_folder(var_name, "HYPERPRO", sensor_Y, long = TRUE)
+  }
+  
+  # Create the three figures
+  print("Creating figures")
+  if(sensor_Y == "HYPERPRO"){
+    if(var_name == "LD"){
+      match_fig_1 <- plot_matchup_nm(match_base_1, var_name, "HYPERNETS", "TRIOS")
+    } else {
+      match_fig_1 <- plot_matchup_nm(match_base_1, var_name, "HYPERNETS", "TRIOS")
+      match_fig_2 <- plot_matchup_nm(match_base_2, var_name, "HYPERNETS", "HYPERPRO")
+      match_fig_3 <- plot_matchup_nm(match_base_3, var_name, "TRIOS", "HYPERPRO")
+    }
+  } else {
+    match_fig_1 <- plot_matchup_nm(match_base_1, var_name, "HYPERNETS", sensor_Y)
+    match_fig_2 <- plot_matchup_nm(match_base_2, var_name, "TRIOS", sensor_Y)
+    match_fig_3 <- plot_matchup_nm(match_base_3, var_name, "HYPERPRO", sensor_Y)
+  }
+  
+  # Combine into final figure and save
+  print("Saving and exit")
+  if(var_name == "LD"){ 
+    match_fig <- match_fig_1 +guides(colour = guide_legend(nrow = 2)) 
+    ggsave(paste0("figures/global_scatter_all_",var_name,"_",sensor_Y,".png"), match_fig, width = 6, height = 7)
+  } else {
+    match_fig <- match_fig_1 + match_fig_2 + match_fig_3 + plot_layout(guides = "collect") &
+      theme(legend.position = "bottom")
+    ggsave(paste0("figures/global_scatter_all_",var_name,"_",sensor_Y,".png"), match_fig, width = 12, height = 5)
+  }
+}
 
 
 # Global scatterplots -----------------------------------------------------
 
-test1 <- plot_matchup_nm(rhow_hypernets_aqua, "Rhow", "HYPERNETS", "AQUA")
-test2 <- plot_matchup_nm(rhow_hypernets_aqua, "Rhow", "HYPERNETS", "AQUA")
-test3 <- plot_matchup_nm(rhow_hypernets_aqua, "Rhow", "HYPERNETS", "AQUA")
-test4 <- test1 + test2 + test3 + plot_layout(guides = "collect") &
-  theme(legend.position = "bottom")
-ggsave("figures/test1.png", test4, width = 12, height = 5)
+# In situ
+global_triptych("ED", "HYPERPRO")
+global_triptych("LD", "HYPERPRO")
+global_triptych("LU", "HYPERPRO")
+global_triptych("LW", "HYPERPRO")
+global_triptych("RHOW", "HYPERPRO")
+ 
+# Remote
+global_triptych("RHOW", "PACE_V31")
+global_triptych("RHOW", "AQUA")
+global_triptych("RHOW", "VIIRS_N")
+global_triptych("RHOW", "VIIRS_J1")
+global_triptych("RHOW", "VIIRS_J2")
+global_triptych("RHOW", "S3A")
+global_triptych("RHOW", "S3B")
 
