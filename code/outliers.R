@@ -53,7 +53,7 @@ plot_matchup_nm <- function(df, var_name, x_sensor, y_sensor){
          colour = "Wavelength (nm)") +
     scale_colour_manual(values = colour_nm)  +
     theme_minimal() +
-    theme(plot.background = element_rect(fill = NA, color = "black"),
+    theme(panel.border = element_rect(fill = NA, color = "black"),
           legend.position = "bottom")
 }
 
@@ -71,7 +71,7 @@ plot_matchup_date <- function(df, var_name, x_sensor, y_sensor){
          colour = "date") +
     # scale_colour_brewer(palette = "Dark2")  +
     theme_minimal() +
-    theme(plot.background = element_rect(fill = NA, color = "black"),
+    theme(panel.border = element_rect(fill = NA, color = "black"),
           legend.position = "bottom")
 }
 
@@ -88,7 +88,7 @@ plot_matchup_dateTime <- function(df, var_name, x_sensor, y_sensor, date_filter)
          y = paste(var_name, y_sensor),
          colour = "time (UTC)") +
     theme_minimal() +
-    theme(plot.background = element_rect(fill = NA, color = "black"),
+    theme(panel.border = element_rect(fill = NA, color = "black"),
           legend.position = "bottom")
 }
 

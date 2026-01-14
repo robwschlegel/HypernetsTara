@@ -62,13 +62,17 @@ load_matchup_long <- function(file_name){
   df_mean <- load_matchup_mean(file_name)
   
   # Pivot longer
-  # Melt it for additional stats
   df_long <- df_mean |> 
     pivot_longer(cols = matches("1|2|3|4|5|6|7|8|9"), names_to = "wavelength", values_to = "value") |> 
     dplyr::select(-day, -time, -longitude, -latitude) |>
     pivot_wider(names_from = sensor, values_from = value) |>
     na.omit() |> 
-    mutate(file_name = basename(file_name), .before = "wavelength")
+    mutate(wavelength = as.numeric(wavelength),
+           file_name = basename(file_name), .before = "wavelength") |> 
+    mutate(wavelength_group = cut(wavelength,
+                                  breaks = c(350, 400, 450, 500, 550, 600, 650, 700, 750, 800),
+                                  labels = labels_nm,
+                                  include.lowest = FALSE, right = FALSE), .after = "wavelength")
 }
 
 # Load all files in a given folder
