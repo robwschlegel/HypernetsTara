@@ -4,11 +4,9 @@
 # TODO: Replace PACE data with MODIS, or something that covers the full mapped region
 
 
-# Libraries ---------------------------------------------------------------
+# Setup -------------------------------------------------------------------
 
-library(tidyverse)
-library(ncdf4)
-library(patchwork)
+source("code/functions.R")
 
 
 # Functions ---------------------------------------------------------------

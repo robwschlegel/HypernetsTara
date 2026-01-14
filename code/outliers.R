@@ -2,17 +2,9 @@
 # Convenience functions to rapidly visualise outliers
 
 
-# Libraries ---------------------------------------------------------------
+# Setup -------------------------------------------------------------------
 
-library(tidyverse)
-library(geosphere) # For determining distance between points
-library(readxl)
-# library(janitor)
-
-# Define the wavelength (nm) band colour palette
-labels_nm <- c("350-400", "400-450", "450-500", "500-550", "550-600", "600-650", "650-700", "700-750", "750-800")
-colour_nm <- c('darkviolet', 'violet', 'blue', 'darkgreen', 'yellow', 'orange', 'red', "firebrick", 'sienna')
-names(colour_nm) <- labels_nm
+source("code/functions.R")
 
 
 # Outlier hunting ---------------------------------------------------------
@@ -61,7 +53,7 @@ plot_matchup_nm <- function(df, var_name, x_sensor, y_sensor){
          colour = "Wavelength (nm)") +
     scale_colour_manual(values = colour_nm)  +
     theme_minimal() +
-    theme(panel.background = element_rect(fill = NA, color = "black"),
+    theme(plot.background = element_rect(fill = NA, color = "black"),
           legend.position = "bottom")
 }
 
@@ -79,7 +71,7 @@ plot_matchup_date <- function(df, var_name, x_sensor, y_sensor){
          colour = "date") +
     # scale_colour_brewer(palette = "Dark2")  +
     theme_minimal() +
-    theme(panel.background = element_rect(fill = NA, color = "black"),
+    theme(plot.background = element_rect(fill = NA, color = "black"),
           legend.position = "bottom")
 }
 
@@ -96,7 +88,7 @@ plot_matchup_dateTime <- function(df, var_name, x_sensor, y_sensor, date_filter)
          y = paste(var_name, y_sensor),
          colour = "time (UTC)") +
     theme_minimal() +
-    theme(panel.background = element_rect(fill = NA, color = "black"),
+    theme(plot.background = element_rect(fill = NA, color = "black"),
           legend.position = "bottom")
 }
 
