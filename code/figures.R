@@ -62,7 +62,7 @@ plot_matchup_nm <- function(df, var_name, sensor_X, sensor_Y){
 # TODO: Same for the in situ figures so they can be paneled in an interesting way
 # Takes variable and Y sensor as input to automagically create global scatterplot triptych
 # var_name = "RHOW"; sensor_Y = "HYPERPRO"
-global_triptych <- function(var_name, sensor_Y){
+global_triptych <- function(var_name, sensor_Y, cut_legend = NULL){
   
   # Check that in situ data are being requested if variable is anything other than Rhow
   if(var_name != "RHOW" & sensor_Y != "HYPERPRO") stop("Can only use RHOW with remote data matchups")
@@ -98,15 +98,91 @@ global_triptych <- function(var_name, sensor_Y){
   }
   
   # Combine into final figure and save
-  print("Saving and exit")
+  print("Processing and exit")
   if(var_name == "LD"){ 
-    match_fig <- match_fig_1 + guides(colour = "none") 
-    ggsave(paste0("figures/global_scatter_all_",var_name,"_",sensor_Y,".png"), match_fig, width = 5, height = 5)
+    match_fig <- match_fig_1 + 
+      guides(colour = guide_legend(nrow = 2)) +
+      theme(legend.position = "right",
+            legend.direction = "horizontal") 
+    # ggsave(paste0("figures/global_scatter_all_",var_name,"_",sensor_Y,".png"), match_fig, width = 5, height = 5)
+  } else if(!is.null(cut_legend)){
+    match_fig_1 <- match_fig_1 + guides(colour = "none")
+    match_fig_2 <- match_fig_2 + guides(colour = "none")
+    match_fig_3 <- match_fig_3 + guides(colour = "none")
+    match_fig <- match_fig_1 + match_fig_2 + match_fig_3
   } else {
+    # match_fig <- ggpubr::ggarrange(match_fig_1, match_fig_2, match_fig_3, ncol = 3, nrow = 1, 
+    #                                common.legend = TRUE, legend = "bottom")
     match_fig <- match_fig_1 + match_fig_2 + match_fig_3 + plot_layout(guides = "collect") &
       theme(legend.position = "bottom")
-    ggsave(paste0("figures/global_scatter_all_",var_name,"_",sensor_Y,".png"), match_fig, width = 12, height = 5)
+    # ggsave(paste0("figures/global_scatter_all_",var_name,"_",sensor_Y,".png"), match_fig, width = 12, height = 5)
   }
+}
+
+# Stack the triptych output as required
+# var_name = "ED"; sensor_Z = "HYPERPRO"
+# var_name = "RHOW"; sensor_Z = "HYPERPRO"
+# var_name = "RHOW"; sensor_Z = "MODIS"
+# var_name = "RHOW"; sensor_Z = "OLCI"
+# var_name = "RHOW"; sensor_Z = "VIIRS"
+global_triptych_stack <- function(var_name, sensor_Z){
+  
+  # Create ply grid
+  ply_grid <- sensor_grid(var_name, sensor_Z)
+  
+  # Cut it down
+  ply_grid_short
+  
+  # Get sensor variant count
+  sensor_count <- length(unique(ply_grid$sensor_Y))
+
+  # Create figures
+  if(var_name != "RHOW"){
+    fig_a <- global_triptych("ED", "HYPERPRO", cut_legend = "cut") #+ guides(colour = "none")
+    fig_b <- global_triptych("LD", "HYPERPRO")
+    # global_triptych("LU", "HYPERPRO")
+    fig_c <- global_triptych("LW", "HYPERPRO", cut_legend = "cut")
+    
+    # Combine into special layout
+    fig_stack <- ggpubr::ggarrange(fig_a, fig_b, fig_c, ncol = 1, nrow = 3, 
+                                   labels = c("a)", "b)", "c)"), hjust = c(-2.2, -7.0, -1.5)) + 
+      ggpubr::bgcolor("white") + ggpubr::border("white", size = 2)
+    # fig_stack <- plot_spacer() + fig_a / fig_b / fig_c + plot_layout(ncol = 1, nrow = 3, heights = c(1, 1, 1))
+    ggsave(paste0("figures/global_scatter_OTHER_in_situ.png"), fig_stack, width = 11, height = 12)
+  } else if(sensor_Z == "HYPERPRO"){
+    fig_stack <- global_triptych("RHOW", "HYPERPRO")
+    ggsave(paste0("figures/global_scatter_",var_name,"_in_situ.png"), fig_stack, width = 12, height = 5)
+    # TODO: Optimise this logic gate to make this decision automagically
+  } else if(sensor_count == 1){
+    fig_stack <- global_triptych(var_name, ply_grid$sensor_Y[1])
+    ggsave(paste0("figures/global_scatter_",var_name,"_",sensor_Z,".png"), fig_stack, width = 12, height = 5)
+  } else if(sensor_count == 2){
+    fig_a <- global_triptych(var_name, ply_grid$sensor_Y[1], cut_legend = "cut")
+    fig_b <- global_triptych(var_name, ply_grid$sensor_Y[2])
+    fig_stack <- ggpubr::ggarrange(fig_a, fig_b, ncol = 1, nrow = sensor_count, 
+                                   labels = c("a)", "b)"), heights = c(1, 1.14)) + 
+      ggpubr::bgcolor("white") + ggpubr::border("white", size = 2)
+    # fig_stack <- fig_a / fig_b + plot_layout(guides = "collect") &
+    #   theme(legend.position = "bottom") #+ 
+      # plot_annotation(tag_levels = "a", tag_suffix = ")")
+    # fig_stack +
+    #   annotate("text", x = -Inf, y = Inf, label = "a)", vjust = 0, hjust = -2) +
+    #   annotate("text", x = -Inf, y = Inf, label = "b)", vjust = 0, hjust = 5) #+
+      # annotate("text", x = -Inf, y = Inf, label = "c)", vjust = 2, hjust = 1.2)
+    ggsave(paste0("figures/global_scatter_",var_name,"_",sensor_Z,".png"), fig_stack, width = 12, height = 9)
+  }
+  
+  # Correct sensor_Z for file names upon saving
+  if(var_name == "LD"){
+    sensor_Z <- "Hyp_vs_Trios"
+  } else if(sensor_Z == "HYPERPRO"){
+    sensor_Z <- "in_situ"
+  } else {
+    sensor_Z <- sensor_Z
+  }
+  
+  # Save and exit
+  
 }
 
 
