@@ -7,6 +7,12 @@
 source("code/functions.R")
 
 
+
+#  Check individual values ------------------------------------------------
+
+# This space will contain simple code that allows the calculation of a targeted cell within the output tables
+
+
 # Individual matchup stats ------------------------------------------------
 
 # Run for all variables and satellites

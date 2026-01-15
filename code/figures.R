@@ -124,14 +124,16 @@ global_triptych <- function(var_name, sensor_Y, cut_legend = NULL){
 # var_name = "RHOW"; sensor_Z = "HYPERPRO"
 # var_name = "RHOW"; sensor_Z = "MODIS"
 # var_name = "RHOW"; sensor_Z = "OLCI"
+# var_name = "RHOW"; sensor_Z = "OCI"
 # var_name = "RHOW"; sensor_Z = "VIIRS"
 global_triptych_stack <- function(var_name, sensor_Z){
   
   # Create ply grid
-  ply_grid <- sensor_grid(var_name, sensor_Z)
+  ply_grid <- sensor_grid(var_name, sensor_Z) |> 
+    dplyr::select(var_name, sensor_Y) |> distinct()
   
   # Cut it down
-  ply_grid_short
+  # ply_grid_short
   
   # Get sensor variant count
   sensor_count <- length(unique(ply_grid$sensor_Y))
@@ -170,37 +172,27 @@ global_triptych_stack <- function(var_name, sensor_Z){
     #   annotate("text", x = -Inf, y = Inf, label = "b)", vjust = 0, hjust = 5) #+
       # annotate("text", x = -Inf, y = Inf, label = "c)", vjust = 2, hjust = 1.2)
     ggsave(paste0("figures/global_scatter_",var_name,"_",sensor_Z,".png"), fig_stack, width = 12, height = 9)
+  } else if(sensor_count == 3){
+    fig_a <- global_triptych(var_name, ply_grid$sensor_Y[1], cut_legend = "cut")
+    fig_b <- global_triptych(var_name, ply_grid$sensor_Y[2], cut_legend = "cut")
+    fig_c <- global_triptych(var_name, ply_grid$sensor_Y[3])
+    fig_stack <- ggpubr::ggarrange(fig_a, fig_b, fig_c, ncol = 1, nrow = sensor_count, 
+                                   labels = c("a)", "b)", "c)"), heights = c(1, 1, 1.13)) + 
+      ggpubr::bgcolor("white") + ggpubr::border("white", size = 2)
+    ggsave(paste0("figures/global_scatter_",var_name,"_",sensor_Z,".png"), fig_stack, width = 12, height = 13)
   }
-  
-  # Correct sensor_Z for file names upon saving
-  if(var_name == "LD"){
-    sensor_Z <- "Hyp_vs_Trios"
-  } else if(sensor_Z == "HYPERPRO"){
-    sensor_Z <- "in_situ"
-  } else {
-    sensor_Z <- sensor_Z
-  }
-  
-  # Save and exit
-  
 }
 
 
 # Global scatterplots -----------------------------------------------------
 
 # In situ
-global_triptych("ED", "HYPERPRO")
-global_triptych("LD", "HYPERPRO")
-global_triptych("LU", "HYPERPRO")
-global_triptych("LW", "HYPERPRO")
-global_triptych("RHOW", "HYPERPRO")
+global_triptych_stack("insitu", "HYPERPRO")
+global_triptych_stack("RHOW", "HYPERPRO")
  
 # Remote
-global_triptych("RHOW", "PACE_V31")
-global_triptych("RHOW", "AQUA")
-global_triptych("RHOW", "VIIRS_N")
-global_triptych("RHOW", "VIIRS_J1")
-global_triptych("RHOW", "VIIRS_J2")
-global_triptych("RHOW", "S3A")
-global_triptych("RHOW", "S3B")
+global_triptych_stack("RHOW", "OCI")
+global_triptych_stack("RHOW", "MODIS")
+global_triptych_stack("RHOW", "VIIRS")
+global_triptych_stack("RHOW", "OLCI")
 

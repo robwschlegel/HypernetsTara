@@ -344,7 +344,7 @@ process_sensor <- function(var_name, sensor_Z, stat_choice = "matchup"){
   # Create ply grid
   ply_grid <- sensor_grid(var_name, sensor_Z)
   
-  # Correct sensor_Z for ffile names upn saving
+  # Correct sensor_Z for file names upon saving
   if(var_name == "LD"){
     sensor_Z <- "Hyp_vs_Trios"
   } else if(sensor_Z == "HYPERPRO"){
@@ -404,7 +404,7 @@ global_stats <- function(var_name, sensor_X, sensor_Y){#,
   # file_uniq_list <- right_join(file_all, uniq_base, by = c("sensor_X", "sensor_Y", "dateTime_X"))
   
   # Filter based on filter_table if provided
-  # TODO: Correct this to work with an ED file
+  # Correct this to work with an ED file
   # if(!is.null(filter_table)){
   #   file_uniq_list <- semi_join(file_uniq_list, filter_table, by = c("sensor", "day", "time", "longitude", "latitude"))
   # }
@@ -413,7 +413,7 @@ global_stats <- function(var_name, sensor_X, sensor_Y){#,
   # match_base <- map_dfr(file.path(folder_path, file_uniq_list$file_name), load_matchup_long)
   # NB: Decided to run global results on all possible matchups
   match_base <- map_dfr(file_list_clean, load_matchup_long)
-  print(unique(match_base$wavelength))
+  # print(unique(match_base$wavelength))
   
   # The VIIRS versions have different wavelengths...
   # This hard coded fix is one method of dealing with this.
