@@ -131,15 +131,46 @@ process_matchup_folder <- function(var_name, sensor_X, sensor_Y, filter_table = 
                             filter_table = filter_table)
   
   # Save results and exit
-  if(is.null(filter_table)){
-    file_name <- paste0("all_",basename(folder_path),"_matchup_stats.csv")
-  }  else {
-    file_name <- paste0("all_",basename(folder_path),"_matchup_stats_filtered.csv")
-  }
-  write_csv(df_results, file.path(folder_path, file_name))
+  # if(is.null(filter_table)){
+  #   file_name <- paste0("all_",basename(folder_path),"_matchup_stats.csv")
+  # }  else {
+  #   file_name <- paste0("all_",basename(folder_path),"_matchup_stats_filtered.csv")
+  # }
+  # write_csv(df_results, file.path(folder_path, file_name))
+  
+  # Exit
+  return(df_results)
 }
 
-# Run for all folders
+# Process multiple folders based on request
+var_name = "LD"; sensor_Z = "HYPERPRO"
+# var_name = "ED"; sensor_Z = "HYPERPRO"
+proces_matchup_request <- function(var_name, sensor_Z){
+  
+  
+  test1 <- plyr::ldply(var_name, process_matchup_folder, sensor_X = c("HYPERNETS", "TRIOS"), sensor_Y = c("TRIOS", "HYPERPRO"))
+  test1 <- plyr::ldply(var_name, process_matchup_folder, sensor_X = c("HYPERNETS"), sensor_Y = c("TRIOS"))
+  test2 <- plyr::mdply(data.frame(var_name = var_name, 
+                                  sensor_X = c("HYPERNETS", "HYPERNETS", "TRIOS"), 
+                                  sensor_Y = c("TRIOS", "HYPERPRO", "HYPERPRO")),
+                       process_matchup_folder, .parallel = TRUE)
+  
+  print("Processing matchups")
+  if(var_name == "LD"){
+    proc_base_1 <- process_matchup_folder(var_name, "HYPERNETS", "TRIOS", long = TRUE)
+  } else if(sensor_Z == "HYPERPRO"){
+    proc_base_1 <- process_matchup_folder(var_name, "HYPERNETS", "TRIOS", long = TRUE)
+    proc_base_2 <- process_matchup_folder(var_name, "HYPERNETS", "HYPERPRO", long = TRUE)
+    proc_base_3 <- process_matchup_folder(var_name, "TRIOS", "HYPERPRO", long = TRUE)
+  } else {
+    match_base_1 <- process_matchup_folder(var_name, "HYPERNETS", sensor_Y, long = TRUE)
+    match_base_2 <- process_matchup_folder(var_name, "TRIOS", sensor_Y, long = TRUE)
+    match_base_3 <- process_matchup_folder(var_name, "HYPERPRO", sensor_Y, long = TRUE)
+  }
+}
+
+# Run for all variables and satellites
+
 ## In situ matchups
 ### ED
 process_matchup_folder("ED", "HYPERNETS", "HYPERPRO")
@@ -155,6 +186,10 @@ process_matchup_folder("LU", "TRIOS", "HYPERPRO")
 process_matchup_folder("LW", "HYPERNETS", "HYPERPRO")
 process_matchup_folder("LW", "HYPERNETS", "TRIOS")
 process_matchup_folder("LW", "TRIOS", "HYPERPRO")
+### Rhow
+process_matchup_folder("RHOW", "HYPERNETS", "HYPERPRO")
+process_matchup_folder("RHOW", "HYPERNETS", "TRIOS")
+process_matchup_folder("RHOW", "TRIOS", "HYPERPRO")
 ## Satellite
 ### OCI
 #### PACE v2

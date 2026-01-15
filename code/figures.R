@@ -57,6 +57,9 @@ plot_matchup_nm <- function(df, var_name, sensor_X, sensor_Y){
 
 # Processing functions ----------------------------------------------------
 
+# TODO: Limit the data plotted to match the W_nm shown in the text tables - or not
+# TODO: Allow for multiple different versions of each sensor to be stacked into one figure with a) b) c) labels
+# TODO: Same for the in situ figures so they can be paneled in an interesting way
 # Takes variable and Y sensor as input to automagically create global scatterplot triptych
 # var_name = "RHOW"; sensor_Y = "HYPERPRO"
 global_triptych <- function(var_name, sensor_Y){
@@ -66,14 +69,12 @@ global_triptych <- function(var_name, sensor_Y){
   
   # Load data based on in situ comparisons or not
   print("Loading matchups")
-  if(sensor_Y == "HYPERPRO"){
-    if(var_name == "LD"){
-      match_base_1 <- load_matchups_folder(var_name, "HYPERNETS", "TRIOS", long = TRUE)
-    } else {
-      match_base_1 <- load_matchups_folder(var_name, "HYPERNETS", "TRIOS", long = TRUE)
-      match_base_2 <- load_matchups_folder(var_name, "HYPERNETS", "HYPERPRO", long = TRUE)
-      match_base_3 <- load_matchups_folder(var_name, "TRIOS", "HYPERPRO", long = TRUE)
-    }
+  if(var_name == "LD"){
+    match_base_1 <- load_matchups_folder(var_name, "HYPERNETS", "TRIOS", long = TRUE)
+  } else if(sensor_Y == "HYPERPRO"){
+    match_base_1 <- load_matchups_folder(var_name, "HYPERNETS", "TRIOS", long = TRUE)
+    match_base_2 <- load_matchups_folder(var_name, "HYPERNETS", "HYPERPRO", long = TRUE)
+    match_base_3 <- load_matchups_folder(var_name, "TRIOS", "HYPERPRO", long = TRUE)
   } else {
     match_base_1 <- load_matchups_folder(var_name, "HYPERNETS", sensor_Y, long = TRUE)
     match_base_2 <- load_matchups_folder(var_name, "TRIOS", sensor_Y, long = TRUE)
@@ -99,8 +100,8 @@ global_triptych <- function(var_name, sensor_Y){
   # Combine into final figure and save
   print("Saving and exit")
   if(var_name == "LD"){ 
-    match_fig <- match_fig_1 +guides(colour = guide_legend(nrow = 2)) 
-    ggsave(paste0("figures/global_scatter_all_",var_name,"_",sensor_Y,".png"), match_fig, width = 6, height = 7)
+    match_fig <- match_fig_1 + guides(colour = "none") 
+    ggsave(paste0("figures/global_scatter_all_",var_name,"_",sensor_Y,".png"), match_fig, width = 5, height = 5)
   } else {
     match_fig <- match_fig_1 + match_fig_2 + match_fig_3 + plot_layout(guides = "collect") &
       theme(legend.position = "bottom")
