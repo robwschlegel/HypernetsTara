@@ -7,7 +7,6 @@
 source("code/functions.R")
 
 
-
 #  Check individual values ------------------------------------------------
 
 # This space will contain simple code that allows the calculation of a targeted cell within the output tables
@@ -42,7 +41,7 @@ process_sensor("RHOW", "HYPERPRO", "global")
 process_sensor("RHOW","OCI", "global")
 process_sensor("RHOW", "MODIS", "global")
 process_sensor("RHOW", "VIIRS", "global")
-process_sensor("RHOW", "OLCI", "global")#, W_nm = c(413, 443, 490, 560, 665, 681))
+process_sensor("RHOW", "OLCI", "global")
 
 
 # Duplicated matchups -----------------------------------------------------

@@ -28,12 +28,16 @@ options(scipen = 9999)
 
 # Function that assembles file directory based on desired variable and sensors
 file_path_build <- function(var_name, sensor_X, sensor_Y){
-  file_path <- paste0("~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results/",
+  file_path <- paste0("~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results_v2/",
                       toupper(var_name),"_",toupper(sensor_X),"_vs_", toupper(sensor_Y))
 }
 
 # Load a single matchup file and create mean values from all replicates
+# file_name <- "~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results_v2/RHOW_HYPERNETS_vs_HYPERPRO/HYPERNETS_vs_HYPERPRO_vs_20240809T073700_RHOW.csv"
+# file_name <- "~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results_v2/ED_HYPERNETS_vs_TRIOS/HYPERNETS_vs_TRIOS_vs_20240808T065700_ED.csv"
 load_matchup_mean <- function(file_name){
+  
+  # message(paste0("Started loading : ", file_name))
   
   # Load the csv file
   suppressMessages(
@@ -42,16 +46,32 @@ load_matchup_mean <- function(file_name){
   colnames(df_match)[1] <- "sensor"
   
   # Get means per file
+  # df_mean <- df_match |> 
+  #   dplyr::select(-radiometer_id, -data_id, -type) |> 
+  #   mutate(sensor = gsub(" 1$| 2$| 3$| 4$| 5$| 6$| 7$| 8$| 9$", "", sensor)) |> 
+  #   # Remove HyperNets pre-processed data
+  #   filter(sensor != "Hyp_nosc") |> 
+  #   # mutate(dateTime = as.POSIXct(paste(day, time), format = "%Y%m%d %H%M%S")) |> # make this later
+  #   # NB: Choosing to allow lon/lat be averaged to prevent different pixels from counting as different records
+  #   group_by(sensor, day, time) |> #, longitude, latitude) |>
+  #   summarise_all(mean, na.rm = TRUE) |> 
+  #   ungroup()
+  
+  # Get means per file
   df_mean <- df_match |> 
-    dplyr::select(-radiometer_id, -data_id, -type) |> 
-    mutate(sensor = gsub(" 1$| 2$| 3$| 4$| 5$| 6$| 7$| 8$| 9$", "", sensor)) |> 
-    # Remove HyperNets pre-processed data
-    filter(sensor != "Hyp_nosc") |> 
-    # mutate(dateTime = as.POSIXct(paste(day, time), format = "%Y%m%d %H%M%S")) |> # make this later
-    # NB: Choosing to allow lon/lat be averaged to prevent different pixels from counting as different records
-    group_by(sensor, day, time) |> #, longitude, latitude) |>
-    summarise_all(mean, na.rm = TRUE) |> 
-    ungroup()
+    dplyr::select(-radiometer_id, -data_id, -type) |>
+    filter(grepl(" 1", sensor)) |> 
+    mutate(sensor = gsub(" 1$| 2$| 3$| 4$| 5$| 6$| 7$| 8$| 9$", "", sensor)) |> #,
+           # day = as.character(day),
+           # time = as.character(time)) |> 
+    filter(sensor != "Hyp_nosc") #|> 
+  # mutate(dateTime = as.POSIXct(paste(day, time), format = "%Y%m%d %H%M%S")) |> # make this later
+  
+  # Double check that only two rows of data have been selected
+  if(nrow(df_mean) != 2) warning(paste0("More than two rows in : ", file_path))
+  
+  # Exit
+  # message(paste0("Finished loading : ", file_name))
   return(df_mean)
 }
 
@@ -211,33 +231,16 @@ base_stats <- function(x_vec, y_vec){
 # Matchup processing ------------------------------------------------------
 
 # Function that interrogates each matchup file to produce the needed output for all following comparisons
-# file_path <- "~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results/RHOW_HYPERNETS_vs_HYPERPRO/HYPERNETS_vs_HYPERPRO_vs_20240809T073700_RHOW.csv"
+# file_path <- "~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results_v2/RHOW_HYPERNETS_vs_HYPERPRO/HYPERNETS_vs_HYPERPRO_vs_20240809T073700_RHOW.csv"
+# file_path <- "~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results_v2/ED_HYPERNETS_vs_TRIOS/HYPERNETS_vs_TRIOS_vs_20240808T065700_ED.csv"
 # file_path <- file_list[1]
 process_matchup_file <- function(file_path, filter_table = NULL){
   
-  # Load the data
-  suppressMessages(
-    df_base <- read_delim(file_path, delim = ";")
-  )
-  colnames(df_base)[1] <- "sensor"
-  
-  # Removes 1,2,3 etc. from sensor column values
-  df_mean <- df_base |> 
-    dplyr::select(-radiometer_id, -data_id) |>
-    mutate(sensor = gsub(" 1$| 2$| 3$| 4$| 5$| 6$| 7$| 8$| 9$", "", sensor),
-           day = as.character(day),
-           time = as.character(time)) |> 
-    # Remove HyperNets pre-processed data
-    filter(sensor != "Hyp_nosc") |> 
-    # mutate(dateTime = as.POSIXct(paste(day, time), format = "%Y%m%d %H%M%S")) |> # make this later
-    # NB: It is a choice to allow the lon/lat values to get averaged
-    # This is done for the satellite data as each pixel is given as a row and need to be meaned
-    group_by(sensor, type, day, time) |> #, longitude, latitude) |>
-    summarise_all(mean, na.rm = TRUE) |> 
-    ungroup()
-  # print(df_mean[,1:10])
+  # Load the mean data
+  df_mean <- load_matchup_mean(file_path)
   
   # Filter based on filter_table if provided
+  # NB: Not currently used
   if(!is.null(filter_table)){
     df_mean <- semi_join(df_mean, filter_table, by = c("sensor", "day", "time", "longitude", "latitude"))
   }
@@ -261,7 +264,7 @@ process_matchup_file <- function(file_path, filter_table = NULL){
         # Get data.frame for matchup based on the two sensors being compared
         df_sensor_sub <- df_mean |> 
           filter(sensor %in% c(sensors[i], sensors[j])) |> 
-          mutate(dateTime = as.POSIXct(paste(day, time), format = "%Y%m%d %H%M%S"), .after = "type", .keep = "unused")
+          mutate(dateTime = as.POSIXct(paste(day, time), format = "%Y%m%d %H%M%S"), .after = "latitude", .keep = "unused")
         
         # get distances
         hav_dist <- round(distHaversine(df_sensor_sub[c("longitude", "latitude")])/1000, 2) # distance in km
@@ -273,7 +276,7 @@ process_matchup_file <- function(file_path, filter_table = NULL){
         # Melt it for additional stats
         df_sensor_long <- df_sensor_sub |> 
           pivot_longer(cols = matches("1|2|3|4|5|6|7|8|9"), names_to = "Wavelength", values_to = "Value") |> 
-          dplyr::select(-dateTime, -longitude, -latitude, -type) |> 
+          dplyr::select(-dateTime, -longitude, -latitude) |> 
           pivot_wider(names_from = sensor, values_from = Value) |> 
           na.omit()
         

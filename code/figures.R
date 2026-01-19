@@ -58,8 +58,6 @@ plot_matchup_nm <- function(df, var_name, sensor_X, sensor_Y){
 # Processing functions ----------------------------------------------------
 
 # TODO: Limit the data plotted to match the W_nm shown in the text tables - or not
-# TODO: Allow for multiple different versions of each sensor to be stacked into one figure with a) b) c) labels
-# TODO: Same for the in situ figures so they can be paneled in an interesting way
 # Takes variable and Y sensor as input to automagically create global scatterplot triptych
 # var_name = "RHOW"; sensor_Y = "HYPERPRO"
 global_triptych <- function(var_name, sensor_Y, cut_legend = NULL){
