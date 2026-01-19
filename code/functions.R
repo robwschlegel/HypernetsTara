@@ -44,26 +44,13 @@ load_matchup_mean <- function(file_name){
     df_match <- read_delim(file_name, delim = ";", col_types = "ciccnnic")
   )
   colnames(df_match)[1] <- "sensor"
-  
-  # Get means per file
-  # df_mean <- df_match |> 
-  #   dplyr::select(-radiometer_id, -data_id, -type) |> 
-  #   mutate(sensor = gsub(" 1$| 2$| 3$| 4$| 5$| 6$| 7$| 8$| 9$", "", sensor)) |> 
-  #   # Remove HyperNets pre-processed data
-  #   filter(sensor != "Hyp_nosc") |> 
-  #   # mutate(dateTime = as.POSIXct(paste(day, time), format = "%Y%m%d %H%M%S")) |> # make this later
-  #   # NB: Choosing to allow lon/lat be averaged to prevent different pixels from counting as different records
-  #   group_by(sensor, day, time) |> #, longitude, latitude) |>
-  #   summarise_all(mean, na.rm = TRUE) |> 
-  #   ungroup()
+
   
   # Get means per file
   df_mean <- df_match |> 
     dplyr::select(-radiometer_id, -data_id, -type) |>
     filter(grepl(" 1", sensor)) |> 
-    mutate(sensor = gsub(" 1$| 2$| 3$| 4$| 5$| 6$| 7$| 8$| 9$", "", sensor)) |> #,
-           # day = as.character(day),
-           # time = as.character(time)) |> 
+    mutate(sensor = gsub(" 1$| 2$| 3$| 4$| 5$| 6$| 7$| 8$| 9$", "", sensor)) |>
     filter(sensor != "Hyp_nosc") #|> 
   # mutate(dateTime = as.POSIXct(paste(day, time), format = "%Y%m%d %H%M%S")) |> # make this later
   
@@ -144,9 +131,7 @@ sensor_grid <- function(var_name, sensor_Z){
     if(sensor_Z == "MODIS"){
       sensor_Y <- c("AQUA")
     } else if(sensor_Z == "OCI"){
-      # TODO: Reactivate once these data are available
-      # sensor_Y <- c("PACE_V2", "PACE_V3", "PACE_V31")
-      sensor_Y <- c("PACE_V31")
+      sensor_Y <- c("PACE_V2", "PACE_V30", "PACE_V31")
     } else if(sensor_Z == "VIIRS"){
       sensor_Y <- c("VIIRS_N", "VIIRS_J1", "VIIRS_J2")
     } else if(sensor_Z == "OLCI"){
@@ -168,7 +153,7 @@ sensor_grid <- function(var_name, sensor_Z){
 W_nm_out <- function(sensor_Y){
   if(sensor_Y %in% c("HYPERNETS", "TRIOS", "HYPERPRO")){
     W_nm <- c(400, 412, 443, 490, 510, 560, 620, 673)
-  } else if(sensor_Y %in% c("PACE_V2", "PACE_V3", "PACE_V31")){
+  } else if(sensor_Y %in% c("PACE_V2", "PACE_V30", "PACE_V31")){
     W_nm <- c(412, 443, 490, 510, 560, 673)
   } else if(sensor_Y == "AQUA"){
     W_nm <- c(412, 443, 488, 531, 555, 667)
@@ -380,7 +365,7 @@ global_stats <- function(var_name, sensor_X, sensor_Y){#,
                          # W_nm = c(400, 412, 443, 490, 510, 560, 620, 673)){
   
   # NB: Commented text here is used to filter by unique matchups
-  # THis was decided against as it limits the number of matchups dramatically
+  # This was decided against as it limits the number of matchups dramatically
   
   # Get unique matchups
   # uniq_base <- n_matchup_uniq(var_name, sensor_X, sensor_Y, basic = FALSE)
@@ -436,15 +421,6 @@ global_stats <- function(var_name, sensor_X, sensor_Y){#,
     n_match <- nrow(matchup_filt)
     
     if(n_match > 0){
-      
-      # Get column names for subsetting
-      # x_col <- paste0("X_value(", W_nm[k], ")")
-      # y_col <- paste0("Y_value(", W_nm[k], ")")
-      
-      # if(length(matchup_filt[[y_col]][!is.na(matchup_filt[[y_col]])]) == 0){
-      #   print(paste("No data for wavelength", W_nm[k], "nm, skipping..."))
-      #   next
-      # }
       
       # Correct sensor labels as necessary
       if(sensor_X == "HYPERNETS"){

@@ -33,7 +33,7 @@ process_sensor("LU", "HYPERPRO", "global")
 process_sensor("LW", "HYPERPRO", "global")
 process_sensor("RHOW", "HYPERPRO", "global")
 ## Satellite
-process_sensor("RHOW","OCI", "global")
+process_sensor("RHOW", "OCI", "global")
 process_sensor("RHOW", "MODIS", "global")
 process_sensor("RHOW", "VIIRS", "global")
 process_sensor("RHOW", "OLCI", "global")
