@@ -7,11 +7,6 @@
 source("code/functions.R")
 
 
-#  Check individual values ------------------------------------------------
-
-# This space will contain simple code that allows the calculation of a targeted cell within the output tables
-
-
 # Individual matchup stats ------------------------------------------------
 
 # Run for all variables and satellites
@@ -42,6 +37,50 @@ process_sensor("RHOW","OCI", "global")
 process_sensor("RHOW", "MODIS", "global")
 process_sensor("RHOW", "VIIRS", "global")
 process_sensor("RHOW", "OLCI", "global")
+
+
+# Check individual values -------------------------------------------------
+
+# Rhow - HyperPRO vs OLCI S3A - w_nm 665
+folder_path <- file_path_build("RHOW", "HYPERPRO", "S3B")
+
+# List all files in directory
+file_list <- list.files(folder_path, pattern = "*.csv", full.names = TRUE)
+
+# Load data
+match_base <- map_dfr(file_list, load_matchup_long)
+# print(unique(match_base$wavelength))
+
+# Auto-generate chosen wavelengths
+(W_nm <- W_nm_out("S3B"))
+
+# Get data.frame for matchup based on the wavelength of choice
+(matchup_filt <- filter(match_base, wavelength == W_nm[5]))
+
+# Create vectors from filtered columns
+(x_vec <- matchup_filt[["HYPERPRO"]])
+(y_vec <- matchup_filt[["S3B"]])
+
+# Calculate stats one-by-one
+message("Slope : ", round(coef(lm(y_vec ~ x_vec))[2], 4))
+message("RMSE : ", round(sqrt(mean((y_vec - x_vec)^2, na.rm = TRUE)), 4))
+message("MSA : ", round(mean(abs(y_vec - x_vec), na.rm = TRUE), 4))
+message("MAPE (%) : ", round(mean(abs((y_vec - x_vec) / x_vec), na.rm = TRUE) * 100, 2))
+
+# Calculate Bias and Error (Pahlevan's method)
+log_ratio <- log10(y_vec / x_vec)
+bias_pahlevan <- median(log_ratio, na.rm = TRUE)
+bias_pahlevan_final <- sign(bias_pahlevan) * (10^abs(bias_pahlevan) - 1)
+message("Bias (%) : ", round(bias_pahlevan_final * 100, 2))
+
+error_pahlevan <- median(abs(log_ratio), na.rm = TRUE)
+error_pahlevan_final <- 10^error_pahlevan - 1
+message("Error (%) : ", round(error_pahlevan_final * 100, 2))
+
+# Plot data
+match_base |> filter(wavelength == W_nm[5]) |> 
+  ggplot(aes(x = HYPERPRO, y = S3A)) +
+  geom_point(aes(colour = wavelength))
 
 
 # Duplicated matchups -----------------------------------------------------
