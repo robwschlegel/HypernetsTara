@@ -210,6 +210,16 @@ global_triptych_stack("RHOW", "OLCI")
 
 # PACE Supp ----------------------------------------------------------------
 
+# Load one slice of PACE v3.1 data at 413 nm
+## Visualise all five days to pick the best coverage
+# map_PACE(read_csv("data/PACE_OCI.20240809T105059.L2.OC_AOP.V3_1_rrs_413.csv"))
+# map_PACE(read_csv("data/PACE_OCI.20240812T105611.L2.OC_AOP.V3_1_rrs_413.csv"))
+# map_PACE(read_csv("data/PACE_OCI.20240813T113041.L2.OC_AOP.V3_1_rrs_413.csv")) # Winner
+# map_PACE(read_csv("data/PACE_OCI.20240814T120512.L2.OC_AOP.V3_1_rrs_413.csv"))
+# map_PACE(read_csv("data/PACE_OCI.20240815T110624.L2.OC_AOP.V3_1_rrs_413.csv"))
+PACE_swath <- read_csv("data/PACE_OCI.20240813T113041.L2.OC_AOP.V3_1_rrs_413.csv") |> 
+  filter(!is.na(Rrs))
+
 # Load the full spectra for one point
 v_all_spectra <- read_delim("data/csv_pour_générer_spectres_pace_V20_V30_V31/PACE_20240809T0900.csv", delim = ";")
 colnames(v_all_spectra)[1] <- "version"

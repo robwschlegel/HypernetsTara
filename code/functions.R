@@ -168,6 +168,55 @@ W_nm_out <- function(sensor_Y){
   }
 }
 
+# Get possible MODIS files
+# NB: At the moment this is optimized to work with just one day of data
+MODIS_dl <- function(prod_id, dl_date, bbox, usrname, psswrd, dl_files = TRUE, dl_dir = "data/MODIS"){
+  
+  # If download is FALSE, just print possible files
+  if(!dl_files){
+    message("Data files : ")
+    luna::getNASA(prod_id, dl_date, dl_date, aoi = bbox, download = FALSE)
+    message("Mask files : ")
+    luna::getNASA("MOD44W", dl_date, dl_date, aoi = bbox, download = FALSE)
+  } else {
+    message("Data files : ")
+    luna::getNASA(prod_id, dl_start, dl_start, aoi = bbox, download = TRUE, overwrite = FALSE,
+                  path = dl_dir, username = earth_up$usrname, password = earth_up$psswrd)
+    message("Mask files : ")
+    luna::getNASA("MOD44W", dl_start, dl_start, aoi = bbox, download = TRUE, overwrite = FALSE,
+                  path = dl_dir, username = usrname, password = psswrd)
+  }
+}
+
+# Process MODIS data in a batch
+# file_names <- list.files(path = "data/MODIS", pattern = "MOD", full.names = TRUE)
+# file_names <- list.files(path = "data/MODIS", pattern = "MYD", full.names = TRUE)
+MODIS_proc <- function(file_names, bbox, water_mask = FALSE){
+  
+  # Load files with desired layers etc.
+  # NB: If run in parallel, merge() causes a crash to desktop
+  if(water_mask){
+    data_layers <- lapply(file_names, rast, subds = 2)
+    data_merge <- do.call(merge, data_layers)
+    # plot(data_merge)
+    data_base <- terra::ifel(data_merge %in% c(1, 2, 3, 4, 5), NA, data_merge)
+    # plot(data_base)
+  } else {
+    data_layers <- lapply(file_names, rast, subds = 3) # Blue green band width; 459-479 nm
+    data_base <- do.call(merge, data_layers)
+    # plot(data_base)
+  }
+  
+  # Project to EPSG:4326
+  data_base_proj <- project(data_base, y = "EPSG:4326")
+  # plot(data_base_proj)
+  
+  # Crop to bbox and exit
+  data_crop <- crop(data_base_proj, bbox)
+  # plot(data_crop)
+  return(data_crop)
+}
+
 
 # Statistics --------------------------------------------------------------
 
