@@ -54,6 +54,19 @@ plot_matchup_nm <- function(df, var_name, sensor_X, sensor_Y){
           legend.position = "bottom")
 }
 
+# For the PACE supplementary figure
+map_PACE <- function(df){
+  df |> 
+    filter(!is.na(Rrs)) |> 
+    ggplot() +
+    borders(fill = "grey80") +
+    geom_tile(aes(x = longitude, y = latitude, fill = Rrs)) +
+    scale_colour_viridis_c(aesthetics = c("colour", "fill")) +
+    labs(x = NULL, y = NULL) +
+    coord_quickmap(xlim = c(min(df$longitude), max(df$longitude)),
+                   ylim = c(min(df$latitude), max(df$latitude)))
+}
+
 
 # Processing functions ----------------------------------------------------
 
@@ -194,3 +207,108 @@ global_triptych_stack("RHOW", "MODIS")
 global_triptych_stack("RHOW", "VIIRS")
 global_triptych_stack("RHOW", "OLCI")
 
+
+# PACE Supp ----------------------------------------------------------------
+
+# Load the full spectra for one point
+v_all_spectra <- read_delim("data/csv_pour_générer_spectres_pace_V20_V30_V31/PACE_20240809T0900.csv", delim = ";")
+colnames(v_all_spectra)[1] <- "version"
+v_all_spectra_long <- v_all_spectra |> 
+  pivot_longer(`356`:`718`, names_to = "nm") |> 
+  mutate(nm = as.integer(nm))
+
+# Load data extracted via Python script
+v2_413 <- read_csv("data/PACE_OCI.20240809T105059.L2.OC_AOP.V2_0.NRT_rrs_413.csv") |> 
+  filter(!is.na(Rrs)) |> 
+  mutate(longitude = plyr::round_any(longitude, 0.02),
+         latitude = plyr::round_any(latitude, 0.02)) |>
+  summarise(Rrs = mean(Rrs, na.rm = TRUE), .by = c("longitude", "latitude")) |> 
+  dplyr::rename(v2_Rrs = Rrs)
+v3_413 <- read_csv("data/PACE_OCI.20240809T105059.L2.OC_AOP.V3_0_rrs_413.csv") |> 
+  filter(!is.na(Rrs)) |> 
+  mutate(longitude = plyr::round_any(longitude, 0.02),
+         latitude = plyr::round_any(latitude, 0.02)) |>
+  summarise(Rrs = mean(Rrs, na.rm = TRUE), .by = c("longitude", "latitude")) |> 
+  dplyr::rename(v3_Rrs = Rrs)
+v31_413 <- read_csv("data/PACE_OCI.20240809T105059.L2.OC_AOP.V3_1_rrs_413.csv") |> 
+  filter(!is.na(Rrs)) |> 
+  mutate(longitude = plyr::round_any(longitude, 0.02),
+         latitude = plyr::round_any(latitude, 0.02)) |>
+  summarise(Rrs = mean(Rrs, na.rm = TRUE), .by = c("longitude", "latitude")) |> 
+  dplyr::rename(v31_Rrs = Rrs)
+
+# Combine and compare
+vall_413 <- left_join(v2_413, v3_413, by = join_by(latitude, longitude)) |> 
+  left_join(v31_413, by = join_by(latitude, longitude)) |> 
+  mutate(v2_v3 = (v2_Rrs / v3_Rrs)*100,
+         v2_v31 = (v2_Rrs / v31_Rrs)*100,
+         v3_v31 = (v3_Rrs / v31_Rrs)*100) |> 
+  mutate(v2_v3 = ifelse(v2_v3 > 200, 200, v2_v3),
+         v2_v31 = ifelse(v2_v31 > 200, 200, v2_v31),
+         v3_v31 = ifelse(v3_v31 > 200, 200, v3_v31),
+         v2_v3 = ifelse(v2_v3 < -200, -200, v2_v3),
+         v2_v31 = ifelse(v2_v31 < -200, -200, v2_v31),
+         v3_v31 = ifelse(v3_v31 < -200, -200, v3_v31)) |>
+  # mutate(v2_v3 = cut(v2_v3, seq(-200, 200, 50)),
+  #        v2_v31 = cut(v2_v31, seq(-200, 200, 50)),
+  #        v3_v31 = cut(v3_v31, seq(-200, 200, 50)))
+  mutate(v2_v3 = cut(v2_v3, c(-200, -100, 0, 50, 80, 90, 100, 110, 120, 150, 200)),
+         v2_v31 = cut(v2_v31, c(-200, -100, 0, 50, 80, 90, 100, 110, 120, 150, 200)),
+         v3_v31 = cut(v3_v31, c(-200, -100, 0, 50, 80, 90, 100, 110, 120, 150, 200)))
+
+# Pivot longer for plotting
+v_comp_long <- vall_413 |> 
+  dplyr::select(longitude, latitude, v2_v3:v3_v31) |> 
+  pivot_longer(v2_v3:v3_v31, names_to = "ver") |> 
+  mutate(ver = factor(ver, levels = c("v2_v3", "v2_v31", "v3_v31"),
+                      labels = c("v2 / v3", "v2 / v3.1", "v3 / v3.1"))) |> 
+  filter(!is.na(value))
+
+# Plot map differences
+pl_top <- ggplot(data = v_comp_long) +
+  # borders(fill = "grey80") +
+  geom_tile(aes(x = longitude, y = latitude, fill = value)) +
+  annotate(geom = "point", x = v_all_spectra$longitude[1], y = v_all_spectra$latitude[1]) +
+  # geom_contour(aes(x = longitude, y = latitude, z = value),
+  #              breaks = c(1.0), color = "black") +
+  # scale_colour_viridis_c(aesthetics = c("colour", "fill")) +
+  scale_fill_viridis_d() +
+  labs(x = NULL, y = NULL, fill = "Difference (%)") +
+  facet_wrap(~ver) +
+  coord_quickmap(xlim = c(min(v_comp_long$longitude), max(v_comp_long$longitude)),
+                 ylim = c(min(v_comp_long$latitude), max(v_comp_long$latitude))) +
+  theme(panel.background = element_rect(colour = "black", fill = "grey90"),
+        legend.position = "top")
+
+# Plot percent difference as non-map
+pl_left <- v_comp_long |> 
+  summarise(cut_n = n(), .by = c("ver", "value")) |> 
+  # complete(ver, value)
+  ggplot() +
+  geom_col(aes(x = value, y = cut_n, fill = ver), 
+           position = "dodge", colour = "black") +
+  scale_y_continuous(expand = c(0, 2000), 
+                     breaks = c(0, 50000, 100000, 150000, 200000, 250000),
+                     labels = c("0", "50K", "100K", "150K", "200K", "250K")) +
+  scale_fill_brewer(palette = "Accent") +
+  # scale_fill_viridis_d(option = "A") + # yuck
+  labs(x = "Difference (%)", y = "Pixel count (n)", fill = "Comparison") +
+  theme(panel.background = element_rect(colour = "black", fill = "grey90"),
+        legend.position = "bottom")
+
+# Plot spectra differences
+pl_right <- ggplot(v_all_spectra_long) +
+  geom_path(aes(x = nm, y = value, colour = version),
+            linewidth = 2, alpha = 0.8) +
+  geom_vline(xintercept = 413) +
+  labs(x = "Wavelength (nm)", y = "Remote sensing reflectance (Rrs)") +
+  scale_color_brewer(palette = "YlGnBu") +
+  # scale_colour_viridis_d(option = "B") + # yuck
+  scale_y_continuous(expand = c(-0.1, 0.005)) +
+  theme(panel.background = element_rect(colour = "black", fill = "grey90"),
+        legend.position = "bottom")
+
+# Put it all together
+pl_all <- (pl_top / (pl_left + pl_right)) +
+  plot_annotation(tag_levels = 'a', tag_suffix = ')')
+ggsave("figures/fig_S1.png", pl_all, height = 9, width = 14)
