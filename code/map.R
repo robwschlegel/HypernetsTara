@@ -48,6 +48,10 @@ productInfo("MYD09Q1")
 # MODIS/Aqua Surface Reflectance 8-Day L3 Global 500m SIN Grid V006
 productInfo("MYD09A1")
 
+# MODIS/Terra Land Water Mask Derived from MODIS and SRTM L3 Global 250m SIN Grid V061
+# https://lpdaac.usgs.gov/documents/1915/MOD44W_User_Guide_ATBD_V61.pdf
+productInfo("MOD44W")
+
 # Coords for bbox
 coords <- matrix(c(
   3, 32,  # Bottom-left corner
@@ -69,30 +73,46 @@ dl_start <- "2024-08-09"; dl_end <- "2024-08-16"
 
 # Get possible MODIS files
 luna::getNASA("MYD09A1", dl_start, dl_start, aoi = bbox, download = FALSE)
+luna::getNASA("MOD44W", dl_start, dl_start, aoi = bbox, download = FALSE)
 
 # Download the files
 luna::getNASA("MYD09A1", dl_start, dl_start, aoi = bbox, download = TRUE, overwrite = FALSE,
               path = "data", username = earth_up$usrname, password = earth_up$psswrd)
+luna::getNASA("MOD44W", dl_start, dl_start, aoi = bbox, download = TRUE, overwrite = FALSE,
+              path = "data", username = earth_up$usrname, password = earth_up$psswrd)
 
 # Load a file as a raster to look at the specifics
-mf1 <- terra::rast("data/MYD09A1.A2024217.h18v04.061.2024249185906.hdf")
+mf1 <- terra::rast("data/MOD44W.A2024001.h18v04.061.2025064072734.hdf")
 mf1
 terra::names(mf1)
-plot(mf1[[3]])
+plot(mf1[[2]])
 # plotRGB(mf1, r = 1, g = 4, b = 3, stretch="lin")
+mask_base <- MODIS_filtered <- terra::ifel(mf1[[2]] %in% c(1, 2, 3, 4, 5), NA, mf1[[2]])
+plot(mask_base)
+
+# Load multiple water mask files to create a mosaic to filter the other files with
+mask_files <- list.files(path = "data", pattern = "MYD", full.names = TRUE)
+
+# Read each file individually and store in a list
+mask_list <- lapply(mask_files, rast, subds = 2) # 459-479 nm
+
+# Mosaic all rasters into one
+mask_mosaic <- do.call(merge, mask_list)
+mask_mosaic_proj <- project(mask_mosaic, y = "EPSG:4326")
+
+# Crop the mosaic raster
+mask_cropped <- crop(mask_mosaic_proj, bbox)
+plot(mask_cropped)
 
 # Create a quality mask
 # https://rspatial.org/modis/4-quality.html
-from <- c(3)
-to <- c(5)
-reject <- c("001")
-qa_bits <- cbind(from, to, reject)
-qa_bits
 qc <- mf1[[12]]
 plot(qc, main = "Quality")
-quality_mask <- modis_mask(qc, 16, qa_bits)
-plot(quality_mask, main = "Quality mask")
-hist(quality_mask)
+from <- c(4)
+to <- c(6)
+reject <- c("001,010,011,100,101,110,111")
+(qa_bits <- cbind(from, to, reject))
+quality_mask <- modis_mask(qc, 16, qa_bits); plot(quality_mask, main = "Quality mask")
 mf1_mask <- mask(mf1, quality_mask)
 plot(mf1_mask[[3]])
 
