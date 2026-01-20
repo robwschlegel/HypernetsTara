@@ -37,20 +37,20 @@ earth_up <- read_csv("~/pCloudDrive/Documents/info/earthdata_pswd.csv")
 # Lists all products that are currently searchable
 # https://lpdaac.usgs.gov/documents/925/MOD09_User_Guide_V61.pdf
 MODIS_prod <- luna::getProducts()
-productInfo("MODISA_L3m_RRS")
+# productInfo("MODISA_L3m_RRS")
 
 # MODIS/Aqua Surface Reflectance Daily L2G Global 250m SIN Grid V061
-productInfo("MYD09GQ")
+# productInfo("MYD09GQ")
 
 # MODIS/Aqua Surface Reflectance 8-Day L3 Global 250m SIN Grid V006
-productInfo("MYD09Q1")
+# productInfo("MYD09Q1")
 
 # MODIS/Aqua Surface Reflectance 8-Day L3 Global 500m SIN Grid V006
-productInfo("MYD09A1")
+# productInfo("MYD09A1")
 
 # MODIS/Terra Land Water Mask Derived from MODIS and SRTM L3 Global 250m SIN Grid V061
 # https://lpdaac.usgs.gov/documents/1915/MOD44W_User_Guide_ATBD_V61.pdf
-productInfo("MOD44W")
+# productInfo("MOD44W")
 
 # Coords for bbox
 coords <- matrix(c(
@@ -72,14 +72,84 @@ plot(bbox)
 dl_start <- "2024-08-09"; dl_end <- "2024-08-16"
 
 # Get possible MODIS files
-luna::getNASA("MYD09A1", dl_start, dl_start, aoi = bbox, download = FALSE)
-luna::getNASA("MOD44W", dl_start, dl_start, aoi = bbox, download = FALSE)
+# NB: At the moment this is optimized to work with just one day of data
+MODIS_dl <- function(prod_id, dl_date, bbox, usrname, psswrd, dl_files = TRUE, dl_dir = "data/MODIS"){
+  
+  # If download is FALSE, just print possible files
+  if(!dl_files){
+    message("Data files : ")
+    luna::getNASA(prod_id, dl_date, dl_date, aoi = bbox, download = FALSE)
+    message("Mask files : ")
+    luna::getNASA("MOD44W", dl_date, dl_date, aoi = bbox, download = FALSE)
+  } else {
+    message("Data files : ")
+    luna::getNASA(prod_id, dl_start, dl_start, aoi = bbox, download = TRUE, overwrite = FALSE,
+                  path = dl_dir, username = earth_up$usrname, password = earth_up$psswrd)
+    message("Mask files : ")
+    luna::getNASA("MOD44W", dl_start, dl_start, aoi = bbox, download = TRUE, overwrite = FALSE,
+                  path = dl_dir, username = usrname, password = psswrd)
+  }
+}
 
-# Download the files
-luna::getNASA("MYD09A1", dl_start, dl_start, aoi = bbox, download = TRUE, overwrite = FALSE,
-              path = "data", username = earth_up$usrname, password = earth_up$psswrd)
-luna::getNASA("MOD44W", dl_start, dl_start, aoi = bbox, download = TRUE, overwrite = FALSE,
-              path = "data", username = earth_up$usrname, password = earth_up$psswrd)
+# Download data
+MODIS_dl("MYD09A1", dl_start, bbox, earth_up$usrname, earth_up$psswrd)
+
+# Prepare the water mask
+MODIS_proc <- function(file_name, bbox, water_mask = FALSE){
+  
+  # Load file
+  mask_raw <- terra::rast(file_name)
+  
+  # Filter water mask if desired
+  if(water_mask){
+    mask_base <- terra::ifel(mask_raw[[2]] %in% c(1, 2, 3, 4, 5), NA, mask_raw[[2]])
+  } else {
+    mask_base <- mask_raw[[3]] # Blue green band width; 459-479 nm
+  }
+
+  # Project to EPSG:4326
+  mask_base_proj <- project(mask_base, y = "EPSG:4326")
+  
+  # Crop to bbox and exit
+  mask_crop <- crop(mask_base_proj, bbox)
+  # plot(mask_crop)
+  return(mask_crop)
+}
+
+# test on one file
+# MODIS_water_mask_proc("data/MODIS/MOD44W.A2024001.h18v04.061.2025064072734.hdf", bbox)
+
+# Run on all of them
+# NB: If run in parallel, merge() causes a crash to desktop
+MODIS_mask_list <- lapply(list.files(path = "data/MODIS", pattern = "MOD", full.names = TRUE), 
+                          MODIS_proc, bbox = bbox, water_mask = TRUE)
+# MODIS_mask_list <- plyr::llply(list.files(path = "data/MODIS", pattern = "MOD", full.names = TRUE), MODIS_water_mask_proc,
+#                                .parallel = TRUE, bbox = bbox)
+MODIS_mask <- do.call(merge, MODIS_mask_list)
+writeRaster(MODIS_mask, "data/MODIS/study_area_mask.tif", overwrite = TRUE)
+MODIS_mask <- rast("data/MODIS/study_area_mask.tif")
+plot(MODIS_mask)
+
+# Prep one day of MODIS data
+MODIS_rast_list <- lapply(list.files(path = "data/MODIS", pattern = "MYD", full.names = TRUE), 
+                          MODIS_proc, bbox = bbox)
+MODIS_rast <- do.call(merge, MODIS_rast_list)
+writeRaster(MODIS_rast, "data/MODIS/study_area_rast.tif", overwrite = TRUE)
+MODIS_rast <- rast("data/MODIS/study_area_rast.tif")
+plot(MODIS_rast)
+
+# Projected the 250 m mask to the same grid as the 500 m raster data
+MODIS_mask_proj <- project(MODIS_mask, MODIS_rast)
+
+# Mask the raster data
+MODIS_water <- mask(MODIS_rast, MODIS_mask_proj)
+plot(MODIS_water)
+
+# Some more filtering
+MODIS_water_filt <- terra::ifel(MODIS_water > 100, NA, MODIS_water)
+plot(MODIS_water_filt)
+
+
 
 # Load a file as a raster to look at the specifics
 mf1 <- terra::rast("data/MOD44W.A2024001.h18v04.061.2025064072734.hdf")
