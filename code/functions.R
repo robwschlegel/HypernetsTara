@@ -7,6 +7,7 @@
 library(tidyverse)
 library(readxl)
 library(ncdf4)
+library(FNN) # Needed for fastest nearest neighbor searching
 library(geosphere) # For determining distance between points
 library(patchwork)
 library(doParallel); registerDoParallel(cores = detectCores() - 2)
@@ -263,6 +264,24 @@ base_stats <- function(x_vec, y_vec){
 
 
 # Matchup processing ------------------------------------------------------
+
+# get 5 nearest pixels
+get_nearest_pixels <- function(df_data, target_lat, target_lon, n_pixels){
+  
+  # Extract latitude and longitude into a matrix
+  df_coords <- S3A_band_1[, c("latitude", "longitude")]
+  
+  # Target coordinate as a data.frame
+  target_coord <- data.frame(latitude = target_lat, 
+                             longitude = target_lon)
+  
+  # Find the indices of the 5 nearest neighbors
+  knn_indices <- get.knnx(df_coords, target_coord, k = n_pixels)
+  
+  # Extract the 5 nearest rows
+  df_res <- df_data[as.vector(knn_indices$nn.index), ]
+  return(df_res)
+}
 
 # Function that interrogates each matchup file to produce the needed output for all following comparisons
 # file_path <- "~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results_v2/RHOW_HYPERNETS_vs_HYPERPRO/HYPERNETS_vs_HYPERPRO_vs_20240809T073700_RHOW.csv"

@@ -358,3 +358,53 @@ plot_rhow_hyperpro_viirsj1 <- ggpubr::ggarrange(plot_rhow_hyperpro_viirsj1_wavel
 ggsave("~/pCloudDrive/Documents/OMTAB/HYPERNETS/figures/test_rhow_hyperpro_viirsj1.png", plot_rhow_hyperpro_viirsj1,
        width = 18, height = 6, dpi = 600)
 
+
+## S3A errors --------------------------------------------------------------
+
+# Load matchup
+S3A_match <- read_delim("~/Downloads/TRIOS_vs_HYPERPRO_vs_S3A_vs_20240814T082814_RHOW.csv", delim = ";", col_types = "cccc")
+colnames(S3A_match)[1] <- "sensor"
+
+# Get coordinates
+# ncdump::NetCDF("~/Downloads/S3A_OL_2_WFR____20240814T093459_20240814T093759_20240815T155154_0179_115_364_2340_MAR_O_NT_003.SEN3/geo_coordinates.nc")
+S3A_coords <- tidync::tidync("~/Downloads/S3A_OL_2_WFR____20240814T093459_20240814T093759_20240815T155154_0179_115_364_2340_MAR_O_NT_003.SEN3/geo_coordinates.nc") |> 
+  tidync::hyper_tibble()
+
+# Load one netcdf
+# ncdump::NetCDF("~/Downloads/S3A_OL_2_WFR____20240814T093459_20240814T093759_20240815T155154_0179_115_364_2340_MAR_O_NT_003.SEN3/Oa01_reflectance.nc")
+# info_var <- ncdump::NetCDF("~/Downloads/S3A_OL_2_WFR____20240814T093459_20240814T093759_20240815T155154_0179_115_364_2340_MAR_O_NT_003.SEN3/Oa01_reflectance.nc")$variable
+S3A_band_1 <- tidync::tidync("~/Downloads/S3A_OL_2_WFR____20240814T093459_20240814T093759_20240815T155154_0179_115_364_2340_MAR_O_NT_003.SEN3/Oa01_reflectance.nc") |> 
+  tidync::hyper_tibble() |> left_join(S3A_coords, by = join_by(columns, rows))
+S3A_band_2 <- tidync::tidync("~/Downloads/S3A_OL_2_WFR____20240814T093459_20240814T093759_20240815T155154_0179_115_364_2340_MAR_O_NT_003.SEN3/Oa02_reflectance.nc") |> 
+  tidync::hyper_tibble() |> left_join(S3A_coords, by = join_by(columns, rows))
+S3A_band_3 <- tidync::tidync("~/Downloads/S3A_OL_2_WFR____20240814T093459_20240814T093759_20240815T155154_0179_115_364_2340_MAR_O_NT_003.SEN3/Oa02_reflectance.nc") |> 
+  tidync::hyper_tibble() |> left_join(S3A_coords, by = join_by(columns, rows))
+
+# Get nearest pixels
+target_lat <- S3A_match[8,]$latitude; target_lon <- S3A_match[8,]$longitude
+S3A_band_1_5 <- get_nearest_pixels(S3A_band_1, target_lat, target_lon, 5)
+mean(S3A_band_1_5$Oa01_reflectance, na.rm = TRUE)
+S3A_band_2_5 <- get_nearest_pixels(S3A_band_2, target_lat, target_lon, 5)
+mean(S3A_band_2_5$Oa02_reflectance, na.rm = TRUE)
+S3A_band_2_5 <- get_nearest_pixels(S3A_band_2, target_lat, target_lon, 5)
+mean(S3A_band_2_5$Oa02_reflectance, na.rm = TRUE)
+
+# Map each band
+S3A_plot <- S3A_band_1 |> 
+  mutate(lon_coarse = round(longitude, 2),
+         lat_coarse = round(latitude, 2)) |> 
+  summarise(reflectance = mean(Oa01_reflectance, na.RM = TRUE), .by = c("lon_coarse", "lat_coarse")) |> 
+  ggplot() +
+  annotation_borders(fill = "grey80") +
+  # geom_point(aes(x = longitude, y = latitude, colour = Oa01_reflectance), size = 5) +
+  geom_tile(aes(x = lon_coarse, y = lat_coarse, fill = reflectance)) +
+  geom_point(data = S3A_match[8,], aes(x = longitude, y = latitude), colour = "red") +
+  scale_fill_viridis_c() +
+  labs(x = "Longitude (°E)", y = "Latitude (°N)", 
+       fill = "S3A band 1 (Rrs)") +
+  coord_quickmap(xlim = c(7, 25), ylim = c(35, 42)) +
+  theme(legend.position = "bottom")
+  # coord_quickmap(xlim = c(S3A_match[8,]$longitude-0.01, S3A_match[8,]$longitude+0.01), 
+                 # ylim = c(S3A_match[8,]$latitude-0.01, S3A_match[8,]$latitude+0.01))
+ggsave("figures/S3A_error.png", S3A_plot, height = 6, width = 9)
+
