@@ -34,17 +34,20 @@ earth_up <- read_csv("~/pCloudDrive/Documents/info/earthdata_pswd.csv")
 
 # Lists all products that are currently searchable
 # https://lpdaac.usgs.gov/documents/925/MOD09_User_Guide_V61.pdf
-# MODIS_prod <- luna::getProducts()
+MODIS_prod <- luna::getProducts()
 # productInfo("MODISA_L3m_RRS")
 
 # MODIS/Aqua Surface Reflectance Daily L2G Global 250m SIN Grid V061
-# productInfo("MYD09GQ")
+productInfo("MYD09GQ")
+
+# Niveau 1
+productInfo("MYD01")
 
 # MODIS/Aqua Surface Reflectance 8-Day L3 Global 250m SIN Grid V006
 # productInfo("MYD09Q1")
 
 # MODIS/Aqua Surface Reflectance 8-Day L3 Global 500m SIN Grid V006
-# productInfo("MYD09A1")
+# moproductInfo("MYD09A1")
 
 # MODIS/Terra Land Water Mask Derived from MODIS and SRTM L3 Global 250m SIN Grid V061
 # https://lpdaac.usgs.gov/documents/1915/MOD44W_User_Guide_ATBD_V61.pdf
