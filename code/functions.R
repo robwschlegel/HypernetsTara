@@ -29,7 +29,7 @@ options(scipen = 9999)
 
 # Function that assembles file directory based on desired variable and sensors
 file_path_build <- function(var_name, sensor_X, sensor_Y){
-  file_path <- paste0("~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results_v2/",
+  file_path <- paste0("~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results_20260126/",
                       toupper(var_name),"_",toupper(sensor_X),"_vs_", toupper(sensor_Y))
 }
 
@@ -45,16 +45,20 @@ load_matchup_mean <- function(file_name){
     df_match <- read_delim(file_name, delim = ";", col_types = "ciccnnic")
   )
   colnames(df_match)[1] <- "sensor"
-
   
   # Get means per file
-  df_mean <- df_match |> 
-    dplyr::select(-radiometer_id, -data_id, -type) |>
-    filter(grepl(" 1", sensor)) |> 
-    mutate(sensor = gsub(" 1$| 2$| 3$| 4$| 5$| 6$| 7$| 8$| 9$", "", sensor)) |>
-    filter(sensor != "Hyp_nosc") #|> 
-  # mutate(dateTime = as.POSIXct(paste(day, time), format = "%Y%m%d %H%M%S")) |> # make this later
-  
+  # Satellite matchups have a different structure than in situ matchups
+  # TODO: Test this with a satellite matchup file
+  # if("mean" %in% df_match$data_id){
+    
+  # } else {
+    df_mean <- df_match |> 
+      dplyr::select(-radiometer_id, -data_id, -type) |>
+      filter(grepl(" 1", sensor)) |> 
+      mutate(sensor = gsub(" 1$| 2$| 3$| 4$| 5$| 6$| 7$| 8$| 9$", "", sensor)) |>
+      filter(sensor != "Hyp_nosc")
+  # }
+
   # Double check that only two rows of data have been selected
   if(nrow(df_mean) != 2) warning(paste0("More than two rows in : ", file_path))
   
@@ -265,7 +269,7 @@ base_stats <- function(x_vec, y_vec){
 
 # Matchup processing ------------------------------------------------------
 
-# get 5 nearest pixels
+# get n nearest pixels
 get_nearest_pixels <- function(df_data, target_lat, target_lon, n_pixels){
   
   # Extract latitude and longitude into a matrix
