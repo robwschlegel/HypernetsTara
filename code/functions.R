@@ -29,35 +29,47 @@ options(scipen = 9999)
 
 # Function that assembles file directory based on desired variable and sensors
 file_path_build <- function(var_name, sensor_X, sensor_Y){
-  file_path <- paste0("~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results_20260126/",
-                      toupper(var_name),"_",toupper(sensor_X),"_vs_", toupper(sensor_Y))
+  file_path <- paste0("~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results_mwm_595/",
+                      toupper(var_name),"_",toupper(sensor_X),"_vs_", toupper(sensor_Y),"/")
 }
 
 # Load a single matchup file and create mean values from all replicates
-# file_name <- "~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results_v2/RHOW_HYPERNETS_vs_HYPERPRO/HYPERNETS_vs_HYPERPRO_vs_20240809T073700_RHOW.csv"
-# file_name <- "~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results_v2/ED_HYPERNETS_vs_TRIOS/HYPERNETS_vs_TRIOS_vs_20240808T065700_ED.csv"
+# file_name <- "~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results_mwm_595/RHOW_HYPERNETS_vs_HYPERPRO/HYPERNETS_vs_HYPERPRO_vs_20240809T073700_RHOW.csv"
+# file_name <- "~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results_mwm_595/ED_HYPERNETS_vs_TRIOS/HYPERNETS_vs_TRIOS_vs_20240808T065700_ED.csv"
+# file_name <- "~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results_mwm_595/RHOW_HYPERNETS_vs_AQUA/HYPERNETS_vs_AQUA_vs_20240810T110400_RHOW.csv"
 load_matchup_mean <- function(file_name){
   
   # message(paste0("Started loading : ", file_name))
   
   # Load the csv file
   suppressMessages(
-    df_match <- read_delim(file_name, delim = ";", col_types = "ciccnnic")
+    df_match <- read_delim(file_name, delim = ";", col_types = "ccccnnic")
   )
   colnames(df_match)[1] <- "sensor"
   
   # Get means per file
   # Satellite matchups have a different structure than in situ matchups
   # TODO: Test this with a satellite matchup file
-  # if("mean" %in% df_match$data_id){
-    
-  # } else {
+  if("weighted" %in% df_match$data_type){
+    df_mean <- df_match |>
+      mutate(sensor = gsub(" 1$| 2$| 3$| 4$| 5$| 6$| 7$| 8$| 9$", "", sensor)) |>
+      filter(sensor != "Hyp_nosc") |> 
+      filter(data_type %in% c("mean", "weighted")) |>
+      # NB: Simple mean for in situ data is taken instead of the weighted mean
+      # This is an important point for discussion
+      mutate(data_check = case_when(sensor %in% c("Hyp", "TRIOS", "HYPERPRO") & data_type == "mean" ~ "keep",
+                                    !(sensor %in% c("Hyp", "TRIOS", "HYPERPRO")) & data_type == "weighted" ~ "keep"), 
+             .after = "data_type") |>
+      filter(data_check == "keep") |>
+      dplyr::select(-radiometer_id, -data_type, -data_check, -type)
+  } else {
+    # TODO: Double check this with all ins-itu matchup file types
     df_mean <- df_match |> 
-      dplyr::select(-radiometer_id, -data_id, -type) |>
       filter(grepl(" 1", sensor)) |> 
       mutate(sensor = gsub(" 1$| 2$| 3$| 4$| 5$| 6$| 7$| 8$| 9$", "", sensor)) |>
-      filter(sensor != "Hyp_nosc")
-  # }
+      filter(sensor != "Hyp_nosc") |> 
+      dplyr::select(-radiometer_id, -data_type, -type)
+  }
 
   # Double check that only two rows of data have been selected
   if(nrow(df_mean) != 2) warning(paste0("More than two rows in : ", file_path))
@@ -154,20 +166,25 @@ sensor_grid <- function(var_name, sensor_Z){
   ply_grid <- ply_grid[ply_grid$sensor_X != ply_grid$sensor_Y,]
 }
 
-# Output desired wavelengths based on sensor_Y
-W_nm_out <- function(sensor_Y){
+# Output desired wavelengths based on sensor_Y and var_name
+W_nm_out <- function(sensor_Y, var_name){
   if(sensor_Y %in% c("HYPERNETS", "TRIOS", "HYPERPRO")){
-    W_nm <- c(400, 412, 443, 490, 510, 560, 620, 673)
+    # NB: This allows for comparisons of higher wavelengths to be made for ED etc.
+    if(var_name != "RHOW"){
+      W_nm <- c(400, 412, 443, 490, 510, 560, 620, 673)
+    } else {
+      W_nm <- c(400, 412, 443, 490, 510, 560)
+    }
   } else if(sensor_Y %in% c("PACE_V2", "PACE_V30", "PACE_V31")){
-    W_nm <- c(412, 443, 490, 510, 560, 673)
+    W_nm <- c(412, 443, 490, 510, 560)#, 673)
   } else if(sensor_Y == "AQUA"){
-    W_nm <- c(412, 443, 488, 531, 555, 667)
+    W_nm <- c(412, 443, 488, 531, 555)#, 667)
   } else if(sensor_Y == "VIIRS_N"){
-    W_nm = c(410, 443, 486, 551, 671)
+    W_nm = c(410, 443, 486, 551)#, 671)
   } else if(sensor_Y %in% c("VIIRS_J1", "VIIRS_J2")){
-    W_nm <- c(411, 445, 489, 556, 667)
+    W_nm <- c(411, 445, 489, 556)#, 667)
   } else if(sensor_Y %in% c("S3A", "S3B")){
-    W_nm <- c(413, 443, 490, 560, 665, 681)
+    W_nm <- c(413, 443, 490, 560)#, 665, 681)
   } else {
     stop(paste0("Incorrect value for 'sensor_Y' : ",sensor_Y))
   }
@@ -374,9 +391,10 @@ process_matchup_file <- function(file_path, filter_table = NULL){
 }
 
 # Function that runs this over all matchup files in a directory
-# var_name = "RHOW"; sensor_X = "HYPERPRO"; sensor_Y = "PACE_v31"; filter_table = NULL
-# var_name = "RHOW"; sensor_X = "HYPERNETS"; sensor_Y = "AQUA"; filter_table = NULL
-process_matchup_folder <- function(var_name, sensor_X, sensor_Y, filter_table = NULL){
+# var_name = "RHOW"; sensor_X = "HYPERPRO"; sensor_Y = "PACE_v31"
+# var_name = "RHOW"; sensor_X = "HYPERNETS"; sensor_Y = "AQUA"
+# var_name = "RHOW"; sensor_X = "HYPERNETS"; sensor_Y = "AQUA"
+process_matchup_folder <- function(var_name, sensor_X, sensor_Y){
   
   # Create file path
   folder_path <- file_path_build(var_name, sensor_X, sensor_Y)
@@ -428,20 +446,12 @@ process_sensor <- function(var_name, sensor_Z, stat_choice = "matchup"){
 
 # Global stats per matchup wavelength
 # testers..
+# var_name = "RHOW"; sensor_X = "HYPERNETS"; sensor_Y = "TRIOS"
 # var_name = "RHOW"; sensor_X = "TRIOS"; sensor_Y = "AQUA"; W_nm = c(412, 443, 488, 531, 555, 667)
 # var_name = "RHOW"; sensor_X = "HYPERNETS"; sensor_Y = "PACE_V31"; W_nm = c(412, 443, 490, 510, 560, 673)
 # MAPE_limit = NULL; filter_table = NULL;
 # W_nm = c(412, 443, 488, 531, 555, 667)
-global_stats <- function(var_name, sensor_X, sensor_Y){#, 
-                         # filter_table = NULL, MAPE_limit = NULL, 
-                         # W_nm = c(400, 412, 443, 490, 510, 560, 620, 673)){
-  
-  # NB: Commented text here is used to filter by unique matchups
-  # This was decided against as it limits the number of matchups dramatically
-  
-  # Get unique matchups
-  # uniq_base <- n_matchup_uniq(var_name, sensor_X, sensor_Y, basic = FALSE)
-  # uniq_base <- uniq_base[uniq_base$sensor_X == sensor_Y,] # NB: This X to Y cross is intentional
+global_stats <- function(var_name, sensor_X, sensor_Y){
   
   # Create file path
   folder_path <- file_path_build(var_name, sensor_X, sensor_Y)
@@ -449,43 +459,70 @@ global_stats <- function(var_name, sensor_X, sensor_Y){#,
   # List all files in directory
   file_list <- list.files(folder_path, pattern = "*.csv", full.names = TRUE)
   
-  # Remove stats output files
-  # NB: No longer necessary
-  file_list_clean <- file_list[!grepl("all|global", file_list)]
-  
-  # Load processed results for further filtering
-  # suppressMessages(
-  # file_all <- read_csv(file_list[grepl("all_", file_list)])
-  # )
-  
-  # List files that respect unique matchups
-  # NB: This allows for multiple in situ matchups against satellites
-  # Ultimately this was considered desirable as otherwise the samples would be very small
-  # file_uniq_list <- right_join(file_all, uniq_base, by = c("sensor_X", "sensor_Y", "dateTime_X"))
-  
-  # Filter based on filter_table if provided
-  # Correct this to work with an ED file
-  # if(!is.null(filter_table)){
-  #   file_uniq_list <- semi_join(file_uniq_list, filter_table, by = c("sensor", "day", "time", "longitude", "latitude"))
-  # }
-  
   # Load data
-  # match_base <- map_dfr(file.path(folder_path, file_uniq_list$file_name), load_matchup_long)
-  # NB: Decided to run global results on all possible matchups
-  match_base <- map_dfr(file_list_clean, load_matchup_long)
-  # print(unique(match_base$wavelength))
+  match_base <- map_dfr(file_list, load_matchup_long)
+  
+  # Continue with satellite versions if necessary
+    if(sensor_Y  == "AQUA"){
+      sensor_Z <- "MODIS"
+    } else if(sensor_Y %in% c("PACE_V2", "PACE_V30", "PACE_V31")){
+      sensor_Z <- "OCI"
+    } else if(sensor_Y %in% c("VIIRS_N", "VIIRS_J1", "VIIRS_J2")){
+      sensor_Z <- "VIIRS"
+    } else if(sensor_Y %in% c("S3A", "S3B")){
+      sensor_Z <- "OLCI"
+    } else {
+    }
+  
+  # Get filestub based on sensor_Y and var_name
+  if(var_name %in% c("ED", "LU", "LW")){
+    filestub <- "_in_situ.csv"
+  } else if(var_name %in% c("LD")){
+    filestub <- "_Hyp_vs_Trios.csv"
+  } else if(sensor_Y %in% c("TRIOS", "HYPERPRO")){
+    filestub <- "_in_situ.csv"
+  } else {
+    filestub <- paste0("_",sensor_Z,".csv")
+  }
+  
+  # Correct sensor_X for filtering
+  if(sensor_X == "HYPERNETS"){
+    sensor_X_filt <- "Hyp"
+  } else {
+    sensor_X_filt <- sensor_X
+  }
+  
+  # Load individual matchup results to access difftime values
+  match_base_details <- read_csv(paste0("output/matchup_stats_",var_name,filestub)) |> 
+    filter(sensor_X == sensor_X_filt, sensor_Y == sensor_Y)
+  if(nrow(match_base_details) == 0) stop("Individual matchup file not loaded correctly.")
+  
+  # Join for further use
+  match_base_plus <- left_join(match_base, match_base_details, by = join_by(file_name))
+
+  # Filter out matches outside of allowed time window
+  if(!(sensor_Y %in% c("TRIOS", "HYPERPRO"))){
+    time_window <- 120
+  } else {
+    time_window <- 20
+  }
+  match_base_filt <- filter(match_base_plus, diff_time <= time_window)
+    
+  # Get the count of base matchups and those filtered by time window
+  match_count_all <- length(unique(match_base_plus$file_name))
+  match_count_filt <- length(unique(match_base_filt$file_name))
   
   # The VIIRS versions have different wavelengths...
   # This hard coded fix is one method of dealing with this.
   # It may need to change in the future
-  W_nm <- W_nm_out(sensor_Y)
+  W_nm <- W_nm_out(sensor_Y, var_name)
   
   # For loop that cycles through the requested wavelengths and calculates stats
   df_results <- data.frame()
   for(i in 1:length(W_nm)){
     
     # Get data.frame for matchup based on the wavelength of choice
-    matchup_filt <- filter(match_base, wavelength == W_nm[i])
+    matchup_filt <- filter(match_base_filt, wavelength == W_nm[i])
     
     # if(!is.null(MAPE_limit)){
     #   matchup_filt <- filter(matchup_filt, MAPE <= MAPE_limit)
@@ -531,8 +568,11 @@ global_stats <- function(var_name, sensor_X, sensor_Y){#,
     }
   }
   
-  # Get file name and save
-  # write_csv(df_results, paste0(folder_path, "/", var_name, "_", sensor_X, "_vs_", sensor_Y, "_global_stats.csv"))
+  # Add matchup count and exit
+  df_results <- df_results |> 
+    mutate(n_base = match_count_all,
+           # count_diff_time = match_count_filt,
+           diff_time_window = time_window, .before = "sensor_X")
   return(df_results)
 }
 
