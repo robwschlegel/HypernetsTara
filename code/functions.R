@@ -308,21 +308,10 @@ get_nearest_pixels <- function(df_data, target_lat, target_lon, n_pixels){
 # file_path <- "~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results_v2/RHOW_HYPERNETS_vs_HYPERPRO/HYPERNETS_vs_HYPERPRO_vs_20240809T073700_RHOW.csv"
 # file_path <- "~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results_v2/ED_HYPERNETS_vs_TRIOS/HYPERNETS_vs_TRIOS_vs_20240808T065700_ED.csv"
 # file_path <- file_list[1]
-process_matchup_file <- function(file_path, filter_table = NULL){
+process_matchup_file <- function(file_path){
   
   # Load the mean data
   df_mean <- load_matchup_mean(file_path)
-  
-  # Filter based on filter_table if provided
-  # NB: Not currently used
-  if(!is.null(filter_table)){
-    df_mean <- semi_join(df_mean, filter_table, by = c("sensor", "day", "time", "longitude", "latitude"))
-  }
-  
-  if(nrow(df_mean) < 2){
-    print(paste("Not enough data in", basename(file_path), "after filtering, skipping..."))
-    return(NULL)
-  }
   
   # Sensors to be compared
   sensors <- unique(df_mean$sensor)
@@ -406,8 +395,7 @@ process_matchup_folder <- function(var_name, sensor_X, sensor_Y){
   file_list <- file_list[!grepl("all|global", file_list)]
   
   # Initialise results data.frame
-  df_results <- plyr::ldply(file_list, process_matchup_file, .parallel = TRUE, 
-                            filter_table = filter_table)
+  df_results <- plyr::ldply(file_list, process_matchup_file, .parallel = TRUE)
   
   # Exit
   return(df_results)
@@ -449,7 +437,6 @@ process_sensor <- function(var_name, sensor_Z, stat_choice = "matchup"){
 # var_name = "RHOW"; sensor_X = "HYPERNETS"; sensor_Y = "TRIOS"
 # var_name = "RHOW"; sensor_X = "TRIOS"; sensor_Y = "AQUA"; W_nm = c(412, 443, 488, 531, 555, 667)
 # var_name = "RHOW"; sensor_X = "HYPERNETS"; sensor_Y = "PACE_V31"; W_nm = c(412, 443, 490, 510, 560, 673)
-# MAPE_limit = NULL; filter_table = NULL;
 # W_nm = c(412, 443, 488, 531, 555, 667)
 global_stats <- function(var_name, sensor_X, sensor_Y){
   

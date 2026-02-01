@@ -189,6 +189,14 @@ filter_join_LU_in_situ <- right_join(base_LU_in_situ, filter_LU_in_situ)
 
 # Plot all wavelength matchups
 plot_matchup_nm(join_LU_in_situ, "LU", "Hyp", "TRIOS")
+ggsave("figures/global_scatter_LU_hyp_trios.png", height = 7, width = 6)
+# Plot all wavelength matchups
+plot_matchup_nm(join_LU_in_situ, "LU", "Hyp", "HYPERPRO")
+ggsave("figures/global_scatter_LU_hyp_pro.png", height = 7, width = 6)
+plot_matchup_nm(join_LU_in_situ, "LU", "TRIOS", "HYPERPRO")
+ggsave("figures/global_scatter_LU_trios_pro.png", height = 7, width = 6)
+
+# With filtering
 plot_matchup_nm(filter_join_LU_in_situ, "LU", "Hyp", "TRIOS")
 
 # Plot matchups by date
