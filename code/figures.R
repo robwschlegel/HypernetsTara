@@ -92,6 +92,13 @@ global_triptych <- function(var_name, sensor_Y, cut_legend = NULL){
     match_base_3 <- load_matchups_folder(var_name, "HYPERPRO", sensor_Y, long = TRUE)
   }
   
+  # Filter out wavelengths above 590 if plotting Rhow data
+  if(var_name == "RHOW"){
+    match_base_1 <- filter(match_base_1, wavelength <= 590) 
+    match_base_2 <- filter(match_base_2, wavelength <= 590) 
+    match_base_3 <- filter(match_base_3, wavelength <= 590) 
+  }
+  
   # Create the three figures
   print("Creating figures")
   if(sensor_Y == "HYPERPRO"){
@@ -158,7 +165,7 @@ global_triptych_stack <- function(var_name, sensor_Z){
     
     # Combine into special layout
     fig_stack <- ggpubr::ggarrange(fig_a, fig_b, fig_c, ncol = 1, nrow = 3, 
-                                   labels = c("a)", "b)", "c)"), hjust = c(-2.2, -7.0, -1.5)) + 
+                                   labels = c("a)", "b)", "c)"), hjust = c(-2.2, -6.5, -1.5)) + 
       ggpubr::bgcolor("white") + ggpubr::border("white", size = 2)
     # fig_stack <- plot_spacer() + fig_a / fig_b / fig_c + plot_layout(ncol = 1, nrow = 3, heights = c(1, 1, 1))
     ggsave(paste0("figures/global_scatter_OTHER_in_situ.png"), fig_stack, width = 11, height = 12)
