@@ -39,7 +39,41 @@ process_sensor("RHOW", "VIIRS", "global")
 process_sensor("RHOW", "OLCI", "global")
 
 
-# Check individual values -------------------------------------------------
+# Check individual matchups -----------------------------------------------
+
+# Files of interest
+# HYPERNETS_vs_TRIOS_vs_20240816T081000_LW.csv # Negative values cause massive MAPE (%)
+
+# Load file
+match_1 <- load_matchup_long(paste0(file_path_build("LW", "HYPERNETS", "TRIOS"), "HYPERNETS_vs_TRIOS_vs_20240816T081000_LW.csv"))
+
+# Create vectors from filtered columns
+(x_vec <- match_1[["Hyp"]])
+(y_vec <- match_1[["TRIOS"]])
+
+# Calculate stats one-by-one
+message("Slope : ", round(coef(lm(y_vec ~ x_vec))[2], 4))
+message("RMSE : ", round(sqrt(mean((y_vec - x_vec)^2, na.rm = TRUE)), 4))
+message("MSA : ", round(mean(abs(y_vec - x_vec), na.rm = TRUE), 4))
+message("MAPE (%) : ", round(mean(abs((y_vec - x_vec) / x_vec), na.rm = TRUE) * 100, 2))
+
+# Calculate Bias and Error (Pahlevan's method)
+log_ratio <- log10(y_vec / x_vec)
+bias_pahlevan <- median(log_ratio, na.rm = TRUE)
+bias_pahlevan_final <- sign(bias_pahlevan) * (10^abs(bias_pahlevan) - 1)
+message("Bias (%) : ", round(bias_pahlevan_final * 100, 2))
+
+error_pahlevan <- median(abs(log_ratio), na.rm = TRUE)
+error_pahlevan_final <- 10^error_pahlevan - 1
+message("Error (%) : ", round(error_pahlevan_final * 100, 2))
+
+# Plot data
+match_base |> 
+  ggplot(aes(x = Hyp, y = TRIOS)) +
+  geom_point(aes(colour = wavelength))
+
+
+# Check individual global values ------------------------------------------
 
 # Rhow - HyperPRO vs OLCI S3A - w_nm 665
 folder_path <- file_path_build("RHOW", "HYPERPRO", "S3B")

@@ -48,8 +48,7 @@ load_matchup_mean <- function(file_name){
   colnames(df_match)[1] <- "sensor"
   
   # Get means per file
-  # Satellite matchups have a different structure than in situ matchups
-  # TODO: Test this with a satellite matchup file
+  # NB: Satellite matchups have a different structure than in situ matchups
   if("weighted" %in% df_match$data_type){
     df_mean <- df_match |>
       mutate(sensor = gsub(" 1$| 2$| 3$| 4$| 5$| 6$| 7$| 8$| 9$", "", sensor)) |>
@@ -63,7 +62,6 @@ load_matchup_mean <- function(file_name){
       filter(data_check == "keep") |>
       dplyr::select(-radiometer_id, -data_type, -data_check, -type)
   } else {
-    # TODO: Double check this with all ins-itu matchup file types
     df_mean <- df_match |> 
       filter(grepl(" 1", sensor)) |> 
       mutate(sensor = gsub(" 1$| 2$| 3$| 4$| 5$| 6$| 7$| 8$| 9$", "", sensor)) |>
@@ -448,6 +446,13 @@ global_stats <- function(var_name, sensor_X, sensor_Y){
   
   # Load data
   match_base <- map_dfr(file_list, load_matchup_long)
+  
+  # TODO: Apply outlier filtering as necessary
+  # Get outliers list
+  
+  # Filter accordingly
+  
+  # Mark the difference in files removed and the reason why if convenient
   
   # Continue with satellite versions if necessary
     if(sensor_Y  == "AQUA"){

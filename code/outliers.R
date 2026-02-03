@@ -62,6 +62,37 @@ plot_matchup_dateTime <- function(df, var_name, x_sensor, y_sensor, date_filter)
           legend.position = "bottom")
 }
 
+# Plot scatterplot based on the MAPE values of each comparison
+plot_matchup_MAPE_Bias <- function(df, var_name, x_sensor, y_sensor){
+  pl_MAPE <- df |> 
+    filter(!is.na(!!sym(x_sensor)), !is.na(!!sym(y_sensor))) |> 
+    ggplot(aes_string(x = x_sensor, y = y_sensor)) +
+    geom_point(aes(colour = MAPE)) +
+    geom_abline(slope = 1, intercept = 0, color = "black", linetype = "dashed") +
+    scale_colour_viridis_c(option = "D") +
+    labs(title = paste(var_name,"-", x_sensor, "vs", y_sensor,"- MAPE"),
+         x = paste(var_name, x_sensor),
+         y = paste(var_name, y_sensor),
+         colour = "MAPE [%]") +
+    theme_minimal() +
+    theme(panel.border = element_rect(fill = NA, color = "black"),
+          legend.position = "bottom")
+  pl_Bias <- df |>
+    filter(!is.na(!!sym(x_sensor)), !is.na(!!sym(y_sensor))) |> 
+    ggplot(aes_string(x = x_sensor, y = y_sensor)) +
+    geom_point(aes(colour = Bias)) +
+    geom_abline(slope = 1, intercept = 0, color = "black", linetype = "dashed") +
+    scale_colour_viridis_c(option = "A") +
+    labs(title = paste(var_name,"-", x_sensor, "vs", y_sensor,"- Bias"),
+         x = paste(var_name, x_sensor),
+         y = paste(var_name, y_sensor),
+         colour = "Bias [%]") +
+    theme_minimal() +
+    theme(panel.border = element_rect(fill = NA, color = "black"),
+          legend.position = "bottom")
+  ggpubr::ggarrange(pl_MAPE, pl_Bias, nrow = 2, ncol = 1)
+}
+
 # Plot the relationship between difftime and distance for MAPE and bias for all variables
 # df = matchup_ED_in_situ; var_name = "ED"
 plot_matchup_scatter <- function(df, var_name, pl_height = 6, pl_width = 9){
@@ -104,14 +135,14 @@ plot_matchup_scatter <- function(df, var_name, pl_height = 6, pl_width = 9){
 }
 
 
-# Outlier hunting ---------------------------------------------------------
+# In situ Outliers ---------------------------------------------------------
 
 ## ED ----------------------------------------------------------------------
 
 # Load processed in situ matchups
 matchup_ED_in_situ <- read_csv("output/matchup_stats_ED_in_situ.csv") |> 
   mutate(comp_sensors = paste0(sensor_X," vs ",sensor_Y)) |> 
-  filter(comp_sensors %in% c("Hyp vs TRIOS", "Hyp vs HYPERPRO", "TRIOS vs HYPERPRO"))
+  filter(comp_sensors %in% c("Hyp vs TRIOS", "HYPERPRO vs Hyp", "HYPERPRO vs TRIOS"))
 
 # Load base W_nm matchup values
 base_ED_in_situ <- plyr::ldply(list.files(c(file_path_build("ED", "Hypernets", "Trios"), 
@@ -120,18 +151,23 @@ base_ED_in_situ <- plyr::ldply(list.files(c(file_path_build("ED", "Hypernets", "
                                           pattern = "*.csv", full.names = TRUE), 
                                load_matchup_long, .parallel = TRUE)
 
-# Filter all by MAPE to get an initial idea of the issues
-filter_ED_in_situ <- filter(matchup_ED_in_situ, MAPE >= 20) |> mutate(val_filter = "MAPE >= 20")
-
 # Join for full range of stats
 join_ED_in_situ <- left_join(base_ED_in_situ, matchup_ED_in_situ, by = join_by(file_name))
-filter_join_ED_in_situ <- right_join(base_ED_in_situ, filter_ED_in_situ)
+
+# Plot matchup by MAPE + Bias
+plot_matchup_MAPE_Bias(join_ED_in_situ, "Ed", "Hyp", "TRIOS") # MAPE > 20
+plot_matchup_MAPE_Bias(join_ED_in_situ, "Ed", "HYPERPRO", "Hyp") # OK
+plot_matchup_MAPE_Bias(join_ED_in_situ, "Ed", "HYPERPRO", "TRIOS") # OK
+
+# Filter all by MAPE or Bias to get an initial idea of the issues
+filter_ED_in_situ <- filter(matchup_ED_in_situ, MAPE >= 20) |> mutate(val_filter = "MAPE >= 20")
+filter_join_ED_in_situ <- right_join(base_ED_in_situ, filter_ED_in_situ, by = join_by(file_name))
+clean_join_ED_in_situ <- anti_join(base_ED_in_situ, filter_ED_in_situ, by = join_by(file_name))
 
 # Plot all wavelength matchups
 plot_matchup_nm(join_ED_in_situ, "Ed", "Hyp", "TRIOS")
 plot_matchup_nm(filter_join_ED_in_situ, "Ed", "Hyp", "TRIOS")
-plot_matchup_nm(join_ED_in_situ, "Ed", "TRIOS", "HYPERPRO")
-plot_matchup_nm(filter_join_ED_in_situ, "Ed", "TRIOS", "HYPERPRO")
+plot_matchup_nm(clean_join_ED_in_situ, "Ed", "Hyp", "TRIOS")
 
 # Plot matchups by date
 plot_matchup_date(filter_join_ED_in_situ, "Ed", "Hyp", "TRIOS")
@@ -142,7 +178,7 @@ plot_matchup_date(filter_join_ED_in_situ, "Ed", "Hyp", "TRIOS")
 # Load processed in situ matchups
 matchup_LD_in_situ <- read_csv("output/matchup_stats_LD_Hyp_vs_Trios.csv") |> 
   mutate(comp_sensors = paste0(sensor_X," vs ",sensor_Y)) |> 
-  filter(comp_sensors %in% c("Hyp vs TRIOS", "Hyp vs HYPERPRO", "TRIOS vs HYPERPRO"))
+  filter(comp_sensors %in% c("Hyp vs TRIOS", "HYPERPRO vs Hyp", "HYPERPRO vs TRIOS"))
 
 # Load base W_nm matchup values
 base_LD_in_situ <- plyr::ldply(list.files(c(file_path_build("LD", "Hypernets", "Trios"), 
@@ -151,16 +187,22 @@ base_LD_in_situ <- plyr::ldply(list.files(c(file_path_build("LD", "Hypernets", "
                                           pattern = "*.csv", full.names = TRUE), 
                                load_matchup_long, .parallel = TRUE)
 
+# Join for full range of stats
+join_LD_in_situ <- left_join(base_LD_in_situ, matchup_LD_in_situ, by = join_by(file_name))
+
+# Plot matchup by MAPE + Bias
+# NB: Only HypStar vs Trios
+plot_matchup_MAPE_Bias(join_LD_in_situ, "Ld", "Hyp", "TRIOS") # Bias < -50
+
 # Filter all by MAPE to get an initial idea of the issues
 filter_LD_in_situ <- filter(matchup_LD_in_situ, Bias <= -50) |> mutate(val_filter = "Bias <= -50")
-
-# Join for full range of stats
-join_LD_in_situ <- left_join(base_LD_in_situ, filter_LD_in_situ, by = join_by(file_name))
-filter_join_LD_in_situ <- right_join(base_LD_in_situ, filter_LD_in_situ)
+filter_join_LD_in_situ <- right_join(base_LD_in_situ, filter_LD_in_situ, by = join_by(file_name))
+clean_join_LD_in_situ <- anti_join(base_LD_in_situ, filter_LD_in_situ, by = join_by(file_name))
 
 # Plot all wavelength matchups
 plot_matchup_nm(join_LD_in_situ, "LD", "Hyp", "TRIOS")
 plot_matchup_nm(filter_join_LD_in_situ, "LD", "Hyp", "TRIOS")
+plot_matchup_nm(clean_join_LD_in_situ, "LD", "Hyp", "TRIOS")
 
 # Plot matchups by date
 plot_matchup_date(filter_join_LD_in_situ, "LD", "Hyp", "TRIOS")
@@ -171,7 +213,7 @@ plot_matchup_date(filter_join_LD_in_situ, "LD", "Hyp", "TRIOS")
 # Load processed in situ matchups
 matchup_LU_in_situ <- read_csv("output/matchup_stats_LU_in_situ.csv") |> 
   mutate(comp_sensors = paste0(sensor_X," vs ",sensor_Y)) |> 
-  filter(comp_sensors %in% c("Hyp vs TRIOS", "Hyp vs HYPERPRO", "TRIOS vs HYPERPRO"))
+  filter(comp_sensors %in% c("Hyp vs TRIOS", "HYPERPRO vs Hyp", "HYPERPRO vs TRIOS"))
 
 # Load base W_nm matchup values
 base_LU_in_situ <- plyr::ldply(list.files(c(file_path_build("LU", "Hypernets", "Trios"), 
@@ -180,32 +222,34 @@ base_LU_in_situ <- plyr::ldply(list.files(c(file_path_build("LU", "Hypernets", "
                                           pattern = "*.csv", full.names = TRUE), 
                                load_matchup_long, .parallel = TRUE)
 
-# Filter all by MAPE to get an initial idea of the issues
-filter_LU_in_situ <- filter(matchup_LU_in_situ, MAPE >= 20) |> mutate(val_filter = "MAPE >= 20")
-
 # Join for full range of stats
 join_LU_in_situ <- left_join(base_LU_in_situ, matchup_LU_in_situ, by = join_by(file_name))
+
+# Plot matchup by MAPE + Bias
+# NB: Only HypStar vs Trios
+plot_matchup_MAPE_Bias(join_LU_in_situ, "Lu", "Hyp", "TRIOS") # Bias < -50
+
+# Filter all by MAPE to get an initial idea of the issues
+filter_LU_in_situ <- filter(matchup_LU_in_situ, Bias <= -50) |> mutate(val_filter = "Bias <= -50")
 filter_join_LU_in_situ <- right_join(base_LU_in_situ, filter_LU_in_situ)
 clean_join_LU_in_situ <- anti_join(base_LU_in_situ, filter_LU_in_situ)
 
 # Plot all wavelength matchups
 plot_matchup_nm(join_LU_in_situ, "LU", "Hyp", "TRIOS")
+plot_matchup_nm(filter_join_LU_in_situ, "LU", "Hyp", "TRIOS")
 plot_matchup_nm(clean_join_LU_in_situ, "LU", "Hyp", "TRIOS")
 ggsave("figures/global_scatter_LU_hyp_trios.png", height = 7, width = 6)
 
-# Plot all wavelength matchups
-plot_matchup_nm(clean_join_LU_in_situ, "LU", "Hyp", "HYPERPRO")
-plot_matchup_nm(join_LU_in_situ, "LU", "Hyp", "HYPERPRO")
-ggsave("figures/global_scatter_LU_hyp_pro.png", height = 7, width = 6)
-plot_matchup_nm(join_LU_in_situ, "LU", "TRIOS", "HYPERPRO")
-plot_matchup_nm(clean_join_LU_in_situ, "LU", "TRIOS", "HYPERPRO")
-ggsave("figures/global_scatter_LU_trios_pro.png", height = 7, width = 6)
-
-# With filtering
-plot_matchup_nm(filter_join_LU_in_situ, "LU", "Hyp", "TRIOS")
-
 # Plot matchups by date
 plot_matchup_date(filter_join_LU_in_situ, "LU", "Hyp", "TRIOS")
+
+# Plot HyperPRO wavelength matchups for interest
+plot_matchup_nm(join_LU_in_situ, "LU", "HYPERPRO", "Hyp")
+plot_matchup_nm(clean_join_LU_in_situ, "LU", "HYPERPRO", "Hyp")
+ggsave("figures/global_scatter_LU_hyperpro_hypstar.png", height = 7, width = 6)
+plot_matchup_nm(join_LU_in_situ, "LU", "HYPERPRO", "TRIOS")
+plot_matchup_nm(clean_join_LU_in_situ, "LU", "HYPERPRO", "TRIOS")
+ggsave("figures/global_scatter_LU_hyperpro_trios.png", height = 7, width = 6)
 
 
 ## LW ----------------------------------------------------------------------
@@ -213,7 +257,7 @@ plot_matchup_date(filter_join_LU_in_situ, "LU", "Hyp", "TRIOS")
 # Load processed in situ matchups
 matchup_LW_in_situ <- read_csv("output/matchup_stats_LW_in_situ.csv") |> 
   mutate(comp_sensors = paste0(sensor_X," vs ",sensor_Y)) |> 
-  filter(comp_sensors %in% c("Hyp vs TRIOS", "Hyp vs HYPERPRO", "TRIOS vs HYPERPRO"))
+  filter(comp_sensors %in% c("Hyp vs TRIOS", "HYPERPRO vs Hyp", "HYPERPRO vs TRIOS"))
 
 # Load base W_nm matchup values
 base_LW_in_situ <- plyr::ldply(list.files(c(file_path_build("LW", "Hypernets", "Trios"), 
@@ -222,21 +266,41 @@ base_LW_in_situ <- plyr::ldply(list.files(c(file_path_build("LW", "Hypernets", "
                                           pattern = "*.csv", full.names = TRUE), 
                                load_matchup_long, .parallel = TRUE)
 
-# Filter all by MAPE to get an initial idea of the issues
-filter_LW_in_situ <- filter(matchup_LW_in_situ, Bias <= -50) |> mutate(val_filter = "Bias <= -50")
+# List of files with negative HypStar values
+neg_LW_hypstar <- base_LW_in_situ |> 
+  filter(Hyp < 0) |> 
+  distinct(file_name) |> 
+  left_join(matchup_LW_in_situ) |> 
+  mutate(val_filter = "Negative HypStar values")
 
 # Join for full range of stats
-join_LW_in_situ <- left_join(base_LW_in_situ, matchup_LW_in_situ, by = join_by(file_name))
-filter_join_LW_in_situ <- right_join(base_LW_in_situ, filter_LW_in_situ)
-length(unique(join_LW_in_situ$file_name))
-length(unique(filter_LW_in_situ$file_name))
+join_LW_in_situ <- left_join(base_LW_in_situ, matchup_LW_in_situ, by = join_by(file_name)) |> 
+  anti_join(neg_LW_hypstar, by = join_by(file_name))
+
+# Plot matchup by MAPE + Bias
+plot_matchup_MAPE_Bias(join_LW_in_situ, "Lw", "Hyp", "TRIOS") # Bias < -100
+plot_matchup_MAPE_Bias(join_LW_in_situ, "Lw", "HYPERPRO", "Hyp") # Bias > 50
+plot_matchup_MAPE_Bias(join_LW_in_situ, "Lw", "HYPERPRO", "TRIOS") # OK
+
+# Filter all by MAPE to get an initial idea of the issues
+filter_LW_in_situ <- filter(matchup_LW_in_situ, Bias <= -100 | Bias >= 50) |> mutate(val_filter = "Bias <= -100 | Bias >= 50")
+filter_join_LW_in_situ <- right_join(base_LW_in_situ, filter_LW_in_situ, by = join_by(file_name))
+clean_join_LW_in_situ <- anti_join(base_LW_in_situ, filter_LW_in_situ, by = join_by(file_name))
 
 # Plot all wavelength matchups
 plot_matchup_nm(join_LW_in_situ, "LW", "Hyp", "TRIOS")
 plot_matchup_nm(filter_join_LW_in_situ, "LW", "Hyp", "TRIOS")
+plot_matchup_nm(clean_join_LW_in_situ, "LW", "Hyp", "TRIOS")
+plot_matchup_nm(join_LW_in_situ, "LW", "HYPERPRO", "Hyp")
+plot_matchup_nm(filter_join_LW_in_situ, "LW", "HYPERPRO", "Hyp")
+plot_matchup_nm(clean_join_LW_in_situ, "LW", "HYPERPRO", "Hyp")
+plot_matchup_nm(join_LW_in_situ, "LW", "HYPERPRO", "TRIOS")
+plot_matchup_nm(filter_join_LW_in_situ, "LW", "HYPERPRO", "TRIOS") # OK
+plot_matchup_nm(clean_join_LW_in_situ, "LW", "HYPERPRO", "TRIOS")
 
 # Plot matchups by date
 plot_matchup_date(filter_join_LW_in_situ, "LW", "Hyp", "TRIOS")
+plot_matchup_date(filter_join_LW_in_situ, "LW", "HYPERPRO", "Hyp")
 
 
 ## Rhow --------------------------------------------------------------------
@@ -244,7 +308,7 @@ plot_matchup_date(filter_join_LW_in_situ, "LW", "Hyp", "TRIOS")
 # Load processed in situ matchups
 matchup_RHOW_in_situ <- read_csv("output/matchup_stats_RHOW_in_situ.csv") |> 
   mutate(comp_sensors = paste0(sensor_X," vs ",sensor_Y)) |> 
-  filter(comp_sensors %in% c("Hyp vs TRIOS", "Hyp vs HYPERPRO", "TRIOS vs HYPERPRO"))
+  filter(comp_sensors %in% c("Hyp vs TRIOS", "HYPERPRO vs Hyp", "HYPERPRO vs TRIOS"))
 
 # Load base W_nm matchup values
 base_RHOW_in_situ <- plyr::ldply(list.files(c(file_path_build("RHOW", "Hypernets", "Trios"), 
@@ -253,28 +317,50 @@ base_RHOW_in_situ <- plyr::ldply(list.files(c(file_path_build("RHOW", "Hypernets
                                             pattern = "*.csv", full.names = TRUE), 
                                  load_matchup_long, .parallel = TRUE)
 
-# Filter all by MAPE to get an initial idea of the issues
-filter_RHOW_in_situ <- filter(matchup_RHOW_in_situ, MAPE >= 50) |> mutate(val_filter = "MAPE >= 20")
+# List of files with negative HypStar values
+neg_RHOW_hypstar <- base_RHOW_in_situ |> 
+  filter(Hyp < 0) |> 
+  distinct(file_name) |> 
+  left_join(matchup_RHOW_in_situ) |> 
+  mutate(val_filter = "Negative HypStar values")
 
 # Join for full range of stats
-join_RHOW_in_situ <- left_join(base_RHOW_in_situ, matchup_RHOW_in_situ, by = join_by(file_name))
+join_RHOW_in_situ <- left_join(base_RHOW_in_situ, matchup_RHOW_in_situ, by = join_by(file_name)) |> 
+  anti_join(neg_RHOW_hypstar, by = join_by(file_name))
+
+# Plot matchup by MAPE + Bias
+plot_matchup_MAPE_Bias(join_RHOW_in_situ, "RHOW", "Hyp", "TRIOS") # MAPE > 50
+plot_matchup_MAPE_Bias(join_RHOW_in_situ, "RHOW", "HYPERPRO", "Hyp") # MAPE > 50
+plot_matchup_MAPE_Bias(join_RHOW_in_situ, "RHOW", "HYPERPRO", "TRIOS") # MAPE > 50
+
+# Filter all by MAPE to get an initial idea of the issues
+filter_RHOW_in_situ <- filter(matchup_RHOW_in_situ, MAPE >= 50) |> mutate(val_filter = "MAPE >= 50")
 filter_join_RHOW_in_situ <- right_join(base_RHOW_in_situ, filter_RHOW_in_situ)
-length(unique(join_RHOW_in_situ$file_name))
-length(unique(filter_RHOW_in_situ$file_name))
+clean_join_RHOW_in_situ <- anti_join(base_RHOW_in_situ, filter_RHOW_in_situ)
 
 # Plot all wavelength matchups
 plot_matchup_nm(join_RHOW_in_situ, "RHOW", "Hyp", "TRIOS")
 plot_matchup_nm(filter_join_RHOW_in_situ, "RHOW", "Hyp", "TRIOS")
+plot_matchup_nm(clean_join_RHOW_in_situ, "RHOW", "Hyp", "TRIOS")
+plot_matchup_nm(join_RHOW_in_situ, "RHOW", "HYPERPRO", "Hyp")
+plot_matchup_nm(filter_join_RHOW_in_situ, "RHOW", "HYPERPRO", "Hyp")
+plot_matchup_nm(clean_join_RHOW_in_situ, "RHOW", "HYPERPRO", "Hyp")
+plot_matchup_nm(join_RHOW_in_situ, "RHOW", "HYPERPRO", "TRIOS")
+plot_matchup_nm(filter_join_RHOW_in_situ, "RHOW", "HYPERPRO", "TRIOS")
+plot_matchup_nm(clean_join_RHOW_in_situ, "RHOW", "HYPERPRO", "TRIOS")
 
 # Plot matchups by date
 plot_matchup_date(filter_join_RHOW_in_situ, "RHOW", "Hyp", "TRIOS")
+plot_matchup_date(filter_join_RHOW_in_situ, "RHOW", "HYPERPRO", "Hyp")
+plot_matchup_date(filter_join_RHOW_in_situ, "RHOW", "HYPERPRO", "TRIOS")
 
 
 ## Combine in situ outliers ------------------------------------------------
 
 # Stack all filtered data.frames with file names that appear to be outliers
 in_situ_outliers <- rbind(filter_ED_in_situ, filter_LD_in_situ, filter_LU_in_situ, 
-                          filter_LW_in_situ, filter_RHOW_in_situ) |> 
+                          filter_LW_in_situ, neg_LW_hypstar, 
+                          filter_RHOW_in_situ, neg_RHOW_hypstar) |> 
   dplyr::select(file_name, var_name, sensor_X, sensor_Y, dist, diff_time,MAPE, Bias)
 write_csv(in_situ_outliers, "meta/in_situ_outliers.csv")
 
@@ -286,96 +372,109 @@ plot_matchup_scatter(matchup_LW_in_situ, "LW")
 plot_matchup_scatter(matchup_RHOW_in_situ, "RHOW")
 
 
-## VIIRS_J1 ---------------------------------------------------------------
+# Satellite Outliers -------------------------------------------------------
 
-viirs_J1_Rhow <- read_excel("~/pCloudDrive/Documents/OMTAB/HYPERNETS/MATCHUPS_dm_120_min_350_max_800/VIIRS_J1/all_metrics_min_350_max_800_VIIRS_JPSS1_L2A_RHOW.xlsx")
-viirs_J1_Rhow_long <- viirs_J1_Rhow |>
-  filter(!is.na(dateTime)) |> 
-  dplyr::select(dateTime:Y_data, `X_value(411)`:`Y_value(671)`) |> 
-  pivot_longer(cols = contains("value"), names_to = "Wavelength", values_to = "Value") |>
-  separate(Wavelength, into = c("Sensor", "Wavelength_nm"), sep = "_value\\(") |>
-  mutate(Wavelength_nm = as.numeric(gsub("\\)", "", Wavelength_nm)),
-         dateTime = as.POSIXct(dateTime, format = "%Y%m%dT%H%M%S"),
-         date = as.Date(dateTime)) |> 
-  mutate(Sensor = case_when(
-    Sensor == "X" ~ X_data,
-    Sensor == "Y" ~ Y_data)) |> 
-  dplyr::select(-X_data, -Y_data) |> 
-  distinct() |> 
-  pivot_wider(names_from = Sensor, values_from = Value, id_cols = c(date, dateTime, Wavelength_nm), values_fn = mean) |> 
-  mutate(Wavelength_group = cut(Wavelength_nm,
-                                breaks = c(350, 400, 450, 500, 550, 600, 650, 700, 750),
-                                labels = c("350-400", "400-450", "450-500", "500-550", "550-600", "600-650", "650-700", "700-750"),
-                                include.lowest = FALSE, right = FALSE))
+## OLCI --------------------------------------------------------------------
 
+# Load processed in situ matchups
+matchup_OLCI <- read_csv("output/matchup_stats_RHOW_OLCI.csv") |> 
+  filter(sensor_X %in% c("Hyp", "HYPERPRO", "TRIOS")) |> 
+  mutate(comp_sensors = paste0(sensor_X," vs ",sensor_Y))
 
-### HyperPRO vs VIIRS_J1 ------------------------------------------------------
+# Load base W_nm matchup values
+base_OLCI <- plyr::ldply(list.files(dir("~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results_20260203/", 
+                                         pattern = "S3", full.names = TRUE),
+                                     pattern = "*.csv", full.names = TRUE), 
+                          load_matchup_long, .parallel = TRUE)
 
-# Plot values by wavelength group
-plot_rhow_hyperpro_viirsj1_wavelength <- viirs_J1_Rhow_long |> 
-  filter(!is.na(Hyperpro)) |>
-  ggplot(aes(x = Hyperpro, y = JPSS1)) +
-  geom_point(aes(colour = Wavelength_group)) +
-  geom_abline(slope = 1, intercept = 0, color = "black", linetype = "dashed") +
-  labs(title = "Rho_w - HyperPRO vs VIIRS_J1",
-       x = "Rho_w HyperPRO",
-       y = "Rho_w VIIRS_J1",
-       colour = "Wavelength (nm)") +
-  # scale_colour_discrete(palette = "dark2") +
-  scale_colour_discrete(palette = colour_nm)  +
-  theme_minimal() +
-  theme(panel.background = element_rect(fill = NA, color = "black"),
-        legend.position = "bottom")
-plot_rhow_hyperpro_viirsj1_wavelength
+# Join for full range of stats
+join_OLCI <- left_join(base_OLCI, matchup_OLCI, by = join_by(file_name))
 
+# Plot matchup by MAPE + Bias
+# NB: There are more S3A matchups, so using that sensor for analysis
+plot_matchup_MAPE_Bias(join_OLCI, "Rhow", "Hyp", "S3A") # MAPE > 200
+plot_matchup_MAPE_Bias(join_OLCI, "Rhow", "TRIOS", "S3A") # MAPE > 200
+plot_matchup_MAPE_Bias(join_OLCI, "Rhow", "HYPERPRO", "S3A") # OK
 
-# Plot lineqr model for each wavelength
-plot_rhow_hyperpro_viirsj1_wavelength_lm <- viirs_J1_Rhow_long |> 
-  filter(!is.na(Hyperpro)) |>
-  ggplot(aes(x = Hyperpro, y = JPSS1)) +
-  geom_point(aes(colour = as.factor(Wavelength_nm))) +
-  geom_smooth(aes(group = as.factor(Wavelength_nm), colour = as.factor(Wavelength_nm)), method = "lm", se = FALSE) +
-  geom_abline(slope = 1, intercept = 0, color = "black", linetype = "dashed") +
-  labs(title = "Rho_w - HyperPRO vs VIIRS_J1",
-       x = "Rho_w HyperPRO",
-       y = "Rho_w VIIRS_J1",
-       colour = "Wavelength (nm)") +
-  # scale_colour_discrete(palette = "dark2") +
-  # scale_colour_discrete(palette = colour_nm)  +
-  theme_minimal() +
-  theme(panel.background = element_rect(fill = NA, color = "black"),
-        legend.position = "bottom")
-plot_rhow_hyperpro_viirsj1_wavelength_lm
+# Filter all by MAPE or Bias to get an initial idea of the issues
+filter_OLCI <- filter(matchup_OLCI, MAPE >= 200) |> mutate(val_filter = "MAPE >= 200")
+filter_join_OLCI <- right_join(base_OLCI, filter_OLCI, by = join_by(file_name))
+clean_join_OLCI <- anti_join(base_OLCI, filter_OLCI, by = join_by(file_name))
 
-# Plot lineqr model for each wavelength
-plot_rhow_hyperpro_viirsj1_wavelength_lm_zoom <- viirs_J1_Rhow_long |> 
-  filter(!is.na(Hyperpro)) |>
-  filter(Wavelength_nm > 500) |>
-  ggplot(aes(x = Hyperpro, y = JPSS1)) +
-  geom_point(aes(colour = as.factor(Wavelength_nm))) +
-  geom_smooth(aes(group = as.factor(Wavelength_nm), colour = as.factor(Wavelength_nm)), method = "lm", se = FALSE) +
-  geom_abline(slope = 1, intercept = 0, color = "black", linetype = "dashed") +
-  labs(title = "Rho_w - HyperPRO vs VIIRS_J1",
-       x = "Rho_w HyperPRO",
-       y = "Rho_w VIIRS_J1",
-       colour = "Wavelength (nm)") +
-  # scale_colour_discrete(palette = "dark2") +
-  # scale_colour_discrete(palette = colour_nm)  +
-  theme_minimal() +
-  theme(panel.background = element_rect(fill = NA, color = "black"),
-        legend.position = "bottom")
-plot_rhow_hyperpro_viirsj1_wavelength_lm_zoom
+# Plot all wavelength matchups
+plot_matchup_nm(join_OLCI, "Rhow", "Hyp", "S3A")
+plot_matchup_nm(filter_join_OLCI, "Rhow", "Hyp", "S3A")
+plot_matchup_nm(clean_join_OLCI, "Rhow", "Hyp", "S3A")
+plot_matchup_nm(join_OLCI, "Rhow", "TRIOS", "S3A")
+plot_matchup_nm(filter_join_OLCI, "Rhow", "TRIOS", "S3A")
+plot_matchup_nm(clean_join_OLCI, "Rhow", "TRIOS", "S3A")
+plot_matchup_nm(join_OLCI, "Rhow", "HYPERPRO", "S3A")
+plot_matchup_nm(filter_join_OLCI, "Rhow", "HYPERPRO", "S3A") # OK
+plot_matchup_nm(clean_join_OLCI, "Rhow", "HYPERPRO", "S3A")
 
-# Combine and save
-plot_rhow_hyperpro_viirsj1 <- ggpubr::ggarrange(plot_rhow_hyperpro_viirsj1_wavelength,
-                                                plot_rhow_hyperpro_viirsj1_wavelength_lm,
-                                                plot_rhow_hyperpro_viirsj1_wavelength_lm_zoom,
-                                                ncol = 3, nrow = 1, labels = c("a)", "b)", "c)"))
-ggsave("~/pCloudDrive/Documents/OMTAB/HYPERNETS/figures/test_rhow_hyperpro_viirsj1.png", plot_rhow_hyperpro_viirsj1,
-       width = 18, height = 6, dpi = 600)
+# Plot matchups by date
+plot_matchup_date(filter_join_OLCI, "Rhow", "Hyp", "S3A")
+plot_matchup_date(filter_join_OLCI, "Rhow", "TRIOS", "S3A")
 
 
-## S3A errors --------------------------------------------------------------
+## VIIRS -------------------------------------------------------------------
+
+# Load processed in situ matchups
+matchup_VIIRS <- read_csv("output/matchup_stats_RHOW_VIIRS.csv") |> 
+  filter(sensor_X %in% c("Hyp", "HYPERPRO", "TRIOS")) |> 
+  mutate(comp_sensors = paste0(sensor_X," vs ",sensor_Y))
+
+# Load base W_nm matchup values
+base_VIIRS <- plyr::ldply(list.files(dir("~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results_20260203/", 
+                                         pattern = "VIIRS", full.names = TRUE),
+                                     pattern = "*.csv", full.names = TRUE), 
+                          load_matchup_long, .parallel = TRUE)
+
+# Join for full range of stats
+join_VIIRS <- left_join(base_VIIRS, matchup_VIIRS, by = join_by(file_name))
+
+# Plot matchup by MAPE + Bias
+# NB: VIIRS_N is visually the least similar, so using this for analysis
+plot_matchup_MAPE_Bias(join_VIIRS, "Rhow", "Hyp", "VIIRS_N") # MAPE > 100
+plot_matchup_MAPE_Bias(join_VIIRS, "Rhow", "TRIOS", "VIIRS_N") # MAPE > 100
+plot_matchup_MAPE_Bias(join_VIIRS, "Rhow", "HYPERPRO", "VIIRS_N") # OK
+
+# Filter all by MAPE or Bias to get an initial idea of the issues
+filter_VIIRS <- filter(matchup_VIIRS, MAPE >= 100) |> mutate(val_filter = "MAPE >= 100")
+filter_join_VIIRS <- right_join(base_VIIRS, filter_VIIRS, by = join_by(file_name))
+clean_join_VIIRS <- anti_join(base_VIIRS, filter_VIIRS, by = join_by(file_name))
+
+# Plot all wavelength matchups
+plot_matchup_nm(join_VIIRS, "Rhow", "Hyp", "VIIRS_N")
+plot_matchup_nm(filter_join_VIIRS, "Rhow", "Hyp", "VIIRS_N")
+plot_matchup_nm(clean_join_VIIRS, "Rhow", "Hyp", "VIIRS_N")
+plot_matchup_nm(join_VIIRS, "Rhow", "TRIOS", "VIIRS_N")
+plot_matchup_nm(filter_join_VIIRS, "Rhow", "TRIOS", "VIIRS_N")
+plot_matchup_nm(clean_join_VIIRS, "Rhow", "TRIOS", "VIIRS_N")
+plot_matchup_nm(join_VIIRS, "Rhow", "HYPERPRO", "VIIRS_N")
+plot_matchup_nm(filter_join_VIIRS, "Rhow", "HYPERPRO", "VIIRS_N")
+plot_matchup_nm(clean_join_VIIRS, "Rhow", "HYPERPRO", "VIIRS_N")
+
+# Plot matchups by date
+plot_matchup_date(filter_join_VIIRS, "Rhow", "Hyp", "VIIRS_N")
+
+
+## MODIS -------------------------------------------------------------------
+
+
+
+## OCI ---------------------------------------------------------------------
+
+
+## Combine satellite outliers ----------------------------------------------
+
+# Stack all filtered data.frames with file names that appear to be outliers
+satellite_outliers <- rbind(filter_OLCI, filter_VIIRS, filter_MODIS, filter_OCI) |> 
+  dplyr::select(file_name, var_name, sensor_X, sensor_Y, dist, diff_time,MAPE, Bias)
+write_csv(in_situ_outliers, "meta/satellite_outliers.csv")
+
+
+# S3A errors --------------------------------------------------------------
 
 # Load matchup
 S3A_match <- read_delim("~/Downloads/TRIOS_vs_HYPERPRO_vs_S3A_vs_20240814T082814_RHOW.csv", delim = ";", col_types = "cccc")
