@@ -29,7 +29,7 @@ options(scipen = 9999)
 
 # Function that assembles file directory based on desired variable and sensors
 file_path_build <- function(var_name, sensor_X, sensor_Y){
-  file_path <- paste0("~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results_mwm_595/",
+  file_path <- paste0("~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results_20260203/",
                       toupper(var_name),"_",toupper(sensor_X),"_vs_", toupper(sensor_Y),"/")
 }
 
