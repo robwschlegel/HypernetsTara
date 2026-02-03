@@ -80,7 +80,7 @@ global_triptych <- function(var_name, sensor_Y, cut_legend = NULL){
   
   # Load data based on in situ comparisons or not
   print("Loading matchups")
-  if(var_name == "LD"){
+  if(var_name %in% c("LU", "LD")){
     match_base_1 <- load_matchups_folder(var_name, "HYPERNETS", "TRIOS", long = TRUE)
   } else if(sensor_Y == "HYPERPRO"){
     match_base_1 <- load_matchups_folder(var_name, "HYPERNETS", "TRIOS", long = TRUE)
@@ -102,7 +102,7 @@ global_triptych <- function(var_name, sensor_Y, cut_legend = NULL){
   # Create the three figures
   print("Creating figures")
   if(sensor_Y == "HYPERPRO"){
-    if(var_name == "LD"){
+    if(var_name %in% c ("LU", "LD")){
       match_fig_1 <- plot_matchup_nm(match_base_1, var_name, "HYPERNETS", "TRIOS")
     } else {
       match_fig_1 <- plot_matchup_nm(match_base_1, var_name, "HYPERNETS", "TRIOS")
@@ -117,11 +117,11 @@ global_triptych <- function(var_name, sensor_Y, cut_legend = NULL){
   
   # Combine into final figure and save
   print("Processing and exit")
-  if(var_name == "LD"){ 
-    match_fig <- match_fig_1 + 
-      guides(colour = guide_legend(nrow = 2)) +
-      theme(legend.position = "right",
-            legend.direction = "horizontal") 
+  if(var_name %in% c("LU", "LD")){
+    match_fig <- match_fig_1 #+ 
+      # guides(colour = guide_legend(nrow = 2)) +
+      # theme(legend.position = "right",
+            # legend.direction = "horizontal")
     # ggsave(paste0("figures/global_scatter_all_",var_name,"_",sensor_Y,".png"), match_fig, width = 5, height = 5)
   } else if(!is.null(cut_legend)){
     match_fig_1 <- match_fig_1 + guides(colour = "none")
@@ -159,11 +159,12 @@ global_triptych_stack <- function(var_name, sensor_Z){
   # Create figures
   if(var_name != "RHOW"){
     fig_a <- global_triptych("ED", "HYPERPRO", cut_legend = "cut") #+ guides(colour = "none")
-    fig_b <- global_triptych("LD", "HYPERPRO")
-    # global_triptych("LU", "HYPERPRO")
-    fig_c <- global_triptych("LW", "HYPERPRO", cut_legend = "cut")
+    fig_b <- global_triptych("LD", "HYPERPRO", cut_legend = "cut")
+    fig_c <- global_triptych("LU", "HYPERPRO", cut_legend = "cut")
+    fig_d <- global_triptych("LW", "HYPERPRO")#, cut_legend = "cut")
     
     # Combine into special layout
+    # fig_mid <- ggpubr::ggarrange(fig_b, fig_c, ncol = 2, n
     fig_stack <- ggpubr::ggarrange(fig_a, fig_b, fig_c, ncol = 1, nrow = 3, 
                                    labels = c("a)", "b)", "c)"), hjust = c(-2.2, -6.5, -1.5)) + 
       ggpubr::bgcolor("white") + ggpubr::border("white", size = 2)
