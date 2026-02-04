@@ -27,6 +27,8 @@ pretty_label_func <- function(char_string){
     sensor_lab <- "So-Rad"
   } else if(char_string == "AQUA"){
     sensor_lab <- "MODIS-A" 
+  } else if(char_string == "S3"){ # NB: This is a special case
+    sensor_lab <- "S3A; S3B" 
   } else if(char_string == "PACE_V2"){
     sensor_lab <- "PACE v2.0"
   } else if(char_string == "PACE_V30"){
@@ -75,37 +77,47 @@ plot_global_nm <- function(df, var_name, sensor_X, sensor_Y){
   sensor_Y_labs <- pretty_label_func(sensor_Y)
   var_labs <- pretty_label_func(var_name)
   
+  # Detect Sentinel-3 data and react accordingly
+  if(sensor_Y == "S3"){
+   df_prep <- df |> 
+     pivot_longer(cols = c(S3A, S3B), names_to = "Platform", values_to = "S3") |> 
+     na.omit()
+  } else {
+    df_prep <- df
+  }
+  
   # Get max values
-  max_X <- max(df[sensor_X_labs$sensor_col], na.rm = TRUE)
-  max_Y <- max(df[sensor_Y_labs$sensor_col], na.rm = TRUE)
+  max_X <- max(df_prep[sensor_X_labs$sensor_col], na.rm = TRUE)
+  max_Y <- max(df_prep[sensor_Y_labs$sensor_col], na.rm = TRUE)
   max_axis <- max(max_X, max_Y)
   
-  # TODO: Allow this to detect Sentinel input and plot accordingly
-  
   # Plot
-  df |> 
-    ggplot(aes_string(x = sensor_X_labs$sensor_col, y = sensor_Y_labs$sensor_col)) +
-    geom_point(aes(colour = wavelength_group)) +#, alpha = 0.7) +
+  if(sensor_Y == "S3"){
+    pl_base <- ggplot(data = df_prep, 
+                      aes_string(x = sensor_X_labs$sensor_col, y = sensor_Y_labs$sensor_col)) +
+      geom_point(aes(colour = wavelength_group, shape = Platform), size = 2)
+  } else {
+    pl_base <- ggplot(data = df_prep, 
+                      aes_string(x = sensor_X_labs$sensor_col, y = sensor_Y_labs$sensor_col)) +
+      geom_point(aes(colour = wavelength_group))
+  }
+  pl_clean <- pl_base +
     geom_abline(slope = 1, intercept = 0, color = "black", linetype = "solid") +
     geom_smooth(method = "lm", formula = y ~ x, color = "black", linetype = "dashed", se = FALSE) +
     labs(x = paste0(sensor_X_labs$sensor_lab,"; ", var_labs$units_lab),
          y = paste0(sensor_Y_labs$sensor_lab,"; ", var_labs$units_lab),
-         # y = "CO<sub>2</sub> Emissions (ppm)",
-         # title = paste(sensor_X_labs$sensor_lab, "vs", sensor_Y_labs$sensor_lab)
-         # title = "<b>Main Title</b><br><i>Subtext here</i><sub>subscript</sub>",
          colour = "Wavelength (nm)") +
     scale_colour_manual(values = colour_nm) +
     guides(colour = guide_legend(nrow = 1)) +
     coord_fixed(xlim = c(0, max_axis), ylim = c(0, max_axis)) +
     theme_minimal() +
     theme(panel.border = element_rect(fill = NA, color = "black"),
-          legend.title = element_text(size = 10),
-          legend.text = element_text(size = 8),
-          # plot.title = element_text(hjust = 0.5),
-          # plot.title = element_markdown(),
+          legend.title = element_text(size = 12),
+          legend.text = element_text(size = 10),
           legend.position = "bottom",
           axis.title.x = element_markdown(),
           axis.title.y = element_markdown())
+  return(pl_clean)
 }
 
 # For the PACE supplementary figure
@@ -128,6 +140,7 @@ map_PACE <- function(df){
 # Takes variable and Y sensor as input to automagically create global scatterplot triptych
 # var_name = "LU"; sensor_Y = "HYPERPRO"
 # var_name = "RHOW"; sensor_Y = "HYPERPRO"
+# var_name = "RHOW"; sensor_Y = "S3"
 global_triptych <- function(var_name, sensor_Y, cut_legend = NULL){
   
   # Check that in situ data are being requested if variable is anything other than Rhow
@@ -145,16 +158,22 @@ global_triptych <- function(var_name, sensor_Y, cut_legend = NULL){
   # Load data based on in situ comparisons or not
   print("Loading matchups")
   if(var_name %in% c("LU", "LD")){
-    match_base_1 <- load_matchups_folder(var_name, "HYPERNETS", "TRIOS", long = TRUE) #|> arrange(-wavelength)
+    match_base_1 <- load_matchups_folder(var_name, "HYPERNETS", "TRIOS", long = TRUE)
   } else if(sensor_Y == "HYPERPRO"){
-    match_base_1 <- load_matchups_folder(var_name, "TRIOS", "HYPERPRO", long = TRUE) #|> arrange(-wavelength)
-    match_base_2 <- load_matchups_folder(var_name, "HYPERNETS", "HYPERPRO", long = TRUE) #|> arrange(-wavelength)
-    match_base_3 <- load_matchups_folder(var_name, "HYPERNETS", "TRIOS", long = TRUE) #|> arrange(-wavelength)
-    # TODO: If sentinel data, combine into one plot with shapes showing different sensors
+    match_base_1 <- load_matchups_folder(var_name, "TRIOS", "HYPERPRO", long = TRUE)
+    match_base_2 <- load_matchups_folder(var_name, "HYPERNETS", "HYPERPRO", long = TRUE)
+    match_base_3 <- load_matchups_folder(var_name, "HYPERNETS", "TRIOS", long = TRUE)
+  } else if(sensor_Y == "S3"){
+    match_base_1 <- bind_rows(load_matchups_folder(var_name, "HYPERPRO", "S3A", long = TRUE),
+                              load_matchups_folder(var_name, "HYPERPRO", "S3B", long = TRUE))
+    match_base_2 <- bind_rows(load_matchups_folder(var_name, "TRIOS", "S3A", long = TRUE),
+                              load_matchups_folder(var_name, "TRIOS", "S3B", long = TRUE))
+    match_base_3 <- bind_rows(load_matchups_folder(var_name, "HYPERNETS", "S3A", long = TRUE),
+                              load_matchups_folder(var_name, "HYPERNETS", "S3B", long = TRUE))
   } else {
-    match_base_1 <- load_matchups_folder(var_name, "HYPERPRO", sensor_Y, long = TRUE) #|> arrange(-wavelength)
-    match_base_2 <- load_matchups_folder(var_name, "TRIOS", sensor_Y, long = TRUE) #|> arrange(-wavelength)
-    match_base_3 <- load_matchups_folder(var_name, "HYPERNETS", sensor_Y, long = TRUE) #|> arrange(-wavelength)
+    match_base_1 <- load_matchups_folder(var_name, "HYPERPRO", sensor_Y, long = TRUE)
+    match_base_2 <- load_matchups_folder(var_name, "TRIOS", sensor_Y, long = TRUE)
+    match_base_3 <- load_matchups_folder(var_name, "HYPERNETS", sensor_Y, long = TRUE)
   }
   
   # Filter out outliers
@@ -168,9 +187,9 @@ global_triptych <- function(var_name, sensor_Y, cut_legend = NULL){
   
   # Filter out wavelengths above 590 if plotting Rhow data
   if(var_name == "RHOW"){
-    match_base_1 <- filter(match_base_1, wavelength <= 600) 
-    match_base_2 <- filter(match_base_2, wavelength <= 600) 
-    match_base_3 <- filter(match_base_3, wavelength <= 600) 
+    match_base_1 <- filter(match_base_1, wavelength < 600) 
+    match_base_2 <- filter(match_base_2, wavelength < 600) 
+    match_base_3 <- filter(match_base_3, wavelength < 600) 
   }
   
   # Create the three figures
@@ -224,32 +243,30 @@ global_triptych_stack <- function(var_name, sensor_Z){
   ply_grid <- sensor_grid(var_name, sensor_Z) |> 
     dplyr::select(var_name, sensor_Y) |> distinct()
   
-  # Cut it down
-  # ply_grid_short
-  
   # Get sensor variant count
   sensor_count <- length(unique(ply_grid$sensor_Y))
 
   # Create figures
   if(var_name != "RHOW"){
-    fig_a <- global_triptych("ED", "HYPERPRO", cut_legend = "cut") #+ guides(colour = "none")
+    fig_a <- global_triptych("ED", "HYPERPRO", cut_legend = "cut")
     fig_b <- global_triptych("LU", "HYPERPRO", cut_legend = "cut")
     fig_c <- global_triptych("LD", "HYPERPRO", cut_legend = "cut")
-    fig_d <- global_triptych("LW", "HYPERPRO")#, cut_legend = "cut")
+    fig_d <- global_triptych("LW", "HYPERPRO")
     
     # Combine into special layout
     fig_mid <- ggpubr::ggarrange(fig_b, fig_c, ncol = 2, nrow = 1, 
-                                 labels = c("b)", "c)"), hjust = c(-5.3, -6.0)) #+ 
-      # ggpubr::bgcolor("white") + ggpubr::border("white", size = 2)
+                                 labels = c("b)", "c)"), hjust = c(-5.3, -6.0))
     fig_stack <- ggpubr::ggarrange(fig_a, fig_mid, fig_d, ncol = 1, nrow = 3, 
                                    labels = c("a)", "", "d)"), hjust = c(-2.2, 0, -1.5), heights = c(1.07, 1, 1.17)) + 
       ggpubr::bgcolor("white") + ggpubr::border("white", size = 2)
-    # fig_stack <- plot_spacer() + fig_a / fig_b / fig_c + plot_layout(ncol = 1, nrow = 3, heights = c(1, 1, 1))
     ggsave(paste0("figures/global_scatter_OTHER_in_situ.png"), fig_stack, width = 11, height = 12)
   } else if(sensor_Z == "HYPERPRO"){
     fig_stack <- global_triptych("RHOW", "HYPERPRO")
     ggsave(paste0("figures/global_scatter_",var_name,"_in_situ.png"), fig_stack, width = 12, height = 4.5)
     # TODO: Optimise this logic gate to make this decision automagically
+  } else if(sensor_Z == "OLCI"){
+    fig_stack <- global_triptych("RHOW", "S3")
+    ggsave(paste0("figures/global_scatter_",var_name,"_OLCI.png"), fig_stack, width = 12, height = 4.5)
   } else if(sensor_count == 1){
     fig_stack <- global_triptych(var_name, ply_grid$sensor_Y[1])
     ggsave(paste0("figures/global_scatter_",var_name,"_",sensor_Z,".png"), fig_stack, width = 12, height = 4.5)
