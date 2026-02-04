@@ -37,6 +37,7 @@ file_path_build <- function(var_name, sensor_X, sensor_Y){
 # file_name <- "~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results_mwm_595/RHOW_HYPERNETS_vs_HYPERPRO/HYPERNETS_vs_HYPERPRO_vs_20240809T073700_RHOW.csv"
 # file_name <- "~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results_mwm_595/ED_HYPERNETS_vs_TRIOS/HYPERNETS_vs_TRIOS_vs_20240808T065700_ED.csv"
 # file_name <- "~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results_mwm_595/RHOW_HYPERNETS_vs_AQUA/HYPERNETS_vs_AQUA_vs_20240810T110400_RHOW.csv"
+# file_name <- "~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results_20260203/RHOW_TRIOS_vs_VIIRS_N/TRIOS_vs_VIIRS_N_vs_20240812T121332_RHOW.csv"
 load_matchup_mean <- function(file_name){
   
   # message(paste0("Started loading : ", file_name))
@@ -50,6 +51,26 @@ load_matchup_mean <- function(file_name){
   # Get means per file
   # NB: Satellite matchups have a different structure than in situ matchups
   if("weighted" %in% df_match$data_type){
+    
+    # Check for variance in W_nm columns
+    df_check <- df_match |> 
+      mutate(sensor = gsub(" 1$| 2$| 3$| 4$| 5$| 6$| 7$| 8$| 9$", "", sensor)) |>
+      filter(!(sensor %in% c("Hyp_nosc", "Hyp", "TRIOS", "HYPERNETS"))) |> 
+      dplyr::select(-day, -time, -latitude, -longitude, -radiometer_id, -type) |> 
+      pivot_longer(cols = matches("1|2|3|4|5|6|7|8|9"), names_to = "wavelength", values_to = "value") |> 
+      pivot_wider(names_from = data_type, values_from = value) |>
+      na.omit() |> 
+      mutate(max_sd_diff = weighted / std_max,
+             min_sd_diff = weighted / std_min,
+             wavelength = as.numeric(wavelength)) |> 
+      filter(wavelength <= 500)
+    
+    # If variables are too different, issue a warning and omit file from being loaded
+    if(any(df_check$max_sd_diff >= 1.1) | any(df_check$min_sd_diff <= 0.9)){
+      warning(paste0("Weighted mean has too much variance in file : ", file_name))
+      return()
+    }
+    
     df_mean <- df_match |>
       mutate(sensor = gsub(" 1$| 2$| 3$| 4$| 5$| 6$| 7$| 8$| 9$", "", sensor)) |>
       filter(sensor != "Hyp_nosc") |> 

@@ -392,18 +392,19 @@ join_OLCI <- left_join(base_OLCI, matchup_OLCI, by = join_by(file_name))
 
 # Plot matchup by MAPE + Bias
 # NB: There are more S3A matchups, so using that sensor for analysis
-plot_matchup_MAPE_Bias(join_OLCI, "Rhow", "Hyp", "S3A") # MAPE > 200
-plot_matchup_MAPE_Bias(join_OLCI, "Rhow", "TRIOS", "S3A") # MAPE > 200
+plot_matchup_MAPE_Bias(join_OLCI, "Rhow", "Hyp", "S3A") # The MAPE > 200 does not appear to be an outlier
+plot_matchup_MAPE_Bias(join_OLCI, "Rhow", "TRIOS", "S3A") # MAPE > 300
 plot_matchup_MAPE_Bias(join_OLCI, "Rhow", "HYPERPRO", "S3A") # OK
 
 # Filter all by MAPE or Bias to get an initial idea of the issues
-filter_OLCI <- filter(matchup_OLCI, MAPE >= 200) |> mutate(val_filter = "MAPE >= 200")
+filter_OLCI <- filter(matchup_OLCI, MAPE >= 300) |> mutate(val_filter = "MAPE >= 300") |> 
+  filter(file_name != "TRIOS_vs_S3B_vs_20240813T101805_RHOW.csv") # Manually checked, not an outlier, just a poor matchup
 filter_join_OLCI <- right_join(base_OLCI, filter_OLCI, by = join_by(file_name))
 clean_join_OLCI <- anti_join(base_OLCI, filter_OLCI, by = join_by(file_name))
 
 # Plot all wavelength matchups
 plot_matchup_nm(join_OLCI, "Rhow", "Hyp", "S3A")
-plot_matchup_nm(filter_join_OLCI, "Rhow", "Hyp", "S3A")
+plot_matchup_nm(filter_join_OLCI, "Rhow", "Hyp", "S3A") # OK
 plot_matchup_nm(clean_join_OLCI, "Rhow", "Hyp", "S3A")
 plot_matchup_nm(join_OLCI, "Rhow", "TRIOS", "S3A")
 plot_matchup_nm(filter_join_OLCI, "Rhow", "TRIOS", "S3A")
@@ -413,8 +414,9 @@ plot_matchup_nm(filter_join_OLCI, "Rhow", "HYPERPRO", "S3A") # OK
 plot_matchup_nm(clean_join_OLCI, "Rhow", "HYPERPRO", "S3A")
 
 # Plot matchups by date
-plot_matchup_date(filter_join_OLCI, "Rhow", "Hyp", "S3A")
+plot_matchup_date(filter_join_OLCI, "Rhow", "Hyp", "S3A") # Checked this date and the data appear normal
 plot_matchup_date(filter_join_OLCI, "Rhow", "TRIOS", "S3A")
+plot_matchup_date(filter_join_OLCI, "Rhow", "HYPERPRO", "S3A")
 
 
 ## VIIRS -------------------------------------------------------------------
@@ -434,13 +436,15 @@ base_VIIRS <- plyr::ldply(list.files(dir("~/pCloudDrive/Documents/OMTAB/HYPERNET
 join_VIIRS <- left_join(base_VIIRS, matchup_VIIRS, by = join_by(file_name))
 
 # Plot matchup by MAPE + Bias
-# NB: VIIRS_N is visually the least similar, so using this for analysis
+# NB: VIIRS_N is visually the least similar, so using this for base reference
 plot_matchup_MAPE_Bias(join_VIIRS, "Rhow", "Hyp", "VIIRS_N") # MAPE > 100
 plot_matchup_MAPE_Bias(join_VIIRS, "Rhow", "TRIOS", "VIIRS_N") # MAPE > 100
-plot_matchup_MAPE_Bias(join_VIIRS, "Rhow", "HYPERPRO", "VIIRS_N") # OK
+plot_matchup_MAPE_Bias(join_VIIRS, "Rhow", "HYPERPRO", "VIIRS_N") # MAPE > 100
 
 # Filter all by MAPE or Bias to get an initial idea of the issues
-filter_VIIRS <- filter(matchup_VIIRS, MAPE >= 100) |> mutate(val_filter = "MAPE >= 100")
+filter_VIIRS <- filter(matchup_VIIRS, MAPE >= 100) |> mutate(val_filter = "MAPE >= 100") |> 
+  filter(file_name %in% c("TRIOS_vs_VIIRS_N_vs_20240812T104536_RHOW.csv",
+                          "TRIOS_vs_VIIRS_N_vs_20240812T104536_RHOW.csv"))
 filter_join_VIIRS <- right_join(base_VIIRS, filter_VIIRS, by = join_by(file_name))
 clean_join_VIIRS <- anti_join(base_VIIRS, filter_VIIRS, by = join_by(file_name))
 
