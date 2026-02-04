@@ -104,6 +104,10 @@ MODIS_water_df <- as.data.frame(MODIS_water, xy = TRUE, na.rm = TRUE)
 
 # Map of Tara mission -----------------------------------------------------
 
+# TODO: Constrain pixel values from 0 - 0.1
+# Change sampling date legend to show all values and change legend title
+# Triple check lon/lat points
+
 # Map
 pl_map <- ggplot(data = station_HP) +
   borders(fill = "grey80") +

@@ -595,12 +595,14 @@ global_stats <- function(var_name, sensor_X, sensor_Y){
       
       # Create data.frame of results and add them to df_results
       df_temp <- data.frame(row.names = NULL,
-                            n_diff_time = n_match,
+                            n_w_nm = n_match,
                             sensor_X = sensor_X,
                             sensor_Y = sensor_Y,
                             Wavelength_nm = W_nm[i],
                             Slope = df_stats$Slope,
-                            RMSE = df_stats$RMSE,
+                            # intercept
+                            # R2
+                            # RMSE = df_stats$RMSE,
                             # MSA = df_stats$MSA,
                             MAPE = df_stats$MAPE,
                             Bias = df_stats$Bias,
@@ -616,6 +618,7 @@ global_stats <- function(var_name, sensor_X, sensor_Y){
     mutate(n_base = length(file_list),
            n_clean = length(file_list_clean),
            diff_time_window = time_window, 
+           n_diff_time = match_count_difftime,
            .before = "n_diff_time")
   return(df_results)
 }

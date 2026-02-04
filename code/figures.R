@@ -5,6 +5,7 @@
 # Setup -------------------------------------------------------------------
 
 source("code/functions.R")
+library(ggtext) # For rich text labels
 
 
 # Plotting functions ------------------------------------------------------
@@ -22,8 +23,10 @@ pretty_label_func <- function(char_string){
     sensor_col <- "Hyp"
   } else if(char_string == "HYPERPRO"){
     sensor_lab <- "HyperPRO"
-  }  else if(char_string == "TRIOS"){
+  } else if(char_string == "TRIOS"){
     sensor_lab <- "So-Rad"
+  } else if(char_string == "AQUA"){
+    sensor_lab <- "MODIS-A" 
   } else if(char_string == "PACE_V2"){
     sensor_lab <- "PACE v2.0"
   } else if(char_string == "PACE_V30"){
@@ -40,15 +43,15 @@ pretty_label_func <- function(char_string){
   
   # Correct variable units
   if(char_string == "ED"){
-    units_lab <- "Ed (mW cm⁻² sr⁻¹ nm⁻¹)"
+    units_lab <- "E<sub>d</sub> (W m-2 nm-1)"
   } else if(char_string == "LD"){
-    units_lab <- "Ld (mW cm⁻² sr⁻¹ nm⁻¹)"
+    units_lab <- "L<sub>d</sub> (W m-2 sr-1)"
   } else if(char_string == "LU"){
-    units_lab <- "Lu (mW cm⁻² sr⁻¹ nm⁻¹)"
+    units_lab <- "L<sub>u</sub> (W m-2 sr-1)"
   } else if(char_string == "LW"){
-    units_lab <- "Lw (mW cm⁻² sr⁻¹ nm⁻¹)"
+    units_lab <- "L<sub>w</sub> (W m-2 sr-1)"
   } else if(char_string == "RHOW"){
-    units_lab <- "Rrs (sr⁻¹)"
+    units_lab <- "R<sub>how</sub> (sr-1)"
   }
   
   # Combine into data.frame
@@ -66,10 +69,7 @@ pretty_label_func <- function(char_string){
 
 # Plot data based on wavelength group
 plot_global_nm <- function(df, var_name, sensor_X, sensor_Y){
-  
-  # TODO: Convert this into a functions that takes a single sensor as input
-  # TODO: Add all of the pretty labels etc. in this new functioon
-  # It will correct all ins itu and satellite sensor short codes to pretty names for plotting
+
   # Create sensor and unit labels
   sensor_X_labs <- pretty_label_func(sensor_X)
   sensor_Y_labs <- pretty_label_func(sensor_Y)
@@ -80,23 +80,32 @@ plot_global_nm <- function(df, var_name, sensor_X, sensor_Y){
   max_Y <- max(df[sensor_Y_labs$sensor_col], na.rm = TRUE)
   max_axis <- max(max_X, max_Y)
   
+  # TODO: Allow this to detect Sentinel input and plot accordingly
+  
   # Plot
   df |> 
     ggplot(aes_string(x = sensor_X_labs$sensor_col, y = sensor_Y_labs$sensor_col)) +
     geom_point(aes(colour = wavelength_group)) +#, alpha = 0.7) +
     geom_abline(slope = 1, intercept = 0, color = "black", linetype = "solid") +
     geom_smooth(method = "lm", formula = y ~ x, color = "black", linetype = "dashed", se = FALSE) +
-    labs(title = paste(sensor_X_labs$sensor_lab, "vs", sensor_Y_labs$sensor_lab),
-         x = paste0(sensor_X_labs$sensor_lab," : ", var_labs$units_lab),
-         y = paste0(sensor_Y_labs$sensor_lab," : ", var_labs$units_lab),
+    labs(x = paste0(sensor_X_labs$sensor_lab,"; ", var_labs$units_lab),
+         y = paste0(sensor_Y_labs$sensor_lab,"; ", var_labs$units_lab),
+         # y = "CO<sub>2</sub> Emissions (ppm)",
+         # title = paste(sensor_X_labs$sensor_lab, "vs", sensor_Y_labs$sensor_lab)
+         # title = "<b>Main Title</b><br><i>Subtext here</i><sub>subscript</sub>",
          colour = "Wavelength (nm)") +
     scale_colour_manual(values = colour_nm) +
     guides(colour = guide_legend(nrow = 1)) +
     coord_fixed(xlim = c(0, max_axis), ylim = c(0, max_axis)) +
     theme_minimal() +
     theme(panel.border = element_rect(fill = NA, color = "black"),
-          plot.title = element_text(hjust = 0.5),
-          legend.position = "bottom")
+          legend.title = element_text(size = 10),
+          legend.text = element_text(size = 8),
+          # plot.title = element_text(hjust = 0.5),
+          # plot.title = element_markdown(),
+          legend.position = "bottom",
+          axis.title.x = element_markdown(),
+          axis.title.y = element_markdown())
 }
 
 # For the PACE supplementary figure
@@ -138,29 +147,30 @@ global_triptych <- function(var_name, sensor_Y, cut_legend = NULL){
   if(var_name %in% c("LU", "LD")){
     match_base_1 <- load_matchups_folder(var_name, "HYPERNETS", "TRIOS", long = TRUE) #|> arrange(-wavelength)
   } else if(sensor_Y == "HYPERPRO"){
-    match_base_1 <- load_matchups_folder(var_name, "HYPERNETS", "TRIOS", long = TRUE) #|> arrange(-wavelength)
+    match_base_1 <- load_matchups_folder(var_name, "TRIOS", "HYPERPRO", long = TRUE) #|> arrange(-wavelength)
     match_base_2 <- load_matchups_folder(var_name, "HYPERNETS", "HYPERPRO", long = TRUE) #|> arrange(-wavelength)
-    match_base_3 <- load_matchups_folder(var_name, "TRIOS", "HYPERPRO", long = TRUE) #|> arrange(-wavelength)
+    match_base_3 <- load_matchups_folder(var_name, "HYPERNETS", "TRIOS", long = TRUE) #|> arrange(-wavelength)
+    # TODO: If sentinel data, combine into one plot with shapes showing different sensors
   } else {
-    match_base_1 <- load_matchups_folder(var_name, "HYPERNETS", sensor_Y, long = TRUE) #|> arrange(-wavelength)
+    match_base_1 <- load_matchups_folder(var_name, "HYPERPRO", sensor_Y, long = TRUE) #|> arrange(-wavelength)
     match_base_2 <- load_matchups_folder(var_name, "TRIOS", sensor_Y, long = TRUE) #|> arrange(-wavelength)
-    match_base_3 <- load_matchups_folder(var_name, "HYPERPRO", sensor_Y, long = TRUE) #|> arrange(-wavelength)
+    match_base_3 <- load_matchups_folder(var_name, "HYPERNETS", sensor_Y, long = TRUE) #|> arrange(-wavelength)
   }
   
   # Filter out outliers
   if(var_name %in% c("LU", "LD")){
-    match_base_1 <- match_base_1[!match_base_1$file_name%in% outliers_all$file_name,]
+    match_base_1 <- match_base_1[!match_base_1$file_name %in% outliers_all$file_name,]
   } else {
-    match_base_1 <- match_base_1[!match_base_1$file_name%in% outliers_all$file_name,]
-    match_base_2 <- match_base_2[!match_base_2$file_name%in% outliers_all$file_name,]
-    match_base_3 <- match_base_3[!match_base_3$file_name%in% outliers_all$file_name,]
+    match_base_1 <- match_base_1[!match_base_1$file_name %in% outliers_all$file_name,]
+    match_base_2 <- match_base_2[!match_base_2$file_name %in% outliers_all$file_name,]
+    match_base_3 <- match_base_3[!match_base_3$file_name %in% outliers_all$file_name,]
   }
   
   # Filter out wavelengths above 590 if plotting Rhow data
   if(var_name == "RHOW"){
-    match_base_1 <- filter(match_base_1, wavelength <= 590) 
-    match_base_2 <- filter(match_base_2, wavelength <= 590) 
-    match_base_3 <- filter(match_base_3, wavelength <= 590) 
+    match_base_1 <- filter(match_base_1, wavelength <= 600) 
+    match_base_2 <- filter(match_base_2, wavelength <= 600) 
+    match_base_3 <- filter(match_base_3, wavelength <= 600) 
   }
   
   # Create the three figures
@@ -169,14 +179,14 @@ global_triptych <- function(var_name, sensor_Y, cut_legend = NULL){
     if(var_name %in% c ("LU", "LD")){
       match_fig_1 <- plot_global_nm(match_base_1, var_name, "HYPERNETS", "TRIOS")
     } else {
-      match_fig_1 <- plot_global_nm(match_base_1, var_name, "HYPERNETS", "TRIOS")
+      match_fig_1 <- plot_global_nm(match_base_1, var_name, "HYPERPRO", "TRIOS")
       match_fig_2 <- plot_global_nm(match_base_2, var_name, "HYPERPRO", "HYPERNETS")
-      match_fig_3 <- plot_global_nm(match_base_3, var_name, "HYPERPRO", "TRIOS")
+      match_fig_3 <- plot_global_nm(match_base_3, var_name, "HYPERNETS", "TRIOS")
     }
   } else {
-    match_fig_1 <- plot_global_nm(match_base_1, var_name, "HYPERNETS", sensor_Y)
+    match_fig_1 <- plot_global_nm(match_base_1, var_name, "HYPERPRO", sensor_Y)
     match_fig_2 <- plot_global_nm(match_base_2, var_name, "TRIOS", sensor_Y)
-    match_fig_3 <- plot_global_nm(match_base_3, var_name, "HYPERPRO", sensor_Y)
+    match_fig_3 <- plot_global_nm(match_base_3, var_name, "HYPERNETS", sensor_Y)
   }
   
   # Combine into final figure and save
@@ -223,26 +233,26 @@ global_triptych_stack <- function(var_name, sensor_Z){
   # Create figures
   if(var_name != "RHOW"){
     fig_a <- global_triptych("ED", "HYPERPRO", cut_legend = "cut") #+ guides(colour = "none")
-    fig_b <- global_triptych("LD", "HYPERPRO", cut_legend = "cut")
-    fig_c <- global_triptych("LU", "HYPERPRO", cut_legend = "cut")
+    fig_b <- global_triptych("LU", "HYPERPRO", cut_legend = "cut")
+    fig_c <- global_triptych("LD", "HYPERPRO", cut_legend = "cut")
     fig_d <- global_triptych("LW", "HYPERPRO")#, cut_legend = "cut")
     
     # Combine into special layout
     fig_mid <- ggpubr::ggarrange(fig_b, fig_c, ncol = 2, nrow = 1, 
-                                 labels = c("b)", "c)"), hjust = c(-6.3, -6.4)) #+ 
+                                 labels = c("b)", "c)"), hjust = c(-5.3, -6.0)) #+ 
       # ggpubr::bgcolor("white") + ggpubr::border("white", size = 2)
     fig_stack <- ggpubr::ggarrange(fig_a, fig_mid, fig_d, ncol = 1, nrow = 3, 
-                                   labels = c("a)", "", "d)"), hjust = c(-2.2, 0, -2.3), heights = c(1.07, 1, 1.2)) + 
+                                   labels = c("a)", "", "d)"), hjust = c(-2.2, 0, -1.5), heights = c(1.07, 1, 1.17)) + 
       ggpubr::bgcolor("white") + ggpubr::border("white", size = 2)
     # fig_stack <- plot_spacer() + fig_a / fig_b / fig_c + plot_layout(ncol = 1, nrow = 3, heights = c(1, 1, 1))
     ggsave(paste0("figures/global_scatter_OTHER_in_situ.png"), fig_stack, width = 11, height = 12)
   } else if(sensor_Z == "HYPERPRO"){
     fig_stack <- global_triptych("RHOW", "HYPERPRO")
-    ggsave(paste0("figures/global_scatter_",var_name,"_in_situ.png"), fig_stack, width = 12, height = 5)
+    ggsave(paste0("figures/global_scatter_",var_name,"_in_situ.png"), fig_stack, width = 12, height = 4.5)
     # TODO: Optimise this logic gate to make this decision automagically
   } else if(sensor_count == 1){
     fig_stack <- global_triptych(var_name, ply_grid$sensor_Y[1])
-    ggsave(paste0("figures/global_scatter_",var_name,"_",sensor_Z,".png"), fig_stack, width = 12, height = 5)
+    ggsave(paste0("figures/global_scatter_",var_name,"_",sensor_Z,".png"), fig_stack, width = 12, height = 4.5)
   } else if(sensor_count == 2){
     fig_a <- global_triptych(var_name, ply_grid$sensor_Y[1], cut_legend = "cut")
     fig_b <- global_triptych(var_name, ply_grid$sensor_Y[2])
@@ -282,7 +292,20 @@ global_triptych_stack("RHOW", "VIIRS")
 global_triptych_stack("RHOW", "OLCI")
 
 
+# Hyperspectral figure ----------------------------------------------------
+
+# Create a hyperspectral plot that shows all in situ sensors vs PACE and one other multispectral satellite
+# Matchup scatterplots for everything, with statistic panels in each pane;
+# Add variance bars for multispectral data
+# Add intercept and R2
+# Show this all as two figures:
+## The first has the hyperspectral plot plus the photos from HYPERNETS
+## The second shows all of the matchup scatterplots
+
+
 # PACE Supp ----------------------------------------------------------------
+
+# TODO: Change colour palette for differences to blue-red
 
 # Load one slice of PACE v3.1 data at 413 nm
 ## Visualise all five days to pick the best coverage
