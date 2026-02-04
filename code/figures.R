@@ -9,41 +9,86 @@ source("code/functions.R")
 
 # Plotting functions ------------------------------------------------------
 
+pretty_label_func <- function(char_string){
+  
+  # Set default values
+  # NB: Many names are already correct and don't need to be tuned below
+  sensor_col <- char_string
+  sensor_lab <- char_string
+  units_lab <- char_string
+  
+  # Correct satellite names
+  if(char_string == "HYPERNETS"){
+    sensor_col <- "Hyp"
+  } else if(char_string == "HYPERPRO"){
+    sensor_lab <- "HyperPRO"
+  }  else if(char_string == "TRIOS"){
+    sensor_lab <- "So-Rad"
+  } else if(char_string == "PACE_V2"){
+    sensor_lab <- "PACE v2.0"
+  } else if(char_string == "PACE_V30"){
+    sensor_lab <- "PACE v3.0"
+  } else if(char_string == "PACE_V31"){
+    sensor_lab <- "PACE v3.1"
+  } else if(char_string == "VIIRS_N"){
+    sensor_lab <- "SNPP"
+  } else if(char_string == "VIIRS_J1"){
+    sensor_lab <- "JPSS1"
+  } else if(char_string == "VIIRS_J2"){
+    sensor_lab <- "JPSS2"
+  }
+  
+  # Correct variable units
+  if(char_string == "ED"){
+    units_lab <- "Ed (mW cm⁻² sr⁻¹ nm⁻¹)"
+  } else if(char_string == "LD"){
+    units_lab <- "Ld (mW cm⁻² sr⁻¹ nm⁻¹)"
+  } else if(char_string == "LU"){
+    units_lab <- "Lu (mW cm⁻² sr⁻¹ nm⁻¹)"
+  } else if(char_string == "LW"){
+    units_lab <- "Lw (mW cm⁻² sr⁻¹ nm⁻¹)"
+  } else if(char_string == "RHOW"){
+    units_lab <- "Rrs (sr⁻¹)"
+  }
+  
+  # Combine into data.frame
+  if(char_string %in% c("ED", "LD", "LU", "LW", "RHOW")){
+    pretty_labels <- data.frame(var_name = char_string,
+                                units_lab = units_lab)
+
+  } else {
+    pretty_labels <- data.frame(sesnor_name = char_string,
+                                sensor_col = sensor_col,
+                                sensor_lab = sensor_lab)
+  }
+  return(pretty_labels)
+}
+
 # Plot data based on wavelength group
-# TODO: Consider increasing all text sizes
-plot_matchup_nm <- function(df, var_name, sensor_X, sensor_Y){
+plot_global_nm <- function(df, var_name, sensor_X, sensor_Y){
   
   # TODO: Convert this into a functions that takes a single sensor as input
+  # TODO: Add all of the pretty labels etc. in this new functioon
   # It will correct all ins itu and satellite sensor short codes to pretty names for plotting
-  # Create sensor labels
-  if(sensor_X == "HYPERNETS"){
-    sensor_X_col <- "Hyp"
-    sensor_X_lab <- "HypStar"
-  } else {
-    sensor_X_col <- sensor_X
-    sensor_X_lab <- sensor_X
-  }
-  if(sensor_Y == "HYPERNETS"){
-    sensor_Y_col <- "Hyp"
-    sensor_X_lab <- "HypStar"
-  } else {
-    sensor_Y_col <- sensor_Y
-    sensor_Y_lab <- sensor_Y
-  }
+  # Create sensor and unit labels
+  sensor_X_labs <- pretty_label_func(sensor_X)
+  sensor_Y_labs <- pretty_label_func(sensor_Y)
+  var_labs <- pretty_label_func(var_name)
   
   # Get max values
-  max_X <- max(df[sensor_X_col], na.rm = TRUE)
-  max_Y <- max(df[sensor_Y_col], na.rm = TRUE)
+  max_X <- max(df[sensor_X_labs$sensor_col], na.rm = TRUE)
+  max_Y <- max(df[sensor_Y_labs$sensor_col], na.rm = TRUE)
   max_axis <- max(max_X, max_Y)
   
   # Plot
   df |> 
-    ggplot(aes_string(x = sensor_X_col, y = sensor_Y_col)) +
-    geom_point(aes(colour = wavelength_group)) +
-    geom_abline(slope = 1, intercept = 0, color = "black", linetype = "dashed") +
-    labs(title = paste(sensor_X_lab, "vs", sensor_Y_lab),
-         x = paste(var_name, sensor_X_lab),
-         y = paste(var_name, sensor_Y_lab),
+    ggplot(aes_string(x = sensor_X_labs$sensor_col, y = sensor_Y_labs$sensor_col)) +
+    geom_point(aes(colour = wavelength_group)) +#, alpha = 0.7) +
+    geom_abline(slope = 1, intercept = 0, color = "black", linetype = "solid") +
+    geom_smooth(method = "lm", formula = y ~ x, color = "black", linetype = "dashed", se = FALSE) +
+    labs(title = paste(sensor_X_labs$sensor_lab, "vs", sensor_Y_labs$sensor_lab),
+         x = paste0(sensor_X_labs$sensor_lab," : ", var_labs$units_lab),
+         y = paste0(sensor_Y_labs$sensor_lab," : ", var_labs$units_lab),
          colour = "Wavelength (nm)") +
     scale_colour_manual(values = colour_nm) +
     guides(colour = guide_legend(nrow = 1)) +
@@ -72,24 +117,43 @@ map_PACE <- function(df){
 
 # TODO: Limit the data plotted to match the W_nm shown in the text tables - or not
 # Takes variable and Y sensor as input to automagically create global scatterplot triptych
+# var_name = "LU"; sensor_Y = "HYPERPRO"
 # var_name = "RHOW"; sensor_Y = "HYPERPRO"
 global_triptych <- function(var_name, sensor_Y, cut_legend = NULL){
   
   # Check that in situ data are being requested if variable is anything other than Rhow
   if(var_name != "RHOW" & sensor_Y != "HYPERPRO") stop("Can only use RHOW with remote data matchups")
   
+  # Load outliers to screen them from being plotted
+  suppressMessages(
+    outliers_sat <- read_csv("meta/satellite_outliers.csv")
+  )
+  suppressMessages(
+    outliers_insitu <- read_csv("meta/in_situ_outliers.csv")
+  )
+  outliers_all <- bind_rows(outliers_sat, outliers_insitu)
+  
   # Load data based on in situ comparisons or not
   print("Loading matchups")
   if(var_name %in% c("LU", "LD")){
-    match_base_1 <- load_matchups_folder(var_name, "HYPERNETS", "TRIOS", long = TRUE)
+    match_base_1 <- load_matchups_folder(var_name, "HYPERNETS", "TRIOS", long = TRUE) #|> arrange(-wavelength)
   } else if(sensor_Y == "HYPERPRO"){
-    match_base_1 <- load_matchups_folder(var_name, "HYPERNETS", "TRIOS", long = TRUE)
-    match_base_2 <- load_matchups_folder(var_name, "HYPERNETS", "HYPERPRO", long = TRUE)
-    match_base_3 <- load_matchups_folder(var_name, "TRIOS", "HYPERPRO", long = TRUE)
+    match_base_1 <- load_matchups_folder(var_name, "HYPERNETS", "TRIOS", long = TRUE) #|> arrange(-wavelength)
+    match_base_2 <- load_matchups_folder(var_name, "HYPERNETS", "HYPERPRO", long = TRUE) #|> arrange(-wavelength)
+    match_base_3 <- load_matchups_folder(var_name, "TRIOS", "HYPERPRO", long = TRUE) #|> arrange(-wavelength)
   } else {
-    match_base_1 <- load_matchups_folder(var_name, "HYPERNETS", sensor_Y, long = TRUE)
-    match_base_2 <- load_matchups_folder(var_name, "TRIOS", sensor_Y, long = TRUE)
-    match_base_3 <- load_matchups_folder(var_name, "HYPERPRO", sensor_Y, long = TRUE)
+    match_base_1 <- load_matchups_folder(var_name, "HYPERNETS", sensor_Y, long = TRUE) #|> arrange(-wavelength)
+    match_base_2 <- load_matchups_folder(var_name, "TRIOS", sensor_Y, long = TRUE) #|> arrange(-wavelength)
+    match_base_3 <- load_matchups_folder(var_name, "HYPERPRO", sensor_Y, long = TRUE) #|> arrange(-wavelength)
+  }
+  
+  # Filter out outliers
+  if(var_name %in% c("LU", "LD")){
+    match_base_1 <- match_base_1[!match_base_1$file_name%in% outliers_all$file_name,]
+  } else {
+    match_base_1 <- match_base_1[!match_base_1$file_name%in% outliers_all$file_name,]
+    match_base_2 <- match_base_2[!match_base_2$file_name%in% outliers_all$file_name,]
+    match_base_3 <- match_base_3[!match_base_3$file_name%in% outliers_all$file_name,]
   }
   
   # Filter out wavelengths above 590 if plotting Rhow data
@@ -103,22 +167,22 @@ global_triptych <- function(var_name, sensor_Y, cut_legend = NULL){
   print("Creating figures")
   if(sensor_Y == "HYPERPRO"){
     if(var_name %in% c ("LU", "LD")){
-      match_fig_1 <- plot_matchup_nm(match_base_1, var_name, "HYPERNETS", "TRIOS")
+      match_fig_1 <- plot_global_nm(match_base_1, var_name, "HYPERNETS", "TRIOS")
     } else {
-      match_fig_1 <- plot_matchup_nm(match_base_1, var_name, "HYPERNETS", "TRIOS")
-      match_fig_2 <- plot_matchup_nm(match_base_2, var_name, "HYPERNETS", "HYPERPRO")
-      match_fig_3 <- plot_matchup_nm(match_base_3, var_name, "TRIOS", "HYPERPRO")
+      match_fig_1 <- plot_global_nm(match_base_1, var_name, "HYPERNETS", "TRIOS")
+      match_fig_2 <- plot_global_nm(match_base_2, var_name, "HYPERPRO", "HYPERNETS")
+      match_fig_3 <- plot_global_nm(match_base_3, var_name, "HYPERPRO", "TRIOS")
     }
   } else {
-    match_fig_1 <- plot_matchup_nm(match_base_1, var_name, "HYPERNETS", sensor_Y)
-    match_fig_2 <- plot_matchup_nm(match_base_2, var_name, "TRIOS", sensor_Y)
-    match_fig_3 <- plot_matchup_nm(match_base_3, var_name, "HYPERPRO", sensor_Y)
+    match_fig_1 <- plot_global_nm(match_base_1, var_name, "HYPERNETS", sensor_Y)
+    match_fig_2 <- plot_global_nm(match_base_2, var_name, "TRIOS", sensor_Y)
+    match_fig_3 <- plot_global_nm(match_base_3, var_name, "HYPERPRO", sensor_Y)
   }
   
   # Combine into final figure and save
   print("Processing and exit")
   if(var_name %in% c("LU", "LD")){
-    match_fig <- match_fig_1 #+ 
+    match_fig <- match_fig_1 + guides(colour = "none")
       # guides(colour = guide_legend(nrow = 2)) +
       # theme(legend.position = "right",
             # legend.direction = "horizontal")
@@ -164,9 +228,11 @@ global_triptych_stack <- function(var_name, sensor_Z){
     fig_d <- global_triptych("LW", "HYPERPRO")#, cut_legend = "cut")
     
     # Combine into special layout
-    # fig_mid <- ggpubr::ggarrange(fig_b, fig_c, ncol = 2, n
-    fig_stack <- ggpubr::ggarrange(fig_a, fig_b, fig_c, ncol = 1, nrow = 3, 
-                                   labels = c("a)", "b)", "c)"), hjust = c(-2.2, -6.5, -1.5)) + 
+    fig_mid <- ggpubr::ggarrange(fig_b, fig_c, ncol = 2, nrow = 1, 
+                                 labels = c("b)", "c)"), hjust = c(-6.3, -6.4)) #+ 
+      # ggpubr::bgcolor("white") + ggpubr::border("white", size = 2)
+    fig_stack <- ggpubr::ggarrange(fig_a, fig_mid, fig_d, ncol = 1, nrow = 3, 
+                                   labels = c("a)", "", "d)"), hjust = c(-2.2, 0, -2.3), heights = c(1.07, 1, 1.2)) + 
       ggpubr::bgcolor("white") + ggpubr::border("white", size = 2)
     # fig_stack <- plot_spacer() + fig_a / fig_b / fig_c + plot_layout(ncol = 1, nrow = 3, heights = c(1, 1, 1))
     ggsave(paste0("figures/global_scatter_OTHER_in_situ.png"), fig_stack, width = 11, height = 12)

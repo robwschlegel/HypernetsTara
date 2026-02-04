@@ -51,26 +51,6 @@ load_matchup_mean <- function(file_name){
   # Get means per file
   # NB: Satellite matchups have a different structure than in situ matchups
   if("weighted" %in% df_match$data_type){
-    
-    # Check for variance in W_nm columns
-    df_check <- df_match |> 
-      mutate(sensor = gsub(" 1$| 2$| 3$| 4$| 5$| 6$| 7$| 8$| 9$", "", sensor)) |>
-      filter(!(sensor %in% c("Hyp_nosc", "Hyp", "TRIOS", "HYPERNETS"))) |> 
-      dplyr::select(-day, -time, -latitude, -longitude, -radiometer_id, -type) |> 
-      pivot_longer(cols = matches("1|2|3|4|5|6|7|8|9"), names_to = "wavelength", values_to = "value") |> 
-      pivot_wider(names_from = data_type, values_from = value) |>
-      na.omit() |> 
-      mutate(max_sd_diff = weighted / std_max,
-             min_sd_diff = weighted / std_min,
-             wavelength = as.numeric(wavelength)) |> 
-      filter(wavelength <= 500)
-    
-    # If variables are too different, issue a warning and omit file from being loaded
-    if(any(df_check$max_sd_diff >= 1.1) | any(df_check$min_sd_diff <= 0.9)){
-      warning(paste0("Weighted mean has too much variance in file : ", file_name))
-      return()
-    }
-    
     df_mean <- df_match |>
       mutate(sensor = gsub(" 1$| 2$| 3$| 4$| 5$| 6$| 7$| 8$| 9$", "", sensor)) |>
       filter(sensor != "Hyp_nosc") |> 
@@ -140,6 +120,50 @@ load_matchups_folder <- function(var_name, sensor_X, sensor_Y, long = FALSE){
   
   # Exit
   return(match_base)
+}
+
+# Check the amount of variance in satellite files and return a message if there is an issue
+# file_name <- "~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results_mwm_595/RHOW_HYPERNETS_vs_AQUA/HYPERNETS_vs_AQUA_vs_20240810T110400_RHOW.csv"
+# file_name <- "~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results_20260203/RHOW_TRIOS_vs_VIIRS_N/TRIOS_vs_VIIRS_N_vs_20240812T121332_RHOW.csv"
+# file_name <- "/home/calanus/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results_20260203/RHOW_HYPERPRO_vs_S3A/HYPERPRO_vs_S3A_vs_20240809T084500_RHOW.csv"
+# file_name <- "/home/calanus/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results_20260203/RHOW_HYPERNETS_vs_PACE_V2/HYPERNETS_vs_PACE_V2_vs_20240809T090000_RHOW.csv"
+sat_var_check <- function(file_name, var_limit = 0.1){
+  
+  # Load the csv file
+  suppressMessages(
+    df_match <- read_delim(file_name, delim = ";", col_types = "ccccnnic")
+  )
+  colnames(df_match)[1] <- "sensor"
+  
+  # PACE files don't have weighted mean values
+  if(!("weighted" %in% df_match$data_type)){
+    df_match <- df_match |> 
+      mutate(data_type = case_when(data_type == "rhow" ~ "weighted", TRUE ~ data_type))
+  }
+  
+  # Check for variance in W_nm columns
+  df_check <- df_match |> 
+    mutate(sensor = gsub(" 1$| 2$| 3$| 4$| 5$| 6$| 7$| 8$| 9$", "", sensor)) |>
+    filter(!(sensor %in% c("Hyp_nosc", "Hyp", "TRIOS", "HYPERPRO"))) |> 
+    dplyr::select(-day, -time, -latitude, -longitude, -radiometer_id, -type) |> 
+    pivot_longer(cols = matches("1|2|3|4|5|6|7|8|9"), names_to = "wavelength", values_to = "value") |> 
+    pivot_wider(names_from = data_type, values_from = value) |>
+    na.omit() |> 
+    mutate(max_sd_diff = weighted / std_max,
+           min_sd_diff = weighted / std_min,
+           wavelength = as.numeric(wavelength)) |> 
+    filter(wavelength <= 500)
+  
+  # If variables are too different, issue a warning and omit file from being loaded
+  # TODO: Change this to a flat 25% difference from min to max
+  if(any(df_check$max_sd_diff >= 1+var_limit) | any(df_check$min_sd_diff <= 1-var_limit)){
+    # warning(paste0("Weighted mean has too much variance in file : ", file_name))
+    # return(basename(file_name))
+    file_check <- basename(file_name)
+  } else {
+    file_check <- NULL
+  }
+  return(data.frame(file_name = file_check))
 }
 
 # Create a grid of sensor to ply over
@@ -454,8 +478,8 @@ process_sensor <- function(var_name, sensor_Z, stat_choice = "matchup"){
 # Global stats per matchup wavelength
 # testers..
 # var_name = "RHOW"; sensor_X = "HYPERNETS"; sensor_Y = "TRIOS"
-# var_name = "RHOW"; sensor_X = "TRIOS"; sensor_Y = "AQUA"; W_nm = c(412, 443, 488, 531, 555, 667)
-# var_name = "RHOW"; sensor_X = "HYPERNETS"; sensor_Y = "PACE_V31"; W_nm = c(412, 443, 490, 510, 560, 673)
+# var_name = "RHOW"; sensor_X = "TRIOS"; sensor_Y = "AQUA"
+# var_name = "RHOW"; sensor_X = "HYPERNETS"; sensor_Y = "PACE_V31"
 # W_nm = c(412, 443, 488, 531, 555, 667)
 global_stats <- function(var_name, sensor_X, sensor_Y){
   
@@ -465,13 +489,20 @@ global_stats <- function(var_name, sensor_X, sensor_Y){
   # List all files in directory
   file_list <- list.files(folder_path, pattern = "*.csv", full.names = TRUE)
   
-  # Load data
-  match_base <- map_dfr(file_list, load_matchup_long)
-  
-  # TODO: Apply outlier filtering as necessary
-  # Get outliers list
+  # Get outlier lists
+  suppressMessages(
+    outliers_sat <- read_csv("meta/satellite_outliers.csv")
+  )
+  suppressMessages(
+    outliers_insitu <- read_csv("meta/in_situ_outliers.csv")
+  )
+  outliers_all <- bind_rows(outliers_sat, outliers_insitu)
   
   # Filter accordingly
+  file_list_clean <- file_list[!basename(file_list) %in% outliers_all$file_name]
+  
+  # Load data
+  match_base <- map_dfr(file_list_clean, load_matchup_long)
   
   # Mark the difference in files removed and the reason why if convenient
   
@@ -521,9 +552,8 @@ global_stats <- function(var_name, sensor_X, sensor_Y){
   }
   match_base_filt <- filter(match_base_plus, diff_time <= time_window)
     
-  # Get the count of base matchups and those filtered by time window
-  match_count_all <- length(unique(match_base_plus$file_name))
-  match_count_filt <- length(unique(match_base_filt$file_name))
+  # Get the count of matchups after filtering by time window
+  match_count_difftime <- length(unique(match_base_filt$file_name))
   
   # The VIIRS versions have different wavelengths...
   # This hard coded fix is one method of dealing with this.
@@ -565,10 +595,10 @@ global_stats <- function(var_name, sensor_X, sensor_Y){
       
       # Create data.frame of results and add them to df_results
       df_temp <- data.frame(row.names = NULL,
+                            n_diff_time = n_match,
                             sensor_X = sensor_X,
                             sensor_Y = sensor_Y,
                             Wavelength_nm = W_nm[i],
-                            n = n_match,
                             Slope = df_stats$Slope,
                             RMSE = df_stats$RMSE,
                             # MSA = df_stats$MSA,
@@ -583,9 +613,10 @@ global_stats <- function(var_name, sensor_X, sensor_Y){
   
   # Add matchup count and exit
   df_results <- df_results |> 
-    mutate(n_base = match_count_all,
-           # count_diff_time = match_count_filt,
-           diff_time_window = time_window, .before = "sensor_X")
+    mutate(n_base = length(file_list),
+           n_clean = length(file_list_clean),
+           diff_time_window = time_window, 
+           .before = "n_diff_time")
   return(df_results)
 }
 

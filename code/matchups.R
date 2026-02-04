@@ -25,7 +25,9 @@ process_sensor("RHOW", "OLCI")
 
 # Global statistics --------------------------------------------------------
 
-# Check stats
+# NB: Run code/outliers.R before the global stats in order to filter outliers
+
+# Global stats
 ## In situ matchups
 process_sensor("ED", "HYPERPRO", "global")
 process_sensor("LD", "HYPERPRO", "global")
