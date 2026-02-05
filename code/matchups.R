@@ -12,8 +12,8 @@ source("code/functions.R")
 # Run for all variables and satellites
 ## In situ
 process_sensor("ED", "HYPERPRO")
+process_sensor("LU", "HYPERPRO") # The function corrects the name
 process_sensor("LD", "HYPERPRO") # The function corrects the name
-process_sensor("LU", "HYPERPRO")
 process_sensor("LW", "HYPERPRO")
 process_sensor("RHOW", "HYPERPRO")
 ## Satellite
@@ -30,8 +30,8 @@ process_sensor("RHOW", "OLCI")
 # Global stats
 ## In situ matchups
 process_sensor("ED", "HYPERPRO", "global")
-process_sensor("LD", "HYPERPRO", "global")
 process_sensor("LU", "HYPERPRO", "global")
+process_sensor("LD", "HYPERPRO", "global")
 process_sensor("LW", "HYPERPRO", "global")
 process_sensor("RHOW", "HYPERPRO", "global")
 ## Satellite
@@ -39,6 +39,8 @@ process_sensor("RHOW", "OCI", "global")
 process_sensor("RHOW", "MODIS", "global")
 process_sensor("RHOW", "VIIRS", "global")
 process_sensor("RHOW", "OLCI", "global")
+
+# TODO: Create a function that loads all global results and gets the base and clean matchup counts
 
 
 # Check individual matchups -----------------------------------------------

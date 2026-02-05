@@ -254,7 +254,7 @@ matchup_OLCI <- read_csv("output/matchup_stats_RHOW_OLCI.csv") |>
   mutate(comp_sensors = paste0(sensor_X," vs ",sensor_Y))
 
 # OLCI files
-file_list_OLCI <- list.files(dir("~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results_20260203", 
+file_list_OLCI <- list.files(dir("~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_20260203", 
                                  pattern = "S3", full.names = TRUE), pattern = "*.csv", full.names = TRUE)
 
 # Load base W_nm matchup values
@@ -353,7 +353,7 @@ matchup_MODIS <- read_csv("output/matchup_stats_RHOW_MODIS.csv") |>
   mutate(comp_sensors = paste0(sensor_X," vs ",sensor_Y))
 
 # File list
-file_list_MODIS <- list.files(dir("~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results_20260203", 
+file_list_MODIS <- list.files(dir("~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_20260203", 
                                   pattern = "AQUA", full.names = TRUE), pattern = "*.csv", full.names = TRUE)
 
 # Load base W_nm matchup values
@@ -401,7 +401,7 @@ matchup_OCI <- read_csv("output/matchup_stats_RHOW_OCI.csv") |>
   mutate(comp_sensors = paste0(sensor_X," vs ",sensor_Y))
 
 # File list
-file_list_OCI <- list.files(dir("~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results_20260203", 
+file_list_OCI <- list.files(dir("~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_20260203", 
                                   pattern = "PACE", full.names = TRUE), pattern = "*.csv", full.names = TRUE)
 file_list_OCI <- file_list_OCI[!grepl("RHOW_PACE_V2_vs_PACE_V30_vs_PACE_V31", file_list_OCI)] # Remove self-comparisons
 

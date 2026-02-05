@@ -5,11 +5,12 @@
 # Libraries ---------------------------------------------------------------
 
 library(tidyverse)
-library(readxl)
+# library(readxl)
 library(ncdf4)
 library(FNN) # Needed for fastest nearest neighbor searching
 library(geosphere) # For determining distance between points
-library(patchwork)
+library(ggtext) # For rich text labels
+library(patchwork) # For complex paneling of figures
 library(doParallel); registerDoParallel(cores = detectCores() - 2)
 
 
@@ -29,15 +30,15 @@ options(scipen = 9999)
 
 # Function that assembles file directory based on desired variable and sensors
 file_path_build <- function(var_name, sensor_X, sensor_Y){
-  file_path <- paste0("~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results_20260203/",
+  file_path <- paste0("~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_20260203/",
                       toupper(var_name),"_",toupper(sensor_X),"_vs_", toupper(sensor_Y),"/")
 }
 
 # Load a single matchup file and create mean values from all replicates
-# file_name <- "~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results_mwm_595/RHOW_HYPERNETS_vs_HYPERPRO/HYPERNETS_vs_HYPERPRO_vs_20240809T073700_RHOW.csv"
-# file_name <- "~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results_mwm_595/ED_HYPERNETS_vs_TRIOS/HYPERNETS_vs_TRIOS_vs_20240808T065700_ED.csv"
-# file_name <- "~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results_mwm_595/RHOW_HYPERNETS_vs_AQUA/HYPERNETS_vs_AQUA_vs_20240810T110400_RHOW.csv"
-# file_name <- "~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results_20260203/RHOW_TRIOS_vs_VIIRS_N/TRIOS_vs_VIIRS_N_vs_20240812T121332_RHOW.csv"
+# file_name <- "~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_mwm_595/RHOW_HYPERNETS_vs_HYPERPRO/HYPERNETS_vs_HYPERPRO_vs_20240809T073700_RHOW.csv"
+# file_name <- "~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_mwm_595/ED_HYPERNETS_vs_TRIOS/HYPERNETS_vs_TRIOS_vs_20240808T065700_ED.csv"
+# file_name <- "~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_mwm_595/RHOW_HYPERNETS_vs_AQUA/HYPERNETS_vs_AQUA_vs_20240810T110400_RHOW.csv"
+# file_name <- "~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_20260203/RHOW_TRIOS_vs_VIIRS_N/TRIOS_vs_VIIRS_N_vs_20240812T121332_RHOW.csv"
 load_matchup_mean <- function(file_name){
   
   # message(paste0("Started loading : ", file_name))
@@ -90,6 +91,7 @@ load_matchup_long <- function(file_name){
     dplyr::select(-day, -time, -longitude, -latitude) |>
     pivot_wider(names_from = sensor, values_from = value) |>
     na.omit() |> 
+    filter(wavelength < 700) |> # Prevent one data point for 700-750 from appearing on figures
     mutate(wavelength = as.numeric(wavelength),
            file_name = basename(file_name), .before = "wavelength") |> 
     mutate(wavelength_group = cut(wavelength,
@@ -122,11 +124,20 @@ load_matchups_folder <- function(var_name, sensor_X, sensor_Y, long = FALSE){
   return(match_base)
 }
 
+# Convenience function to get lon/lat coords from SeaBird files
+# file_name <- "~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/Trios_processed_data/TARA_HyperBOOST_Ed_20240323_20240821_Version_20250911.sb"
+# file_name <- "/home/calanus/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/Hypernets_processed_data/07/SEQ20240807T123357/HYPERNETS_W_MAFR_L1B_RAD_20240807T1233_20240912T1039_v2.0.nc"
+# file_name <- "~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/Hypernets_processed_data/10/SEQ20240810T173010/HYPERNETS_W_MAFR_L1B_RAD_20240810T1730_20240912T1013_v2.0.nc"
+# file_name <- "~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/Hypernets_processed_data/18/SEQ20240818T093051/HYPERNETS_W_MAFR_L0A_BLA_20240818T0930_20240912T1031_v2.0.nc"
+load_HYPERNETS_coords <- function(file_name){
+  ncdump::NetCDF(file_name)$attribute$global[c("site_longitude", "site_latitude")]
+}
+
 # Check the amount of variance in satellite files and return a message if there is an issue
-# file_name <- "~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results_mwm_595/RHOW_HYPERNETS_vs_AQUA/HYPERNETS_vs_AQUA_vs_20240810T110400_RHOW.csv"
-# file_name <- "~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results_20260203/RHOW_TRIOS_vs_VIIRS_N/TRIOS_vs_VIIRS_N_vs_20240812T121332_RHOW.csv"
-# file_name <- "/home/calanus/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results_20260203/RHOW_HYPERPRO_vs_S3A/HYPERPRO_vs_S3A_vs_20240809T084500_RHOW.csv"
-# file_name <- "/home/calanus/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results_20260203/RHOW_HYPERNETS_vs_PACE_V2/HYPERNETS_vs_PACE_V2_vs_20240809T090000_RHOW.csv"
+# file_name <- "~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_mwm_595/RHOW_HYPERNETS_vs_AQUA/HYPERNETS_vs_AQUA_vs_20240810T110400_RHOW.csv"
+# file_name <- "~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_20260203/RHOW_TRIOS_vs_VIIRS_N/TRIOS_vs_VIIRS_N_vs_20240812T121332_RHOW.csv"
+# file_name <- "/home/calanus/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_20260203/RHOW_HYPERPRO_vs_S3A/HYPERPRO_vs_S3A_vs_20240809T084500_RHOW.csv"
+# file_name <- "/home/calanus/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_20260203/RHOW_HYPERNETS_vs_PACE_V2/HYPERNETS_vs_PACE_V2_vs_20240809T090000_RHOW.csv"
 sat_var_check <- function(file_name, var_limit = 0.1){
   
   # Load the csv file
@@ -173,9 +184,9 @@ sensor_grid <- function(var_name, sensor_Z){
   if(var_name != "RHOW" & sensor_Z != "HYPERPRO") stop("Only RHOW data for satellites.")
   
   # Get sorrect sensor names
-  if(var_name == "LD"){
-    sensor_X <- c("HYPERNETS")
-    sensor_Y <- c("TRIOS")
+  if(var_name %in% c("LU", "LD")){
+    sensor_X <- "HYPERNETS"
+    sensor_Y <- "TRIOS"
     sensor_Z <- "Hyp_vs_Trios"
   } else if(sensor_Z == "HYPERPRO"){
     sensor_X <- c("HYPERNETS", "HYPERNETS", "TRIOS")
@@ -348,8 +359,8 @@ get_nearest_pixels <- function(df_data, target_lat, target_lon, n_pixels){
 }
 
 # Function that interrogates each matchup file to produce the needed output for all following comparisons
-# file_path <- "~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results_v2/RHOW_HYPERNETS_vs_HYPERPRO/HYPERNETS_vs_HYPERPRO_vs_20240809T073700_RHOW.csv"
-# file_path <- "~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results_v2/ED_HYPERNETS_vs_TRIOS/HYPERNETS_vs_TRIOS_vs_20240808T065700_ED.csv"
+# file_path <- "~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_v2/RHOW_HYPERNETS_vs_HYPERPRO/HYPERNETS_vs_HYPERPRO_vs_20240809T073700_RHOW.csv"
+# file_path <- "~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_v2/ED_HYPERNETS_vs_TRIOS/HYPERNETS_vs_TRIOS_vs_20240808T065700_ED.csv"
 # file_path <- file_list[1]
 process_matchup_file <- function(file_path){
   
@@ -407,7 +418,7 @@ process_matchup_file <- function(file_path){
                              diff_time = time_diff,
                              n = nrow(df_sensor_long),
                              Slope = df_stats$Slope,
-                             RMSE = df_stats$RMSE,
+                             # RMSE = df_stats$RMSE,
                              # MSA = df_stats$MSA,
                              MAPE = df_stats$MAPE,
                              Bias = df_stats$Bias,
@@ -445,7 +456,7 @@ process_matchup_folder <- function(var_name, sensor_X, sensor_Y){
 }
 
 # Process multiple folders based on request
-# var_name = "LD"; sensor_Z = "HYPERPRO"
+# var_name = "LU"; sensor_Z = "HYPERPRO"
 # var_name = "ED"; sensor_Z = "HYPERPRO"
 # var_name = "RHOW"; sensor_Z = "VIIRS"
 process_sensor <- function(var_name, sensor_Z, stat_choice = "matchup"){
@@ -454,7 +465,7 @@ process_sensor <- function(var_name, sensor_Z, stat_choice = "matchup"){
   ply_grid <- sensor_grid(var_name, sensor_Z)
   
   # Correct sensor_Z for file names upon saving
-  if(var_name == "LD"){
+  if(var_name %in% c("LU", "LD")){
     sensor_Z <- "Hyp_vs_Trios"
   } else if(sensor_Z == "HYPERPRO"){
     sensor_Z <- "in_situ"
@@ -477,6 +488,8 @@ process_sensor <- function(var_name, sensor_Z, stat_choice = "matchup"){
 
 # Global stats per matchup wavelength
 # testers..
+# var_name = "ED"; sensor_X = "HYPERNETS"; sensor_Y = "TRIOS"
+# var_name = "LU"; sensor_X = "HYPERNETS"; sensor_Y = "TRIOS"
 # var_name = "RHOW"; sensor_X = "HYPERNETS"; sensor_Y = "TRIOS"
 # var_name = "RHOW"; sensor_X = "TRIOS"; sensor_Y = "AQUA"
 # var_name = "RHOW"; sensor_X = "HYPERNETS"; sensor_Y = "PACE_V31"
@@ -504,24 +517,22 @@ global_stats <- function(var_name, sensor_X, sensor_Y){
   # Load data
   match_base <- map_dfr(file_list_clean, load_matchup_long)
   
-  # Mark the difference in files removed and the reason why if convenient
-  
   # Continue with satellite versions if necessary
-    if(sensor_Y  == "AQUA"){
-      sensor_Z <- "MODIS"
-    } else if(sensor_Y %in% c("PACE_V2", "PACE_V30", "PACE_V31")){
-      sensor_Z <- "OCI"
-    } else if(sensor_Y %in% c("VIIRS_N", "VIIRS_J1", "VIIRS_J2")){
-      sensor_Z <- "VIIRS"
-    } else if(sensor_Y %in% c("S3A", "S3B")){
-      sensor_Z <- "OLCI"
-    } else {
-    }
+  if(sensor_Y  == "AQUA"){
+    sensor_Z <- "MODIS"
+  } else if(sensor_Y %in% c("PACE_V2", "PACE_V30", "PACE_V31")){
+    sensor_Z <- "OCI"
+  } else if(sensor_Y %in% c("VIIRS_N", "VIIRS_J1", "VIIRS_J2")){
+    sensor_Z <- "VIIRS"
+  } else if(sensor_Y %in% c("S3A", "S3B")){
+    sensor_Z <- "OLCI"
+  } else {
+  }
   
   # Get filestub based on sensor_Y and var_name
-  if(var_name %in% c("ED", "LU", "LW")){
+  if(var_name %in% c("ED", "LW")){
     filestub <- "_in_situ.csv"
-  } else if(var_name %in% c("LD")){
+  } else if(var_name %in% c("LU", "LD")){
     filestub <- "_Hyp_vs_Trios.csv"
   } else if(sensor_Y %in% c("TRIOS", "HYPERPRO")){
     filestub <- "_in_situ.csv"
@@ -537,27 +548,27 @@ global_stats <- function(var_name, sensor_X, sensor_Y){
   }
   
   # Load individual matchup results to access difftime values
-  match_base_details <- read_csv(paste0("output/matchup_stats_",var_name,filestub)) |> 
-    filter(sensor_X == sensor_X_filt, sensor_Y == sensor_Y)
+  suppressMessages(
+    match_base_details <- read_csv(paste0("output/matchup_stats_",var_name,filestub))
+  )
+  match_base_details <- dplyr::select(match_base_details, var_name, file_name, dist, diff_time) |> distinct()
   if(nrow(match_base_details) == 0) stop("Individual matchup file not loaded correctly.")
   
   # Join for further use
   match_base_plus <- left_join(match_base, match_base_details, by = join_by(file_name))
-
+  
   # Filter out matches outside of allowed time window
-  if(!(sensor_Y %in% c("TRIOS", "HYPERPRO"))){
-    time_window <- 120
+  if(!(sensor_Y %in% c("HYPERNETS", "TRIOS", "HYPERPRO"))){
+    time_window <- 240
   } else {
     time_window <- 20
   }
   match_base_filt <- filter(match_base_plus, diff_time <= time_window)
-    
+  
   # Get the count of matchups after filtering by time window
   match_count_difftime <- length(unique(match_base_filt$file_name))
   
-  # The VIIRS versions have different wavelengths...
-  # This hard coded fix is one method of dealing with this.
-  # It may need to change in the future
+  # Get pre-determined wavelengths
   W_nm <- W_nm_out(sensor_Y, var_name)
   
   # For loop that cycles through the requested wavelengths and calculates stats
@@ -566,12 +577,9 @@ global_stats <- function(var_name, sensor_X, sensor_Y){
     
     # Get data.frame for matchup based on the wavelength of choice
     matchup_filt <- filter(match_base_filt, wavelength == W_nm[i])
-    
-    # if(!is.null(MAPE_limit)){
-    #   matchup_filt <- filter(matchup_filt, MAPE <= MAPE_limit)
-    # }
     n_match <- nrow(matchup_filt)
     
+    # Calculate stats
     if(n_match > 0){
       
       # Correct sensor labels as necessary
@@ -591,27 +599,36 @@ global_stats <- function(var_name, sensor_X, sensor_Y){
       y_vec <- matchup_filt[[sensor_Y_col]]
       
       # Calculate statistics
-      df_stats <- base_stats(x_vec, y_vec)
+      df_stats_XY <- base_stats(x_vec, y_vec)
+      df_stats_YX <- base_stats(y_vec, x_vec)
       
       # Create data.frame of results and add them to df_results
-      df_temp <- data.frame(row.names = NULL,
+      df_XY <- data.frame(row.names = NULL,
                             n_w_nm = n_match,
                             sensor_X = sensor_X,
                             sensor_Y = sensor_Y,
                             Wavelength_nm = W_nm[i],
-                            Slope = df_stats$Slope,
-                            # intercept
-                            # R2
-                            # RMSE = df_stats$RMSE,
-                            # MSA = df_stats$MSA,
-                            MAPE = df_stats$MAPE,
-                            Bias = df_stats$Bias,
-                            Error = df_stats$Error)
+                            Slope = df_stats_XY$Slope,
+                            Bias = df_stats_XY$Bias,
+                            Error = df_stats_XY$Error)
+      df_YX <- data.frame(row.names = NULL,
+                          n_w_nm = n_match,
+                          sensor_X = sensor_Y,
+                          sensor_Y = sensor_X,
+                          Wavelength_nm = W_nm[i],
+                          Slope = df_stats_YX$Slope,
+                          Bias = df_stats_YX$Bias,
+                          Error = df_stats_YX$Error)
+      df_temp <- rbind(df_XY, df_YX)
       df_results <- rbind(df_results, df_temp)
     } else {
       print(paste0("No data for wavelength ", W_nm[i]))
     }
   }
+  
+  # TODO: Add a final calculation that runs for all sensors
+  # I don't think this can be done with the current structure
+  # It may require another function
   
   # Add matchup count and exit
   df_results <- df_results |> 
@@ -619,7 +636,7 @@ global_stats <- function(var_name, sensor_X, sensor_Y){
            n_clean = length(file_list_clean),
            diff_time_window = time_window, 
            n_diff_time = match_count_difftime,
-           .before = "n_diff_time")
+           .before = "n_w_nm")
   return(df_results)
 }
 
@@ -786,15 +803,15 @@ pretty_label_func <- function(char_string){
   
   # Correct variable units
   if(char_string == "ED"){
-    units_lab <- "E<sub>d</sub> (W m-2 nm-1)"
+    units_lab <- "<i>E<sub>d</sub></i> (W m<sup>-2</sup> nm<sup>-1</sup>)"
   } else if(char_string == "LD"){
-    units_lab <- "L<sub>d</sub> (W m-2 sr-1)"
+    units_lab <- "<i>L<sub>d</sub></i> (W m<sup>-2</sup> sr<sup>-1</sup>)"
   } else if(char_string == "LU"){
-    units_lab <- "L<sub>u</sub> (W m-2 sr-1)"
+    units_lab <- "<i>L<sub>u</sub></i> (W m<sup>-2</sup> sr<sup>-1</sup>)"
   } else if(char_string == "LW"){
-    units_lab <- "L<sub>w</sub> (W m-2 sr-1)"
+    units_lab <- "<i>L<sub>w</sub></i> (W m<sup>-2</sup> sr<sup>-1</sup>)"
   } else if(char_string == "RHOW"){
-    units_lab <- "R<sub>how</sub> (sr-1)"
+    units_lab <- "<i>ρ<sub>w</sub></i> (sr<sup>-1</sup>)"
   }
   
   # Combine into data.frame

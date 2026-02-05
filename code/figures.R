@@ -5,12 +5,10 @@
 # Setup -------------------------------------------------------------------
 
 source("code/functions.R")
-library(ggtext) # For rich text labels
 
 
 # Processing functions ----------------------------------------------------
 
-# TODO: Limit the data plotted to match the W_nm shown in the text tables - or not
 # Takes variable and Y sensor as input to automagically create global scatterplot triptych
 # var_name = "LU"; sensor_Y = "HYPERPRO"
 # var_name = "RHOW"; sensor_Y = "HYPERPRO"
@@ -70,11 +68,11 @@ global_triptych <- function(var_name, sensor_Y, cut_legend = NULL){
   print("Creating figures")
   if(sensor_Y == "HYPERPRO"){
     if(var_name %in% c ("LU", "LD")){
-      match_fig_1 <- plot_global_nm(match_base_1, var_name, "HYPERNETS", "TRIOS")
+      match_fig_1 <- plot_global_nm(match_base_1, var_name, "TRIOS", "HYPERNETS")
     } else {
       match_fig_1 <- plot_global_nm(match_base_1, var_name, "HYPERPRO", "TRIOS")
       match_fig_2 <- plot_global_nm(match_base_2, var_name, "HYPERPRO", "HYPERNETS")
-      match_fig_3 <- plot_global_nm(match_base_3, var_name, "HYPERNETS", "TRIOS")
+      match_fig_3 <- plot_global_nm(match_base_3, var_name, "TRIOS", "HYPERNETS")
     }
   } else {
     match_fig_1 <- plot_global_nm(match_base_1, var_name, "HYPERPRO", sensor_Y)
@@ -129,7 +127,7 @@ global_triptych_stack <- function(var_name, sensor_Z){
     
     # Combine into special layout
     fig_mid <- ggpubr::ggarrange(fig_b, fig_c, ncol = 2, nrow = 1, 
-                                 labels = c("b)", "c)"), hjust = c(-5.3, -6.0))
+                                 labels = c("b)", "c)"), hjust = c(-5.2, -6.0))
     fig_stack <- ggpubr::ggarrange(fig_a, fig_mid, fig_d, ncol = 1, nrow = 3, 
                                    labels = c("a)", "", "d)"), hjust = c(-2.2, 0, -1.5), heights = c(1.07, 1, 1.17)) + 
       ggpubr::bgcolor("white") + ggpubr::border("white", size = 2)
@@ -205,7 +203,7 @@ global_triptych_stack("RHOW", "OLCI")
 # map_PACE(read_csv("data/PACE_OCI.20240813T113041.L2.OC_AOP.V3_1_rrs_413.csv")) # Winner
 # map_PACE(read_csv("data/PACE_OCI.20240814T120512.L2.OC_AOP.V3_1_rrs_413.csv"))
 # map_PACE(read_csv("data/PACE_OCI.20240815T110624.L2.OC_AOP.V3_1_rrs_413.csv"))
-PACE_swath <- read_csv("data/PACE_OCI.20240813T113041.L2.OC_AOP.V3_1_rrs_413.csv") |> 
+PACE_swath <- read_csv("data/PACE/PACE_OCI.20240813T113041.L2.OC_AOP.V3_1_rrs_413.csv") |> 
   filter(!is.na(Rrs))
 
 # Load the full spectra for one point
@@ -216,19 +214,19 @@ v_all_spectra_long <- v_all_spectra |>
   mutate(nm = as.integer(nm))
 
 # Load data extracted via Python script
-v2_413 <- read_csv("data/PACE_OCI.20240809T105059.L2.OC_AOP.V2_0.NRT_rrs_413.csv") |> 
+v2_413 <- read_csv("data/PACE/PACE_OCI.20240809T105059.L2.OC_AOP.V2_0.NRT_rrs_413.csv") |> 
   filter(!is.na(Rrs)) |> 
   mutate(longitude = plyr::round_any(longitude, 0.02),
          latitude = plyr::round_any(latitude, 0.02)) |>
   summarise(Rrs = mean(Rrs, na.rm = TRUE), .by = c("longitude", "latitude")) |> 
   dplyr::rename(v2_Rrs = Rrs)
-v3_413 <- read_csv("data/PACE_OCI.20240809T105059.L2.OC_AOP.V3_0_rrs_413.csv") |> 
+v3_413 <- read_csv("data/PACE/PACE_OCI.20240809T105059.L2.OC_AOP.V3_0_rrs_413.csv") |> 
   filter(!is.na(Rrs)) |> 
   mutate(longitude = plyr::round_any(longitude, 0.02),
          latitude = plyr::round_any(latitude, 0.02)) |>
   summarise(Rrs = mean(Rrs, na.rm = TRUE), .by = c("longitude", "latitude")) |> 
   dplyr::rename(v3_Rrs = Rrs)
-v31_413 <- read_csv("data/PACE_OCI.20240809T105059.L2.OC_AOP.V3_1_rrs_413.csv") |> 
+v31_413 <- read_csv("data/PACE/PACE_OCI.20240809T105059.L2.OC_AOP.V3_1_rrs_413.csv") |> 
   filter(!is.na(Rrs)) |> 
   mutate(longitude = plyr::round_any(longitude, 0.02),
          latitude = plyr::round_any(latitude, 0.02)) |>
@@ -238,9 +236,9 @@ v31_413 <- read_csv("data/PACE_OCI.20240809T105059.L2.OC_AOP.V3_1_rrs_413.csv") 
 # Combine and compare
 vall_413 <- left_join(v2_413, v3_413, by = join_by(latitude, longitude)) |> 
   left_join(v31_413, by = join_by(latitude, longitude)) |> 
-  mutate(v2_v3 = (v2_Rrs / v3_Rrs)*100,
-         v2_v31 = (v2_Rrs / v31_Rrs)*100,
-         v3_v31 = (v3_Rrs / v31_Rrs)*100) |> 
+  mutate(v2_v3 = ((v2_Rrs / v3_Rrs)*100)-100,
+         v2_v31 = ((v2_Rrs / v31_Rrs)*100)-100,
+         v3_v31 = ((v3_Rrs / v31_Rrs)*100)-100) |> 
   mutate(v2_v3 = ifelse(v2_v3 > 200, 200, v2_v3),
          v2_v31 = ifelse(v2_v31 > 200, 200, v2_v31),
          v3_v31 = ifelse(v3_v31 > 200, 200, v3_v31),
@@ -250,9 +248,9 @@ vall_413 <- left_join(v2_413, v3_413, by = join_by(latitude, longitude)) |>
   # mutate(v2_v3 = cut(v2_v3, seq(-200, 200, 50)),
   #        v2_v31 = cut(v2_v31, seq(-200, 200, 50)),
   #        v3_v31 = cut(v3_v31, seq(-200, 200, 50)))
-  mutate(v2_v3 = cut(v2_v3, c(-200, -100, 0, 50, 80, 90, 100, 110, 120, 150, 200)),
-         v2_v31 = cut(v2_v31, c(-200, -100, 0, 50, 80, 90, 100, 110, 120, 150, 200)),
-         v3_v31 = cut(v3_v31, c(-200, -100, 0, 50, 80, 90, 100, 110, 120, 150, 200)))
+  mutate(v2_v3_cut = cut(v2_v3, c(-200, -100, 0, 50, 80, 90, 100, 110, 120, 150, 200)),
+         v2_v31_cut = cut(v2_v31, c(-200, -100, 0, 50, 80, 90, 100, 110, 120, 150, 200)),
+         v3_v31_cut = cut(v3_v31, c(-200, -100, 0, 50, 80, 90, 100, 110, 120, 150, 200)))
 
 # Pivot longer for plotting
 v_comp_long <- vall_413 |> 
@@ -270,7 +268,8 @@ pl_top <- ggplot(data = v_comp_long) +
   # geom_contour(aes(x = longitude, y = latitude, z = value),
   #              breaks = c(1.0), color = "black") +
   # scale_colour_viridis_c(aesthetics = c("colour", "fill")) +
-  scale_fill_viridis_d() +
+  scale_fill_gradient() +
+  # scale_fill_viridis_d() +
   labs(x = NULL, y = NULL, fill = "Difference (%)") +
   facet_wrap(~ver) +
   coord_quickmap(xlim = c(min(v_comp_long$longitude), max(v_comp_long$longitude)),
@@ -310,3 +309,4 @@ pl_right <- ggplot(v_all_spectra_long) +
 pl_all <- (pl_top / (pl_left + pl_right)) +
   plot_annotation(tag_levels = 'a', tag_suffix = ')')
 ggsave("figures/fig_S1.png", pl_all, height = 9, width = 14)
+
