@@ -14,14 +14,33 @@ library(luna)
 
 # Station data ------------------------------------------------------------
 
-# Load HyperPRO sampling stations
-station_HP <- read_csv("meta/all_in-situ_RHOW_stations.csv") |> 
-  filter(sensor != "Hyp_nosc") |> 
-  mutate(date = parse_date(as.character(day), format = "%Y%m%d", locale = locale(tz = "UTC")))
+# Get file lists for all in situ measurements
+file_list_Hyp <- list.files(dir("~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results_20260203", 
+                                pattern = "HYPERNETS", full.names = TRUE), pattern = "*.csv", full.names = TRUE)
+file_list_Hyp <- file_list_Hyp[!grepl("HYPERNETS_vs_TRIOS_vs_HYPERPRO", file_list_Hyp)]
+file_list_Trios <- list.files(dir("~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results_20260203", 
+                                pattern = "TRIOS", full.names = TRUE), pattern = "*.csv", full.names = TRUE)
+file_list_Trios <- file_list_Trios[!grepl("HYPERNETS_vs_TRIOS_vs_HYPERPRO", file_list_Trios)]
+file_list_Pro <- list.files(dir("~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results_20260203", 
+                                pattern = "HYPERPRO", full.names = TRUE), pattern = "*.csv", full.names = TRUE)
+file_list_Pro <- file_list_Pro[!grepl("HYPERNETS_vs_TRIOS_vs_HYPERPRO", file_list_Pro)]
 
-# Get count of instruments per sample
-## Doesn't work great...
-station_count <- station_HP |> 
+# Load base HYPERNETS values
+base_Hyp <- plyr::ldply(file_list_Hyp, load_matchup_mean, .parallel = TRUE)
+base_Trios <- plyr::ldply(file_list_Trios, load_matchup_mean, .parallel = TRUE)
+base_Pro <- plyr::ldply(file_list_Pro, load_matchup_mean, .parallel = TRUE)
+
+# Filter out satellite coordinates and reduce to unique measurements
+station_in_situ <- bind_rows(base_Hyp, base_Trios, base_Pro) |> 
+  dplyr::select(sensor:longitude) |> 
+  filter(sensor %in% c("Hyp", "HYPERPRO", "TRIOS")) |> 
+  distinct() |> 
+  mutate(date = parse_date(day, format = "%Y%m%d", locale = locale(tz = "UTC")),
+         dateTime = as.POSIXct(paste0(day," ",time), format = "%Y%m%d %H%M%S", locale = locale(tz = "UTC")), .before = "latitude")
+write_csv(station_in_situ, "meta/station_in_situ.csv")
+
+# Get count of samples per ~1 km lon/lat
+station_count <- base_in_situ |> 
   mutate(longitude = round(longitude, 2),
          latitude = round(latitude, 2)) |> 
   summarise(count_n = n(), .by = c("longitude", "latitude"))
@@ -109,28 +128,30 @@ MODIS_water_df <- as.data.frame(MODIS_water, xy = TRUE, na.rm = TRUE)
 # Triple check lon/lat points
 
 # Map
-pl_map <- ggplot(data = station_HP) +
+pl_map <- ggplot(data = station_in_situ) +
   borders(fill = "grey80") +
-  geom_tile(data = MODIS_water_df, aes(x = x, y = y, fill = sur_refl_b01)) +
+  # geom_tile(data = MODIS_water_df, aes(x = x, y = y, fill = sur_refl_b01)) +
   geom_point(aes(x = longitude, y = latitude), colour = "black", size = 5.5) +
-  geom_point(aes(x = longitude, y = latitude, colour = date), size = 5) +
-  geom_point(data = filter(station_HP, sensor == "HYPERPRO"),
+  geom_point(aes(x = longitude, y = latitude, colour = as.factor(date)), size = 5) +
+  geom_point(data = filter(station_in_situ, sensor == "HYPERPRO"),
              aes(x = longitude, y = latitude), colour = "maroon", size = 7, shape = 5, stroke = 2) +
   # geom_point(data = filter(station_HP, sensor == "HYPERPRO"),
   #            aes(x = longitude, y = latitude, colour = date), size = 6, shape = 22) +
-  scale_colour_date(guide = "legend", low = "pink", high = "purple") +
+  # scale_colour_date(guide = "colourbar", low = "red", high = "blue", breaks = unique(station_in_situ$date)) +
   # scale_colour_viridis_c(option = "A", guide = "legend") +
-  scale_fill_viridis_c() +
+  # scale_fill_viridis_c() +
   guides(fill = guide_colorbar(barwidth = 20, barheight = 2)) +
   labs(x = "Longitude (°E)", y = "Latitude (°N)", 
-       colour = "Sampling date", fill = "Surface reflectance (459-479 nm) ") +
+       colour = "Measurement\ndate", fill = "Surface reflectance (459-479 nm) ") +
   coord_quickmap(xlim = c(7, 25), ylim = c(35, 42)) +
   theme(panel.border = element_rect(colour = "black", fill = NA),
-        legend.position = "top", 
-        legend.box = "vertical",
+        # legend.position = "top", 
+        # legend.box = "vertical",
+        legend.key.height = unit(1, "cm"),
         legend.title = element_text(size = 20),
         legend.text = element_text(size = 18),
         axis.title = element_text(size = 20),
         axis.text = element_text(size = 18))
-ggsave("figures/fig_1.png", pl_map, height = 9, width = 14)
+# pl_map
+ggsave("figures/fig_1.png", pl_map, height = 9, width = 18)
 

@@ -623,3 +623,254 @@ global_stats <- function(var_name, sensor_X, sensor_Y){
   return(df_results)
 }
 
+
+# Plotting functions ------------------------------------------------------
+
+# Plot data based on wavelength group
+plot_matchup_nm <- function(df, var_name, x_sensor, y_sensor){
+  df |> 
+    filter(!is.na(!!sym(x_sensor)), !is.na(!!sym(y_sensor))) |>
+    ggplot(aes_string(x = x_sensor, y = y_sensor)) +
+    geom_point(aes(colour = wavelength_group)) +
+    geom_abline(slope = 1, intercept = 0, color = "black", linetype = "dashed") +
+    labs(title = paste(var_name,"-", x_sensor, "vs", y_sensor),
+         x = paste(var_name, x_sensor),
+         y = paste(var_name, y_sensor),
+         colour = "Wavelength (nm)") +
+    scale_colour_manual(values = colour_nm)  +
+    theme_minimal() +
+    theme(panel.border = element_rect(fill = NA, color = "black"),
+          legend.position = "bottom")
+}
+
+# Plot based on date of collection
+plot_matchup_date <- function(df, var_name, x_sensor, y_sensor){
+  df |> 
+    filter(!is.na(!!sym(x_sensor)), !is.na(!!sym(y_sensor))) |>
+    mutate(date = as.factor(as.Date(dateTime_X))) |> 
+    ggplot(aes_string(x = x_sensor, y = y_sensor)) +
+    geom_point(aes(colour = date)) +
+    geom_abline(slope = 1, intercept = 0, color = "black", linetype = "dashed") +
+    labs(title = paste(var_name,"-", x_sensor, "vs", y_sensor),
+         x = paste(var_name, x_sensor),
+         y = paste(var_name, y_sensor),
+         colour = "date") +
+    # scale_colour_brewer(palette = "Dark2")  +
+    theme_minimal() +
+    theme(panel.border = element_rect(fill = NA, color = "black"),
+          legend.position = "bottom")
+}
+
+# Plot based on dateTime of collection
+plot_matchup_dateTime <- function(df, var_name, x_sensor, y_sensor, date_filter){
+  df |> 
+    filter(!is.na(!!sym(x_sensor)), !is.na(!!sym(y_sensor))) |> 
+    mutate(date = as.Date(dateTime_X)) |> 
+    filter(date == as.Date(date_filter)) |>
+    ggplot(aes_string(x = x_sensor, y = y_sensor)) +
+    geom_point(aes(colour = dateTime_X)) +
+    geom_abline(slope = 1, intercept = 0, color = "black", linetype = "dashed") +
+    labs(title = paste(var_name,"-", x_sensor, "vs", y_sensor,"-", date_filter),
+         x = paste(var_name, x_sensor),
+         y = paste(var_name, y_sensor),
+         colour = "time (UTC)") +
+    theme_minimal() +
+    theme(panel.border = element_rect(fill = NA, color = "black"),
+          legend.position = "bottom")
+}
+
+# Plot scatterplot based on the MAPE values of each comparison
+plot_matchup_MAPE_Bias <- function(df, var_name, x_sensor, y_sensor){
+  pl_MAPE <- df |> 
+    filter(!is.na(!!sym(x_sensor)), !is.na(!!sym(y_sensor))) |> 
+    ggplot(aes_string(x = x_sensor, y = y_sensor)) +
+    geom_point(aes(colour = MAPE)) +
+    geom_abline(slope = 1, intercept = 0, color = "black", linetype = "dashed") +
+    scale_colour_viridis_c(option = "D") +
+    labs(title = paste(var_name,"-", x_sensor, "vs", y_sensor,"- MAPE"),
+         x = paste(var_name, x_sensor),
+         y = paste(var_name, y_sensor),
+         colour = "MAPE [%]") +
+    theme_minimal() +
+    theme(panel.border = element_rect(fill = NA, color = "black"),
+          legend.position = "bottom")
+  pl_Bias <- df |>
+    filter(!is.na(!!sym(x_sensor)), !is.na(!!sym(y_sensor))) |> 
+    ggplot(aes_string(x = x_sensor, y = y_sensor)) +
+    geom_point(aes(colour = Bias)) +
+    geom_abline(slope = 1, intercept = 0, color = "black", linetype = "dashed") +
+    scale_colour_viridis_c(option = "A") +
+    labs(title = paste(var_name,"-", x_sensor, "vs", y_sensor,"- Bias"),
+         x = paste(var_name, x_sensor),
+         y = paste(var_name, y_sensor),
+         colour = "Bias [%]") +
+    theme_minimal() +
+    theme(panel.border = element_rect(fill = NA, color = "black"),
+          legend.position = "bottom")
+  ggpubr::ggarrange(pl_MAPE, pl_Bias, nrow = 2, ncol = 1)
+}
+
+# Plot the relationship between difftime and distance for MAPE and bias for all variables
+# df = matchup_ED_in_situ; var_name = "ED"
+plot_matchup_scatter <- function(df, var_name, pl_height = 6, pl_width = 9){
+  
+  # Relationship between MAPE, distance and difftime
+  pl_MAPE <- df |> 
+    mutate(comp_sensors = paste0(sensor_X," vs ",sensor_Y)) |> 
+    filter(comp_sensors %in% c("Hyp vs TRIOS", "Hyp vs HYPERPRO", "TRIOS vs HYPERPRO")) |> 
+    ggplot(aes(x = diff_time, y = MAPE)) +
+    geom_point(aes(colour = dist), size = 3, alpha = 0.7) +
+    geom_smooth(method = "lm", se = FALSE) +
+    scale_colour_viridis_c() +
+    labs(x = "Time difference [minutes]", y = "MAPE [%]", colour = "Distance\n[km]",
+         title = paste0(var_name," - MAPE (%) : Effect of sampling time difference"),
+         subtitle = "Colour shows distance (km) between samples") +
+    facet_wrap(~comp_sensors) +
+    theme(panel.border = element_rect(colour = "black"))#, 
+  # legend.position = "bottom")
+  # pl_MAPE
+  
+  # The same but for bias
+  pl_Bias <- df |> 
+    mutate(comp_sensors = paste0(sensor_X," vs ",sensor_Y)) |> 
+    filter(comp_sensors %in% c("Hyp vs TRIOS", "Hyp vs HYPERPRO", "TRIOS vs HYPERPRO")) |> 
+    ggplot(aes(x = diff_time, y = Bias)) +
+    geom_point(aes(colour = dist), size = 3, alpha = 0.7) +
+    geom_smooth(method = "lm", se = FALSE) +
+    scale_colour_viridis_c() +
+    labs(x = "Time difference [minutes]", y = "Bias [%]", colour = "Distance\n[km]",
+         title = paste0(var_name," - Bias (%) : Effect of sampling time difference"),
+         subtitle = "Colour shows distance (km) between samples") +
+    facet_wrap(~comp_sensors) +
+    theme(panel.border = element_rect(colour = "black"))#, 
+  # legend.position = "bottom")
+  # pl_Bias
+  
+  pl_combi <- ggpubr::ggarrange(pl_MAPE, pl_Bias, nrow = 2, ncol = 1)
+  ggsave(paste0("figures/outliers_",var_name,"_in_situ.png"), pl_combi, height = pl_height, width = pl_width)
+  # pl_combi
+}
+
+pretty_label_func <- function(char_string){
+  
+  # Set default values
+  # NB: Many names are already correct and don't need to be tuned below
+  sensor_col <- char_string
+  sensor_lab <- char_string
+  units_lab <- char_string
+  
+  # Correct satellite names
+  if(char_string == "HYPERNETS"){
+    sensor_col <- "Hyp"
+  } else if(char_string == "HYPERPRO"){
+    sensor_lab <- "HyperPRO"
+  } else if(char_string == "TRIOS"){
+    sensor_lab <- "So-Rad"
+  } else if(char_string == "AQUA"){
+    sensor_lab <- "MODIS-A" 
+  } else if(char_string == "S3"){ # NB: This is a special case
+    sensor_lab <- "S3A; S3B" 
+  } else if(char_string == "PACE_V2"){
+    sensor_lab <- "PACE v2.0"
+  } else if(char_string == "PACE_V30"){
+    sensor_lab <- "PACE v3.0"
+  } else if(char_string == "PACE_V31"){
+    sensor_lab <- "PACE v3.1"
+  } else if(char_string == "VIIRS_N"){
+    sensor_lab <- "SNPP"
+  } else if(char_string == "VIIRS_J1"){
+    sensor_lab <- "JPSS1"
+  } else if(char_string == "VIIRS_J2"){
+    sensor_lab <- "JPSS2"
+  }
+  
+  # Correct variable units
+  if(char_string == "ED"){
+    units_lab <- "E<sub>d</sub> (W m-2 nm-1)"
+  } else if(char_string == "LD"){
+    units_lab <- "L<sub>d</sub> (W m-2 sr-1)"
+  } else if(char_string == "LU"){
+    units_lab <- "L<sub>u</sub> (W m-2 sr-1)"
+  } else if(char_string == "LW"){
+    units_lab <- "L<sub>w</sub> (W m-2 sr-1)"
+  } else if(char_string == "RHOW"){
+    units_lab <- "R<sub>how</sub> (sr-1)"
+  }
+  
+  # Combine into data.frame
+  if(char_string %in% c("ED", "LD", "LU", "LW", "RHOW")){
+    pretty_labels <- data.frame(var_name = char_string,
+                                units_lab = units_lab)
+    
+  } else {
+    pretty_labels <- data.frame(sesnor_name = char_string,
+                                sensor_col = sensor_col,
+                                sensor_lab = sensor_lab)
+  }
+  return(pretty_labels)
+}
+
+# Plot data based on wavelength group
+plot_global_nm <- function(df, var_name, sensor_X, sensor_Y){
+  
+  # Create sensor and unit labels
+  sensor_X_labs <- pretty_label_func(sensor_X)
+  sensor_Y_labs <- pretty_label_func(sensor_Y)
+  var_labs <- pretty_label_func(var_name)
+  
+  # Detect Sentinel-3 data and react accordingly
+  if(sensor_Y == "S3"){
+    df_prep <- df |> 
+      pivot_longer(cols = c(S3A, S3B), names_to = "Platform", values_to = "S3") |> 
+      na.omit()
+  } else {
+    df_prep <- df
+  }
+  
+  # Get max values
+  max_X <- max(df_prep[sensor_X_labs$sensor_col], na.rm = TRUE)
+  max_Y <- max(df_prep[sensor_Y_labs$sensor_col], na.rm = TRUE)
+  max_axis <- max(max_X, max_Y)
+  
+  # Plot
+  if(sensor_Y == "S3"){
+    pl_base <- ggplot(data = df_prep, 
+                      aes_string(x = sensor_X_labs$sensor_col, y = sensor_Y_labs$sensor_col)) +
+      geom_point(aes(colour = wavelength_group, shape = Platform), size = 2)
+  } else {
+    pl_base <- ggplot(data = df_prep, 
+                      aes_string(x = sensor_X_labs$sensor_col, y = sensor_Y_labs$sensor_col)) +
+      geom_point(aes(colour = wavelength_group))
+  }
+  pl_clean <- pl_base +
+    geom_abline(slope = 1, intercept = 0, color = "black", linetype = "solid") +
+    geom_smooth(method = "lm", formula = y ~ x, color = "black", linetype = "dashed", se = FALSE) +
+    labs(x = paste0(sensor_X_labs$sensor_lab,"; ", var_labs$units_lab),
+         y = paste0(sensor_Y_labs$sensor_lab,"; ", var_labs$units_lab),
+         colour = "Wavelength (nm)") +
+    scale_colour_manual(values = colour_nm) +
+    guides(colour = guide_legend(nrow = 1)) +
+    coord_fixed(xlim = c(0, max_axis), ylim = c(0, max_axis)) +
+    theme_minimal() +
+    theme(panel.border = element_rect(fill = NA, color = "black"),
+          legend.title = element_text(size = 12),
+          legend.text = element_text(size = 10),
+          legend.position = "bottom",
+          axis.title.x = element_markdown(),
+          axis.title.y = element_markdown())
+  return(pl_clean)
+}
+
+# For the PACE supplementary figure
+map_PACE <- function(df){
+  df |> 
+    filter(!is.na(Rrs)) |> 
+    ggplot() +
+    borders(fill = "grey80") +
+    geom_tile(aes(x = longitude, y = latitude, fill = Rrs)) +
+    scale_colour_viridis_c(aesthetics = c("colour", "fill")) +
+    labs(x = NULL, y = NULL) +
+    coord_quickmap(xlim = c(min(df$longitude), max(df$longitude)),
+                   ylim = c(min(df$latitude), max(df$latitude)))
+}
+
