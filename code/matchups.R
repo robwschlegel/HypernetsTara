@@ -52,6 +52,9 @@ global_count <- map_dfr(file_list_global_stats, read_csv) |>
   distinct()
 
 
+# TODO: Write a chunk that loads the global results exactly as they would appear in each table
+
+
 # Check individual matchups -----------------------------------------------
 
 # Files of interest
