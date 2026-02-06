@@ -40,7 +40,16 @@ process_sensor("RHOW", "MODIS", "global")
 process_sensor("RHOW", "VIIRS", "global")
 process_sensor("RHOW", "OLCI", "global")
 
-# TODO: Create a function that loads all global results and gets the base and clean matchup counts
+# Load all global stats to get matchups counts, outliers, etc.
+file_list_global_stats <- dir("output", pattern = "global", full.names = TRUE)
+global_count <- map_dfr(file_list_global_stats, read_csv) |> 
+  filter(var_name == "RHOW") |> 
+  filter(sensor_X %in% c("HYPERNETS", "TRIOS", "HYPERPRO")) |> 
+  dplyr::select(var_name:sensor_Y) |> 
+  group_by(sensor_X, sensor_Y) |> 
+  filter(n_w_nm == max(n_w_nm)) |> 
+  ungroup() |> 
+  distinct()
 
 
 # Check individual matchups -----------------------------------------------
