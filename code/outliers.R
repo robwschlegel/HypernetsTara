@@ -43,6 +43,51 @@ plot_matchup_nm(clean_join_ED_in_situ, "Ed", "Hyp", "TRIOS")
 
 # Plot matchups by date
 plot_matchup_date(filter_join_ED_in_situ, "Ed", "Hyp", "TRIOS")
+plot_matchup_date(filter_join_ED_in_situ, "Ed", "Hyp", "HYPERPRO")
+plot_matchup_date(filter_join_ED_in_situ, "Ed", "Hyp", "TRIOS")
+
+
+## LU ----------------------------------------------------------------------
+
+# Load processed in situ matchups
+matchup_LU_in_situ <- read_csv("output/matchup_stats_LU_in_situ.csv") |> 
+  mutate(comp_sensors = paste0(sensor_X," vs ",sensor_Y)) |> 
+  filter(comp_sensors %in% c("Hyp vs TRIOS", "HYPERPRO vs Hyp", "HYPERPRO vs TRIOS"))
+
+# Load base W_nm matchup values
+base_LU_in_situ <- plyr::ldply(list.files(c(file_path_build("LU", "Hypernets", "Trios"), 
+                                            file_path_build("LU", "Hypernets", "Hyperpro"),
+                                            file_path_build("LU", "Trios", "Hyperpro")),
+                                          pattern = "*.csv", full.names = TRUE), 
+                               load_matchup_long, .parallel = TRUE)
+
+# Join for full range of stats
+join_LU_in_situ <- left_join(base_LU_in_situ, matchup_LU_in_situ, by = join_by(file_name))
+
+# Plot matchup by MAPE + Bias
+# NB: Only HypStar vs Trios
+plot_matchup_MAPE_Bias(join_LU_in_situ, "Lu", "Hyp", "TRIOS") # Bias < -50
+
+# Filter all by MAPE to get an initial idea of the issues
+filter_LU_in_situ <- filter(matchup_LU_in_situ, Bias <= -50) |> mutate(val_filter = "Bias <= -50")
+filter_join_LU_in_situ <- right_join(base_LU_in_situ, filter_LU_in_situ)
+clean_join_LU_in_situ <- anti_join(base_LU_in_situ, filter_LU_in_situ)
+
+# Plot all wavelength matchups
+plot_matchup_nm(join_LU_in_situ, "LU", "Hyp", "TRIOS")
+plot_matchup_nm(filter_join_LU_in_situ, "LU", "Hyp", "TRIOS")
+plot_matchup_nm(clean_join_LU_in_situ, "LU", "Hyp", "TRIOS")
+
+# Plot matchups by date
+plot_matchup_date(filter_join_LU_in_situ, "LU", "Hyp", "TRIOS")
+
+# Plot HyperPRO wavelength matchups for interest
+plot_matchup_nm(join_LU_in_situ, "LU", "HYPERPRO", "Hyp")
+plot_matchup_nm(clean_join_LU_in_situ, "LU", "HYPERPRO", "Hyp")
+ggsave("figures/global_scatter_LU_hyperpro_hypstar.png", height = 7, width = 6)
+plot_matchup_nm(join_LU_in_situ, "LU", "HYPERPRO", "TRIOS")
+plot_matchup_nm(clean_join_LU_in_situ, "LU", "HYPERPRO", "TRIOS")
+ggsave("figures/global_scatter_LU_hyperpro_trios.png", height = 7, width = 6)
 
 
 ## LD ----------------------------------------------------------------------
@@ -78,50 +123,6 @@ plot_matchup_nm(clean_join_LD_in_situ, "LD", "Hyp", "TRIOS")
 
 # Plot matchups by date
 plot_matchup_date(filter_join_LD_in_situ, "LD", "Hyp", "TRIOS")
-
-
-## LU ----------------------------------------------------------------------
-
-# Load processed in situ matchups
-matchup_LU_in_situ <- read_csv("output/matchup_stats_LU_in_situ.csv") |> 
-  mutate(comp_sensors = paste0(sensor_X," vs ",sensor_Y)) |> 
-  filter(comp_sensors %in% c("Hyp vs TRIOS", "HYPERPRO vs Hyp", "HYPERPRO vs TRIOS"))
-
-# Load base W_nm matchup values
-base_LU_in_situ <- plyr::ldply(list.files(c(file_path_build("LU", "Hypernets", "Trios"), 
-                                            file_path_build("LU", "Hypernets", "Hyperpro"),
-                                            file_path_build("LU", "Trios", "Hyperpro")),
-                                          pattern = "*.csv", full.names = TRUE), 
-                               load_matchup_long, .parallel = TRUE)
-
-# Join for full range of stats
-join_LU_in_situ <- left_join(base_LU_in_situ, matchup_LU_in_situ, by = join_by(file_name))
-
-# Plot matchup by MAPE + Bias
-# NB: Only HypStar vs Trios
-plot_matchup_MAPE_Bias(join_LU_in_situ, "Lu", "Hyp", "TRIOS") # Bias < -50
-
-# Filter all by MAPE to get an initial idea of the issues
-filter_LU_in_situ <- filter(matchup_LU_in_situ, Bias <= -50) |> mutate(val_filter = "Bias <= -50")
-filter_join_LU_in_situ <- right_join(base_LU_in_situ, filter_LU_in_situ)
-clean_join_LU_in_situ <- anti_join(base_LU_in_situ, filter_LU_in_situ)
-
-# Plot all wavelength matchups
-plot_matchup_nm(join_LU_in_situ, "LU", "Hyp", "TRIOS")
-plot_matchup_nm(filter_join_LU_in_situ, "LU", "Hyp", "TRIOS")
-plot_matchup_nm(clean_join_LU_in_situ, "LU", "Hyp", "TRIOS")
-ggsave("figures/global_scatter_LU_hyp_trios.png", height = 7, width = 6)
-
-# Plot matchups by date
-plot_matchup_date(filter_join_LU_in_situ, "LU", "Hyp", "TRIOS")
-
-# Plot HyperPRO wavelength matchups for interest
-plot_matchup_nm(join_LU_in_situ, "LU", "HYPERPRO", "Hyp")
-plot_matchup_nm(clean_join_LU_in_situ, "LU", "HYPERPRO", "Hyp")
-ggsave("figures/global_scatter_LU_hyperpro_hypstar.png", height = 7, width = 6)
-plot_matchup_nm(join_LU_in_situ, "LU", "HYPERPRO", "TRIOS")
-plot_matchup_nm(clean_join_LU_in_situ, "LU", "HYPERPRO", "TRIOS")
-ggsave("figures/global_scatter_LU_hyperpro_trios.png", height = 7, width = 6)
 
 
 ## LW ----------------------------------------------------------------------
@@ -171,7 +172,7 @@ plot_matchup_nm(filter_join_LW_in_situ, "LW", "HYPERPRO", "TRIOS") # OK
 plot_matchup_nm(clean_join_LW_in_situ, "LW", "HYPERPRO", "TRIOS")
 
 # Plot matchups by date
-plot_matchup_date(filter_join_LW_in_situ, "LW", "Hyp", "TRIOS")
+plot_matchup_date(filter_join_LW_in_situ, "LW", "TRIOS", "Hyp")
 plot_matchup_date(filter_join_LW_in_situ, "LW", "HYPERPRO", "Hyp")
 
 
@@ -246,53 +247,52 @@ plot_matchup_scatter(matchup_RHOW_in_situ, "RHOW")
 
 # Satellite Outliers -------------------------------------------------------
 
-## OLCI --------------------------------------------------------------------
+## MODIS -------------------------------------------------------------------
 
 # Load processed in situ matchups
-matchup_OLCI <- read_csv("output/matchup_stats_RHOW_OLCI.csv") |> 
+matchup_MODIS <- read_csv("output/matchup_stats_RHOW_MODIS.csv") |> 
   filter(sensor_X %in% c("Hyp", "HYPERPRO", "TRIOS")) |> 
   mutate(comp_sensors = paste0(sensor_X," vs ",sensor_Y))
 
-# OLCI files
-file_list_OLCI <- list.files(dir("~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_20260203", 
-                                 pattern = "S3", full.names = TRUE), pattern = "*.csv", full.names = TRUE)
+# File list
+file_list_MODIS <- list.files(dir("~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_20260203", 
+                                  pattern = "AQUA", full.names = TRUE), pattern = "*.csv", full.names = TRUE)
 
 # Load base W_nm matchup values
-base_OLCI <- plyr::ldply(file_list_OLCI, load_matchup_long, .parallel = TRUE)
+base_MODIS <- plyr::ldply(file_list_MODIS, load_matchup_long, .parallel = TRUE)
 
 # Join for full range of stats
-join_OLCI <- left_join(base_OLCI, matchup_OLCI, by = join_by(file_name))
+join_MODIS <- left_join(base_MODIS, matchup_MODIS, by = join_by(file_name))
 
 # Check satellite variance in files
-sat_var_OLCI <- plyr::ldply(file_list_OLCI, sat_var_check, .parallel = TRUE)
+sat_var_MODIS <- plyr::ldply(file_list_MODIS, sat_var_check, .parallel = TRUE)
 
 # Plot matchup by MAPE + Bias
-# NB: There are more S3A matchups, so using that sensor for analysis
-plot_matchup_MAPE_Bias(join_OLCI, "Rhow", "Hyp", "S3A") # The MAPE > 200 does not appear to be an outlier
-plot_matchup_MAPE_Bias(join_OLCI, "Rhow", "TRIOS", "S3A") # MAPE > 300
-plot_matchup_MAPE_Bias(join_OLCI, "Rhow", "HYPERPRO", "S3A") # OK
+plot_matchup_MAPE_Bias(join_MODIS, "Rhow", "Hyp", "AQUA") # MAPE > 200
+plot_matchup_MAPE_Bias(join_MODIS, "Rhow", "TRIOS", "AQUA") # MAPE > 300
+plot_matchup_MAPE_Bias(join_MODIS, "Rhow", "HYPERPRO", "AQUA") # MAPE > 150
 
 # Filter all by MAPE or Bias to get an initial idea of the issues
-filter_OLCI <- filter(matchup_OLCI, MAPE >= 300) |> mutate(val_filter = "MAPE >= 300") |> 
-  filter(file_name != "TRIOS_vs_S3B_vs_20240813T101805_RHOW.csv") # Manually checked, not an outlier, just a poor matchup
-filter_join_OLCI <- right_join(base_OLCI, filter_OLCI, by = join_by(file_name))
-clean_join_OLCI <- anti_join(base_OLCI, filter_OLCI, by = join_by(file_name))
+# No need to filter by satellite variance, there is one bad AQUA matchup across all sensors and datetimes
+filter_MODIS <- filter(matchup_MODIS, Bias >= 50) |> mutate(val_filter = "MAPE >= 50")
+filter_join_MODIS <- right_join(base_MODIS, filter_MODIS, by = join_by(file_name))
+clean_join_MODIS <- anti_join(base_MODIS, filter_MODIS, by = join_by(file_name))
 
 # Plot matchups by date
-plot_matchup_date(filter_join_OLCI, "Rhow", "Hyp", "S3A") # OK
-plot_matchup_date(filter_join_OLCI, "Rhow", "TRIOS", "S3A")
-plot_matchup_date(filter_join_OLCI, "Rhow", "HYPERPRO", "S3A") # OK
+plot_matchup_date(filter_join_MODIS, "Rhow", "Hyp", "AQUA")
+plot_matchup_date(filter_join_MODIS, "Rhow", "TRIOS", "AQUA")
+plot_matchup_date(filter_join_MODIS, "Rhow", "HYPERPRO", "AQUA")
 
 # Plot all wavelength matchups
-plot_matchup_nm(join_OLCI, "Rhow", "Hyp", "S3A")
-plot_matchup_nm(filter_join_OLCI, "Rhow", "Hyp", "S3A") # OK
-plot_matchup_nm(clean_join_OLCI, "Rhow", "Hyp", "S3A")
-plot_matchup_nm(join_OLCI, "Rhow", "TRIOS", "S3A")
-plot_matchup_nm(filter_join_OLCI, "Rhow", "TRIOS", "S3A")
-plot_matchup_nm(clean_join_OLCI, "Rhow", "TRIOS", "S3A")
-plot_matchup_nm(join_OLCI, "Rhow", "HYPERPRO", "S3A")
-plot_matchup_nm(filter_join_OLCI, "Rhow", "HYPERPRO", "S3A") # OK
-plot_matchup_nm(clean_join_OLCI, "Rhow", "HYPERPRO", "S3A")
+plot_matchup_nm(join_MODIS, "Rhow", "Hyp", "AQUA")
+plot_matchup_nm(filter_join_MODIS, "Rhow", "Hyp", "AQUA")
+plot_matchup_nm(clean_join_MODIS, "Rhow", "Hyp", "AQUA")
+plot_matchup_nm(join_MODIS, "Rhow", "TRIOS", "AQUA")
+plot_matchup_nm(filter_join_MODIS, "Rhow", "TRIOS", "AQUA")
+plot_matchup_nm(clean_join_MODIS, "Rhow", "TRIOS", "AQUA")
+plot_matchup_nm(join_MODIS, "Rhow", "HYPERPRO", "AQUA")
+plot_matchup_nm(filter_join_MODIS, "Rhow", "HYPERPRO", "AQUA")
+plot_matchup_nm(clean_join_MODIS, "Rhow", "HYPERPRO", "AQUA")
 
 
 ## VIIRS -------------------------------------------------------------------
@@ -303,7 +303,7 @@ matchup_VIIRS <- read_csv("output/matchup_stats_RHOW_VIIRS.csv") |>
   mutate(comp_sensors = paste0(sensor_X," vs ",sensor_Y))
 
 # File list
-file_list_VIIRS <- list.files(dir("~/pCloudDrive/Documents/OMTAB/HYPERNETS/tara_matchups_results_20260203", 
+file_list_VIIRS <- list.files(dir("~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_20260203", 
                                   pattern = "VIIRS", full.names = TRUE), pattern = "*.csv", full.names = TRUE)
 
 # Load base W_nm matchup values
@@ -345,52 +345,53 @@ plot_matchup_nm(filter_join_VIIRS, "Rhow", "HYPERPRO", "VIIRS_N")
 plot_matchup_nm(clean_join_VIIRS, "Rhow", "HYPERPRO", "VIIRS_N")
 
 
-## MODIS -------------------------------------------------------------------
+## OLCI --------------------------------------------------------------------
 
 # Load processed in situ matchups
-matchup_MODIS <- read_csv("output/matchup_stats_RHOW_MODIS.csv") |> 
+matchup_OLCI <- read_csv("output/matchup_stats_RHOW_OLCI.csv") |> 
   filter(sensor_X %in% c("Hyp", "HYPERPRO", "TRIOS")) |> 
   mutate(comp_sensors = paste0(sensor_X," vs ",sensor_Y))
 
-# File list
-file_list_MODIS <- list.files(dir("~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_20260203", 
-                                  pattern = "AQUA", full.names = TRUE), pattern = "*.csv", full.names = TRUE)
+# OLCI files
+file_list_OLCI <- list.files(dir("~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_20260203", 
+                                 pattern = "S3", full.names = TRUE), pattern = "*.csv", full.names = TRUE)
 
 # Load base W_nm matchup values
-base_MODIS <- plyr::ldply(file_list_MODIS, load_matchup_long, .parallel = TRUE)
+base_OLCI <- plyr::ldply(file_list_OLCI, load_matchup_long, .parallel = TRUE)
 
 # Join for full range of stats
-join_MODIS <- left_join(base_MODIS, matchup_MODIS, by = join_by(file_name))
+join_OLCI <- left_join(base_OLCI, matchup_OLCI, by = join_by(file_name))
 
 # Check satellite variance in files
-sat_var_MODIS <- plyr::ldply(file_list_MODIS, sat_var_check, .parallel = TRUE)
+sat_var_OLCI <- plyr::ldply(file_list_OLCI, sat_var_check, .parallel = TRUE)
 
 # Plot matchup by MAPE + Bias
-plot_matchup_MAPE_Bias(join_MODIS, "Rhow", "Hyp", "AQUA") # MAPE > 200
-plot_matchup_MAPE_Bias(join_MODIS, "Rhow", "TRIOS", "AQUA") # MAPE > 300
-plot_matchup_MAPE_Bias(join_MODIS, "Rhow", "HYPERPRO", "AQUA") # MAPE > 150
+# NB: There are more S3A matchups, so using that sensor for analysis
+plot_matchup_MAPE_Bias(join_OLCI, "Rhow", "Hyp", "S3A") # The MAPE > 200 does not appear to be an outlier
+plot_matchup_MAPE_Bias(join_OLCI, "Rhow", "TRIOS", "S3A") # MAPE > 300
+plot_matchup_MAPE_Bias(join_OLCI, "Rhow", "HYPERPRO", "S3A") # OK
 
 # Filter all by MAPE or Bias to get an initial idea of the issues
-# No need to filter by satellite variance, there is one bad AQUA matchup across all sensors and datetimes
-filter_MODIS <- filter(matchup_MODIS, MAPE >= 150) |> mutate(val_filter = "MAPE >= 150")
-filter_join_MODIS <- right_join(base_MODIS, filter_MODIS, by = join_by(file_name))
-clean_join_MODIS <- anti_join(base_MODIS, filter_MODIS, by = join_by(file_name))
+filter_OLCI <- filter(matchup_OLCI, Bias >= 100) |> mutate(val_filter = "Bias >= 100") |> 
+  filter(file_name != "TRIOS_vs_S3B_vs_20240813T101805_RHOW.csv") # Manually checked, not an outlier, just a poor matchup
+filter_join_OLCI <- right_join(base_OLCI, filter_OLCI, by = join_by(file_name))
+clean_join_OLCI <- anti_join(base_OLCI, filter_OLCI, by = join_by(file_name))
 
 # Plot matchups by date
-plot_matchup_date(filter_join_MODIS, "Rhow", "Hyp", "AQUA")
-plot_matchup_date(filter_join_MODIS, "Rhow", "TRIOS", "AQUA")
-plot_matchup_date(filter_join_MODIS, "Rhow", "HYPERPRO", "AQUA")
+plot_matchup_date(filter_join_OLCI, "Rhow", "Hyp", "S3A")
+plot_matchup_date(filter_join_OLCI, "Rhow", "TRIOS", "S3A")
+plot_matchup_date(filter_join_OLCI, "Rhow", "HYPERPRO", "S3A") # OK
 
 # Plot all wavelength matchups
-plot_matchup_nm(join_MODIS, "Rhow", "Hyp", "AQUA")
-plot_matchup_nm(filter_join_MODIS, "Rhow", "Hyp", "AQUA")
-plot_matchup_nm(clean_join_MODIS, "Rhow", "Hyp", "AQUA")
-plot_matchup_nm(join_MODIS, "Rhow", "TRIOS", "AQUA")
-plot_matchup_nm(filter_join_MODIS, "Rhow", "TRIOS", "AQUA")
-plot_matchup_nm(clean_join_MODIS, "Rhow", "TRIOS", "AQUA")
-plot_matchup_nm(join_MODIS, "Rhow", "HYPERPRO", "AQUA")
-plot_matchup_nm(filter_join_MODIS, "Rhow", "HYPERPRO", "AQUA")
-plot_matchup_nm(clean_join_MODIS, "Rhow", "HYPERPRO", "AQUA")
+plot_matchup_nm(join_OLCI, "Rhow", "Hyp", "S3A")
+plot_matchup_nm(filter_join_OLCI, "Rhow", "Hyp", "S3A") # OK
+plot_matchup_nm(clean_join_OLCI, "Rhow", "Hyp", "S3A")
+plot_matchup_nm(join_OLCI, "Rhow", "TRIOS", "S3A")
+plot_matchup_nm(filter_join_OLCI, "Rhow", "TRIOS", "S3A")
+plot_matchup_nm(clean_join_OLCI, "Rhow", "TRIOS", "S3A")
+plot_matchup_nm(join_OLCI, "Rhow", "HYPERPRO", "S3A")
+plot_matchup_nm(filter_join_OLCI, "Rhow", "HYPERPRO", "S3A") # OK
+plot_matchup_nm(clean_join_OLCI, "Rhow", "HYPERPRO", "S3A")
 
 
 ## OCI ---------------------------------------------------------------------
@@ -417,12 +418,12 @@ sat_var_OCI <- plyr::ldply(file_list_OCI, sat_var_check, .parallel = TRUE)
 # Plot matchup by MAPE + Bias
 # NB: PACE_v30 is visually the least similar, so using this for base reference
 # NB: There are many PACE files with negative values
-plot_matchup_MAPE_Bias(join_OCI, "Rhow", "Hyp", "PACE_V30") # MAPE > 100
-plot_matchup_MAPE_Bias(join_OCI, "Rhow", "TRIOS", "PACE_V30") # MAPE > 100
-plot_matchup_MAPE_Bias(join_OCI, "Rhow", "HYPERPRO", "PACE_V30") # MAPE > OK
+plot_matchup_MAPE_Bias(join_OCI, "Rhow", "Hyp", "PACE_V30") # Bias < -50
+plot_matchup_MAPE_Bias(join_OCI, "Rhow", "TRIOS", "PACE_V30") # Bias < -50
+plot_matchup_MAPE_Bias(join_OCI, "Rhow", "HYPERPRO", "PACE_V30") # Bias < -50
 
 # Filter all by MAPE or Bias to get an initial idea of the issues
-filter_OCI <- filter(matchup_OCI, MAPE >= 100) |> mutate(val_filter = "MAPE >= 100") |>
+filter_OCI <- filter(matchup_OCI, Bias <= -50) |> mutate(val_filter = "Bias <= -50") |>
   right_join(sat_var_OCI, by = join_by(file_name)) |> 
   filter(!is.na(var_name))
 filter_join_OCI <- right_join(base_OCI, filter_OCI, by = join_by(file_name))
@@ -431,7 +432,7 @@ clean_join_OCI <- anti_join(base_OCI, filter_OCI, by = join_by(file_name))
 # Plot matchups by date
 plot_matchup_date(filter_join_OCI, "Rhow", "Hyp", "PACE_V30")
 plot_matchup_date(filter_join_OCI, "Rhow", "TRIOS", "PACE_V30")
-plot_matchup_date(filter_join_OCI, "Rhow", "HYPERPRO", "PACE_V30") # OK
+plot_matchup_date(filter_join_OCI, "Rhow", "HYPERPRO", "PACE_V30")
 
 # Plot all wavelength matchups
 plot_matchup_nm(join_OCI, "Rhow", "Hyp", "PACE_V30")

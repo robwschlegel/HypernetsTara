@@ -237,7 +237,7 @@ W_nm_out <- function(sensor_Y, var_name){
     W_nm = c(410, 443, 486, 551)#, 671)
   } else if(sensor_Y %in% c("VIIRS_J1", "VIIRS_J2")){
     W_nm <- c(411, 445, 489, 556)#, 667)
-  } else if(sensor_Y %in% c("S3A", "S3B")){
+  } else if(sensor_Y %in% c("S3A", "S3B", "S3_all")){
     W_nm <- c(413, 443, 490, 560)#, 665, 681)
   } else {
     stop(paste0("Incorrect value for 'sensor_Y' : ",sensor_Y))
@@ -459,10 +459,20 @@ process_matchup_folder <- function(var_name, sensor_X, sensor_Y){
 # var_name = "LU"; sensor_Z = "HYPERPRO"
 # var_name = "ED"; sensor_Z = "HYPERPRO"
 # var_name = "RHOW"; sensor_Z = "VIIRS"
+# var_name = "RHOW"; sensor_Z = "OLCI"; stat_choice = "global"
 process_sensor <- function(var_name, sensor_Z, stat_choice = "matchup"){
   
   # Create ply grid
   ply_grid <- sensor_grid(var_name, sensor_Z)
+  
+  # Add S3_all if needed
+  if(sensor_Z == "OLCI" & stat_choice == "global"){
+    ply_grid_bonus <- data.frame(var_name = var_name,
+                                 sensor_X = unique(ply_grid$sensor_X),
+                                 sensor_Y = "S3_all")
+    ply_grid <- rbind(ply_grid, ply_grid_bonus)
+    message("Added S3_all to sensor_Y list")
+  }
   
   # Correct sensor_Z for file names upon saving
   if(var_name %in% c("LU", "LD")){
@@ -493,11 +503,22 @@ process_sensor <- function(var_name, sensor_Z, stat_choice = "matchup"){
 # var_name = "RHOW"; sensor_X = "HYPERNETS"; sensor_Y = "TRIOS"
 # var_name = "RHOW"; sensor_X = "TRIOS"; sensor_Y = "AQUA"
 # var_name = "RHOW"; sensor_X = "HYPERNETS"; sensor_Y = "PACE_V31"
+# var_name = "RHOW"; sensor_X = "HYPERNETS"; sensor_Y = "S3_all"
 # W_nm = c(412, 443, 488, 531, 555, 667)
 global_stats <- function(var_name, sensor_X, sensor_Y){
   
-  # Create file path
-  folder_path <- file_path_build(var_name, sensor_X, sensor_Y)
+  # Create multiple folder paths if requested
+  if(sensor_Y == "S3_all"){
+    folder_path <- c(file_path_build(var_name, sensor_X, "S3A"),
+                     file_path_build(var_name, sensor_X, "S3B"))
+    # NB: Different wavebands for VIIRS_N than VIIRS_J1 and VIIRS_J2
+  # } else if(sensor_Y == "VIIRS_all"){
+  #   folder_path <- c(file_path_build(var_name, sensor_X, "VIIRS_N"),
+  #                    file_path_build(var_name, sensor_X, "VIIRS_J1"),
+  #                    file_path_build(var_name, sensor_X, "VIIRS_J2"))
+  } else {
+    folder_path <- file_path_build(var_name, sensor_X, sensor_Y)
+  }
   
   # List all files in directory
   file_list <- list.files(folder_path, pattern = "*.csv", full.names = TRUE)
@@ -517,14 +538,22 @@ global_stats <- function(var_name, sensor_X, sensor_Y){
   # Load data
   match_base <- map_dfr(file_list_clean, load_matchup_long)
   
+  # Melt if S3_all
+  if(sensor_Y == "S3_all"){
+    match_base <- match_base |> 
+      pivot_longer(S3A:S3B, names_to = "name", values_to = "S3_all") |> 
+      dplyr::select(-name) |> 
+      filter(!is.na(S3_all))
+  }
+  
   # Continue with satellite versions if necessary
   if(sensor_Y  == "AQUA"){
     sensor_Z <- "MODIS"
   } else if(sensor_Y %in% c("PACE_V2", "PACE_V30", "PACE_V31")){
     sensor_Z <- "OCI"
-  } else if(sensor_Y %in% c("VIIRS_N", "VIIRS_J1", "VIIRS_J2")){
+  } else if(sensor_Y %in% c("VIIRS_N", "VIIRS_J1", "VIIRS_J2", "VIIRS_all")){
     sensor_Z <- "VIIRS"
-  } else if(sensor_Y %in% c("S3A", "S3B")){
+  } else if(sensor_Y %in% c("S3A", "S3B", "S3_all")){
     sensor_Z <- "OLCI"
   } else {
   }
@@ -625,10 +654,6 @@ global_stats <- function(var_name, sensor_X, sensor_Y){
       print(paste0("No data for wavelength ", W_nm[i]))
     }
   }
-  
-  # TODO: Add a final calculation that runs for all sensors
-  # I don't think this can be done with the current structure
-  # It may require another function
   
   # Add matchup count and exit
   df_results <- df_results |> 

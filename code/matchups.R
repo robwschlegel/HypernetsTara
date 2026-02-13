@@ -22,6 +22,8 @@ process_sensor("RHOW", "OCI")
 process_sensor("RHOW", "VIIRS")
 process_sensor("RHOW", "OLCI")
 
+# TODO: Write a chunk that gives the range of dates and times of sampling
+
 
 # Global statistics --------------------------------------------------------
 
@@ -35,22 +37,24 @@ process_sensor("LD", "HYPERPRO", "global")
 process_sensor("LW", "HYPERPRO", "global")
 process_sensor("RHOW", "HYPERPRO", "global")
 ## Satellite
-process_sensor("RHOW", "OCI", "global")
 process_sensor("RHOW", "MODIS", "global")
 process_sensor("RHOW", "VIIRS", "global")
 process_sensor("RHOW", "OLCI", "global")
+process_sensor("RHOW", "OCI", "global")
 
 # Load all global stats to get matchups counts, outliers, etc.
 file_list_global_stats <- dir("output", pattern = "global", full.names = TRUE)
-global_count <- map_dfr(file_list_global_stats, read_csv) |> 
-  filter(var_name == "RHOW") |> 
+global_count <- map_dfr(file_list_global_stats, read_csv)
+global_count_var_name <- global_count|> 
+  # filter(var_name == "RHOW") |>
   filter(sensor_X %in% c("HYPERNETS", "TRIOS", "HYPERPRO")) |> 
   dplyr::select(var_name:sensor_Y) |> 
-  group_by(sensor_X, sensor_Y) |> 
+  group_by(var_name, sensor_X, sensor_Y) |> 
   filter(n_w_nm == max(n_w_nm)) |> 
   ungroup() |> 
   distinct()
 
+# TODO: Write a chunk that quantifies which sensors matched most closely to which satellites.
 
 # TODO: Write a chunk that loads the global results exactly as they would appear in each table
 

@@ -195,22 +195,23 @@ pl_map <- ggplot(data = station_in_situ, aes(x = longitude, y = latitude)) +
   scale_colour_discrete(palette = "Set3") +
   # scale_fill_viridis_c() +
   # guides(fill = guide_colorbar(barwidth = 20, barheight = 2)) +
-  guides(fill = guide_colourbar(theme = theme(legend.key.width  = unit(20, "lines"),
+  guides(fill = guide_colourbar(theme = theme(legend.key.width  = unit(25, "lines"),
                                               legend.key.height = unit(1.5, "lines")))) +
-  guides(color = guide_legend(override.aes = list(shape = 21, color = "black", size = 5,
+  guides(color = guide_legend(nrow = 2,
+                              override.aes = list(shape = 21, color = "black", size = 5,
                                                   fill = c(RColorBrewer::brewer.pal(n = 11, name = "Set3"))))) +
   labs(x = "Longitude (°E)", y = "Latitude (°N)", 
        colour = "Measurement<br>date", 
-       fill = "<i>R<sub>rs</sub></i> (sr<sup>-1</sup>; 459-479 nm) ") +
+       fill = "<i>R<sub>rs</sub></i><br>(sr<sup>-1</sup>; 459-479 nm) ") +
   coord_quickmap(xlim = c(7, 25), ylim = c(35, 42)) +
   theme(panel.border = element_rect(colour = "black", fill = NA),
         legend.position = "top",
         legend.box = "vertical",
         # legend.key.width = unit(2, "cm"),
-        legend.title = element_markdown(size = 20),
-        legend.text = element_text(size = 18),
-        axis.title = element_text(size = 20),
-        axis.text = element_text(size = 18))
+        legend.title = element_markdown(size = 26, halign = 0.5),
+        legend.text = element_text(size = 24),
+        axis.title = element_text(size = 24),
+        axis.text = element_text(size = 22))
 # pl_map
 ggsave("figures/fig_1.png", pl_map, height = 12, width = 18)
 

@@ -170,6 +170,8 @@ global_triptych_stack <- function(var_name, sensor_Z){
 
 # Global scatterplots -----------------------------------------------------
 
+# TODO: Rather have each panel have a letter label, not each row.
+
 # In situ
 global_triptych_stack("insitu", "HYPERPRO")
 global_triptych_stack("RHOW", "HYPERPRO")
@@ -181,15 +183,17 @@ global_triptych_stack("RHOW", "VIIRS")
 global_triptych_stack("RHOW", "OLCI")
 
 
-# Hyperspectral figure ----------------------------------------------------
+# Figure 3 ----------------------------------------------------------------
 
 # Create a hyperspectral plot that shows all in situ sensors vs PACE and one other multispectral satellite
-# Matchup scatterplots for everything, with statistic panels in each pane;
 # Add variance bars for multispectral data
+# Plus the photos from HYPERNETS
+
+
+# Figure 4 ----------------------------------------------------------------
+
+# Matchup scatterplots for everything shown in Figure 3, with statistic panels in each pane;
 # Add intercept and R2
-# Show this all as two figures:
-## The first has the hyperspectral plot plus the photos from HYPERNETS
-## The second shows all of the matchup scatterplots
 
 
 # PACE Supp ----------------------------------------------------------------
