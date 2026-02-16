@@ -290,72 +290,19 @@ ggsave("figures/fig_3.png", fig_3, width = 12, height = 9)
 # Figure 4 ----------------------------------------------------------------
 
 # Matchup scatterplots for everything shown in Figure 3, with statistic panels in each pane;
-sensor_X <- "HyperPRO"; sensor_Y <- "PACE v2.0"
-sensor_X <- "HyperPRO"; sensor_Y <- "VIIRS SNPP"
+fig_4_a <- plot_matchup_single_nm(pro_all_long, "HyperPRO", "So-Rad")
+fig_4_b <- plot_matchup_single_nm(pro_all_long, "HyperPRO", "HYPERNETS")
+fig_4_c <- plot_matchup_single_nm(pro_all_long, "HyperPRO", "VIIRS SNPP")
+fig_4_d <- plot_matchup_single_nm(pro_all_long, "HyperPRO", "PACE v2.0")
+fig_4_e <- plot_matchup_single_nm(pro_all_long, "HyperPRO", "PACE v3.0")
+fig_4_f <- plot_matchup_single_nm(pro_all_long, "HyperPRO", "PACE v3.1")
 
-df_prep <- pro_all_long |> 
-  filter(sensor %in% c(sensor_X, sensor_Y)) |> 
-  filter(wavelength < 600) |> 
-  mutate(wavelength_group = cut(wavelength,
-                                breaks = c(350, 400, 450, 500, 550, 600, 650, 700, 750, 800),
-                                labels = labels_nm,
-                                include.lowest = FALSE, right = FALSE), .after = "wavelength") |> 
-  pivot_wider(names_from = sensor, values_from = rhow:std_min)
-
-# Get max values
-# NB: max/min is incerted in absolute values
-max_X <- max(df_prep[paste0("std_min_",sensor_X)], na.rm = TRUE)
-max_Y <- max(df_prep[paste0("std_min_",sensor_Y)], na.rm = TRUE)
-max_axis <- max(max_X, max_Y)
-
-# Get global stats
-x_vec <- df_prep[[paste0("rhow_",sensor_X)]]
-y_vec <- df_prep[[paste0("rhow_",sensor_Y)]]
-
-# Calculate statistics
-df_stats <- base_stats(x_vec, y_vec)
-
-# Get pretty labels
-var_labs <- pretty_label_func("RHOW")
-
-# The first points
-if(grepl("VIIRS", sensor_Y)){
-  pl_base <- ggplot(data = df_prep, 
-                    aes_string(x = paste0("rhow_",sensor_X), y = paste0("`rhow_",sensor_Y,"`"))) +
-    geom_errorbar(aes_string(xmin = paste0("std_min_",sensor_X), xmax = paste0("std_max_",sensor_X)), width = 0.0005) +
-    geom_errorbar(aes_string(ymin = paste0("`std_min_",sensor_Y,"`"), ymax = paste0("`std_max_",sensor_Y,"`")), width = 0.0005) +
-    geom_point(aes(colour = wavelength_group), size = 5, alpha = 0.9)
-} else {
-  pl_base <- ggplot(data = df_prep, 
-                      aes_string(x = paste0("rhow_",sensor_X), y = paste0("`rhow_",sensor_Y,"`"))) +
-    geom_point(aes(colour = wavelength_group), size = 3, alpha = 0.9)
-}
-
-pl_single <- pl_base +
-  # Add 1:1 line
-  geom_abline(slope = 1, intercept = 0, color = "black", linetype = "solid") +
-  # Add global stats linear model
-  geom_smooth(method = "lm", formula = y ~ x, colour = "white", linewidth = 1.5, linetype = "solid", se = FALSE) +
-  geom_smooth(method = "lm", formula = y ~ x, colour = "black", linewidth = 1, linetype = "dashed", se = FALSE) +
-  # Add global stats text
-  annotate(geom = "text", x = 0, y = max_axis, hjust = 0, vjust = 1, size = 4,
-           label = paste0("Slope: ", df_stats$Slope, "\nβ: ", df_stats$Bias,"% \nϵ: ",df_stats$Error,"%")) +
-  # Make it pretty
-  labs(x = paste0(sensor_X,"; ", var_labs$units_lab),
-       y = paste0(sensor_Y,"; ", var_labs$units_lab),
-       colour = "Wavelength (nm)") +
-  scale_colour_manual(values = colour_nm) +
-  guides(colour = guide_legend(nrow = 1, override.aes = list(alpha = 1.0, size = 3))) +
-  coord_fixed(xlim = c(0, max_axis), ylim = c(0, max_axis)) +
-  theme_minimal() +
-  theme(panel.border = element_rect(fill = NA, color = "black"),
-        legend.title = element_text(size = 14),
-        legend.text = element_text(size = 12),
-        legend.position = "bottom",
-        axis.title.x = element_markdown(size = 12),
-        axis.title.y = element_markdown(size = 12),
-        axis.text = element_text(size = 10))
-# pl_single
+# Combine and save
+fig_4 <- ggpubr::ggarrange(fig_4_a, fig_4_b, fig_4_c, fig_4_d, fig_4_e, fig_4_f, 
+                           labels = c("a)", "b)", "c)", "d)", "e)", "f)"),
+                           ncol = 3, nrow = 2, common.legend = TRUE, legend = "bottom") +
+  ggpubr::bgcolor("white") + ggpubr::border("white", size = 2)
+ggsave("figures/fig_4.png", fig_4, width = 12, height = 9)
 
 
 # PACE Supp ----------------------------------------------------------------
