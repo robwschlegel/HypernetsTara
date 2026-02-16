@@ -12,8 +12,9 @@ source("code/functions.R")
 # Takes variable and Y sensor as input to automagically create global scatterplot triptych
 # var_name = "LU"; sensor_Y = "HYPERPRO"
 # var_name = "RHOW"; sensor_Y = "HYPERPRO"
-# var_name = "RHOW"; sensor_Y = "S3"
-global_triptych <- function(var_name, sensor_Y, cut_legend = NULL){
+# var_name = "RHOW"; sensor_Y = "VIIRS_J2"
+# var_name = "RHOW"; sensor_Y = "S3"; panel_labels <- c("a)", "b)", "c)")
+global_triptych <- function(var_name, sensor_Y, panel_labels, cut_legend = NULL){
   
   # Check that in situ data are being requested if variable is anything other than Rhow
   if(var_name != "RHOW" & sensor_Y != "HYPERPRO") stop("Can only use RHOW with remote data matchups")
@@ -61,7 +62,9 @@ global_triptych <- function(var_name, sensor_Y, cut_legend = NULL){
   if(var_name == "RHOW"){
     match_base_1 <- filter(match_base_1, wavelength < 600) 
     match_base_2 <- filter(match_base_2, wavelength < 600) 
-    match_base_3 <- filter(match_base_3, wavelength < 600) 
+    match_base_3 <- filter(match_base_3, wavelength < 600)
+  } else if (var_name == "LU"){
+    match_base_1 <- filter(match_base_1, wavelength < 600) 
   }
   
   # Create the three figures
@@ -92,12 +95,13 @@ global_triptych <- function(var_name, sensor_Y, cut_legend = NULL){
     match_fig_1 <- match_fig_1 + guides(colour = "none")
     match_fig_2 <- match_fig_2 + guides(colour = "none")
     match_fig_3 <- match_fig_3 + guides(colour = "none")
-    match_fig <- match_fig_1 + match_fig_2 + match_fig_3
+    # match_fig <- match_fig_1 + match_fig_2 + match_fig_3
+    match_fig <- ggpubr::ggarrange(match_fig_1, match_fig_2, match_fig_3, ncol = 3, nrow = 1, labels = panel_labels)
   } else {
-    # match_fig <- ggpubr::ggarrange(match_fig_1, match_fig_2, match_fig_3, ncol = 3, nrow = 1, 
-    #                                common.legend = TRUE, legend = "bottom")
-    match_fig <- match_fig_1 + match_fig_2 + match_fig_3 + plot_layout(guides = "collect") &
-      theme(legend.position = "bottom")
+    match_fig <- ggpubr::ggarrange(match_fig_1, match_fig_2, match_fig_3, ncol = 3, nrow = 1,
+                                   common.legend = TRUE, legend = "bottom", labels = panel_labels)
+    # match_fig <- match_fig_1 + match_fig_2 + match_fig_3 + plot_layout(guides = "collect") &
+    #   theme(legend.position = "bottom")
     # ggsave(paste0("figures/global_scatter_all_",var_name,"_",sensor_Y,".png"), match_fig, width = 12, height = 5)
   }
 }
@@ -120,33 +124,38 @@ global_triptych_stack <- function(var_name, sensor_Z){
 
   # Create figures
   if(var_name != "RHOW"){
-    fig_a <- global_triptych("ED", "HYPERPRO", cut_legend = "cut")
-    fig_b <- global_triptych("LU", "HYPERPRO", cut_legend = "cut")
-    fig_c <- global_triptych("LD", "HYPERPRO", cut_legend = "cut")
-    fig_d <- global_triptych("LW", "HYPERPRO")
+    fig_a <- global_triptych("ED", "HYPERPRO", cut_legend = "cut", panel_labels = c("a)", "b)", "c)"))
+    fig_b <- global_triptych("LU", "HYPERPRO", cut_legend = "cut", panel_labels = "")
+    fig_c <- global_triptych("LD", "HYPERPRO", cut_legend = "cut", panel_labels = "")
+    fig_d <- global_triptych("LW", "HYPERPRO", panel_labels = c("f)", "g)", "h)"))
     
     # Combine into special layout
     fig_mid <- ggpubr::ggarrange(fig_b, fig_c, ncol = 2, nrow = 1, 
-                                 labels = c("b)", "c)"), hjust = c(-5.2, -6.0))
+                                 labels = c("d)", "e)"), hjust = c(-4.9, -5.7), vjust = c(0.5, 0.5))
     fig_stack <- ggpubr::ggarrange(fig_a, fig_mid, fig_d, ncol = 1, nrow = 3, 
-                                   labels = c("a)", "", "d)"), hjust = c(-2.2, 0, -1.5), heights = c(1.07, 1, 1.17)) + 
+                                   # labels = c("a)", "", "d)"), hjust = c(-2.2, 0, -1.5), 
+                                   heights = c(1.09, 1, 1.17)) + 
       ggpubr::bgcolor("white") + ggpubr::border("white", size = 2)
     ggsave(paste0("figures/global_scatter_OTHER_in_situ.png"), fig_stack, width = 11, height = 12)
   } else if(sensor_Z == "HYPERPRO"){
-    fig_stack <- global_triptych("RHOW", "HYPERPRO")
+    fig_stack <- global_triptych("RHOW", "HYPERPRO", panel_labels = c("a)", "b)", "c)")) + 
+      ggpubr::bgcolor("white") + ggpubr::border("white", size = 2)
     ggsave(paste0("figures/global_scatter_",var_name,"_in_situ.png"), fig_stack, width = 12, height = 4.5)
     # TODO: Optimise this logic gate to make this decision automagically
   } else if(sensor_Z == "OLCI"){
-    fig_stack <- global_triptych("RHOW", "S3")
+    fig_stack <- global_triptych("RHOW", "S3", panel_labels = c("a)", "b)", "c)")) + 
+      ggpubr::bgcolor("white") + ggpubr::border("white", size = 2)
     ggsave(paste0("figures/global_scatter_",var_name,"_OLCI.png"), fig_stack, width = 12, height = 4.5)
   } else if(sensor_count == 1){
-    fig_stack <- global_triptych(var_name, ply_grid$sensor_Y[1])
+    fig_stack <- global_triptych(var_name, ply_grid$sensor_Y[1], panel_labels = c("a)", "b)", "c)")) + 
+      ggpubr::bgcolor("white") + ggpubr::border("white", size = 2)
     ggsave(paste0("figures/global_scatter_",var_name,"_",sensor_Z,".png"), fig_stack, width = 12, height = 4.5)
   } else if(sensor_count == 2){
-    fig_a <- global_triptych(var_name, ply_grid$sensor_Y[1], cut_legend = "cut")
-    fig_b <- global_triptych(var_name, ply_grid$sensor_Y[2])
+    fig_a <- global_triptych(var_name, ply_grid$sensor_Y[1], cut_legend = "cut", panel_labels = c("a)", "b)", "c)"))
+    fig_b <- global_triptych(var_name, ply_grid$sensor_Y[2], panel_labels = c("d)", "e)", "f)"))
     fig_stack <- ggpubr::ggarrange(fig_a, fig_b, ncol = 1, nrow = sensor_count, 
-                                   labels = c("a)", "b)"), heights = c(1, 1.14)) + 
+                                   # labels = c("a)", "b)"), 
+                                   heights = c(1, 1.14)) + 
       ggpubr::bgcolor("white") + ggpubr::border("white", size = 2)
     # fig_stack <- fig_a / fig_b + plot_layout(guides = "collect") &
     #   theme(legend.position = "bottom") #+ 
@@ -157,11 +166,12 @@ global_triptych_stack <- function(var_name, sensor_Z){
       # annotate("text", x = -Inf, y = Inf, label = "c)", vjust = 2, hjust = 1.2)
     ggsave(paste0("figures/global_scatter_",var_name,"_",sensor_Z,".png"), fig_stack, width = 12, height = 9)
   } else if(sensor_count == 3){
-    fig_a <- global_triptych(var_name, ply_grid$sensor_Y[1], cut_legend = "cut")
-    fig_b <- global_triptych(var_name, ply_grid$sensor_Y[2], cut_legend = "cut")
-    fig_c <- global_triptych(var_name, ply_grid$sensor_Y[3])
+    fig_a <- global_triptych(var_name, ply_grid$sensor_Y[1], cut_legend = "cut", panel_labels = c("a)", "b)", "c)"))
+    fig_b <- global_triptych(var_name, ply_grid$sensor_Y[2], cut_legend = "cut", panel_labels = c("d)", "e)", "f)"))
+    fig_c <- global_triptych(var_name, ply_grid$sensor_Y[3], panel_labels = c("h)", "i)", "j)"))
     fig_stack <- ggpubr::ggarrange(fig_a, fig_b, fig_c, ncol = 1, nrow = sensor_count, 
-                                   labels = c("a)", "b)", "c)"), heights = c(1, 1, 1.13)) + 
+                                   # labels = c("a)", "b)", "c)"), 
+                                   heights = c(1, 1, 1.13)) + 
       ggpubr::bgcolor("white") + ggpubr::border("white", size = 2)
     ggsave(paste0("figures/global_scatter_",var_name,"_",sensor_Z,".png"), fig_stack, width = 12, height = 13)
   }
@@ -169,8 +179,6 @@ global_triptych_stack <- function(var_name, sensor_Z){
 
 
 # Global scatterplots -----------------------------------------------------
-
-# TODO: Rather have each panel have a letter label, not each row.
 
 # In situ
 global_triptych_stack("insitu", "HYPERPRO")
@@ -188,6 +196,14 @@ global_triptych_stack("RHOW", "OLCI")
 # Create a hyperspectral plot that shows all in situ sensors vs PACE and one other multispectral satellite
 # Add variance bars for multispectral data
 # Plus the photos from HYPERNETS
+
+# Using the HYPERPRO 2024-08-12 10:53:00 measurement as a reference as this has a PACE and VIIRS_N matchup
+pro_pace2 <- read_delim("~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_20260203/RHOW_HYPERPRO_vs_PACE_V2/HYPERPRO_vs_PACE_V2_vs_20240812T105300_RHOW.csv", delim = ";", col_types = "ccccnnic")
+pro_pace3 <- read_delim("~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_20260203/RHOW_HYPERPRO_vs_PACE_V30/HYPERPRO_vs_PACE_V30_vs_20240812T105300_RHOW.csv", delim = ";", col_types = "ccccnnic")
+pro_pace31 <- read_delim("~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_20260203/RHOW_HYPERPRO_vs_PACE_V31/HYPERPRO_vs_PACE_V31_vs_20240812T105300_RHOW.csv", delim = ";", col_types = "ccccnnic")
+pro_viirsn <- read_delim("~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_20260203/RHOW_HYPERPRO_vs_VIIRS_N/HYPERPRO_vs_VIIRS_N_vs_20240812T105300_RHOW.csv", delim = ";", col_types = "ccccnnic")
+pro_hyp <- read_delim("~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_20260203/RHOW_HYPERNETS_vs_HYPERPRO/HYPERNETS_vs_HYPERPRO_vs_20240812T104500_RHOW.csv", delim = ";", col_types = "ccccnnic")
+pro_tri <- read_delim("~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_20260203/RHOW_TRIOS_vs_HYPERPRO/TRIOS_vs_HYPERPRO_vs_20240812T104536_RHOW.csv", delim = ";", col_types = "ccccnnic")
 
 
 # Figure 4 ----------------------------------------------------------------

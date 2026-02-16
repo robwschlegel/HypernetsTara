@@ -237,7 +237,7 @@ W_nm_out <- function(sensor_Y, var_name){
     W_nm = c(410, 443, 486, 551)#, 671)
   } else if(sensor_Y %in% c("VIIRS_J1", "VIIRS_J2")){
     W_nm <- c(411, 445, 489, 556)#, 667)
-  } else if(sensor_Y %in% c("S3A", "S3B", "S3_all")){
+  } else if(sensor_Y %in% c("S3A", "S3B", "S3", "S3_all")){
     W_nm <- c(413, 443, 490, 560)#, 665, 681)
   } else {
     stop(paste0("Incorrect value for 'sensor_Y' : ",sensor_Y))
@@ -874,32 +874,69 @@ plot_global_nm <- function(df, var_name, sensor_X, sensor_Y){
   max_Y <- max(df_prep[sensor_Y_labs$sensor_col], na.rm = TRUE)
   max_axis <- max(max_X, max_Y)
   
+  # Get global stats
+  x_vec <- df_prep[[sensor_X_labs$sensor_col]]
+  y_vec <- df_prep[[sensor_Y_labs$sensor_col]]
+  
+  # Calculate statistics
+  df_stats <- base_stats(x_vec, y_vec)
+  
+  if(sensor_Y %in% sensor_Y %in% c("PACE_V2", "PACE_V30", "PACE_V31")){
+    point_alpha <- 0.3
+  } else if(var_name != "RHOW"){
+    point_alpha <- 0.3
+  } else {
+    point_alpha <- 0.9
+  }
+  
+  # Get pre-determined wavelengths
+  W_nm <- W_nm_out(sensor_Y, var_name)
+  
+  # Filter dataframe to only plot linear models for chosen wavebands
+  df_sub <- filter(df_prep, wavelength %in% W_nm)
+  
   # Plot
   if(sensor_Y == "S3"){
     pl_base <- ggplot(data = df_prep, 
                       aes_string(x = sensor_X_labs$sensor_col, y = sensor_Y_labs$sensor_col)) +
-      geom_point(aes(colour = wavelength_group, shape = Platform), size = 2)
+      geom_point(aes(colour = wavelength_group, shape = Platform), size = 2, alpha = point_alpha)
   } else {
     pl_base <- ggplot(data = df_prep, 
                       aes_string(x = sensor_X_labs$sensor_col, y = sensor_Y_labs$sensor_col)) +
-      geom_point(aes(colour = wavelength_group))
+      geom_point(aes(colour = wavelength_group), alpha = point_alpha)
   }
   pl_clean <- pl_base +
+    # Add 1:1 line
     geom_abline(slope = 1, intercept = 0, color = "black", linetype = "solid") +
-    geom_smooth(method = "lm", formula = y ~ x, color = "black", linetype = "dashed", se = FALSE) +
+    # Add global stats linear model
+    geom_smooth(method = "lm", formula = y ~ x, colour = "white", linewidth = 1.5, linetype = "dashed", se = FALSE) +
+    geom_smooth(method = "lm", formula = y ~ x, colour = "black", linewidth = 1, linetype = "dashed", se = FALSE) +
+    # Add dashed linear model lines for each waveband
+    # geom_smooth(data = df_sub, method = "lm", formula = y ~ x, linewidth = 1, linetype = "dashed", se = FALSE,
+    #             aes(group = as.factor(wavelength)), colour = "black", show.legend = FALSE) +
+    geom_smooth(data = df_sub, method = "lm", formula = y ~ x, linewidth = 1.5, linetype = "solid", se = FALSE,
+                aes(group = as.factor(wavelength)), colour = "white", alpha = 0.7, show.legend = FALSE) +
+    geom_smooth(data = df_sub, method = "lm", formula = y ~ x, linewidth = 1, linetype = "dashed", se = FALSE,
+                aes(colour = wavelength_group, group = as.factor(wavelength)), alpha = 0.7, show.legend = FALSE) +
+    # Add global stats text
+    annotate(geom = "text", x = 0, y = max_axis, hjust = 0, vjust = 1, size = 4,
+             label = paste0("Slope: ", df_stats$Slope, "\nβ: ", df_stats$Bias,"% \nϵ: ",df_stats$Error,"%")) +
+    # Make it pretty
     labs(x = paste0(sensor_X_labs$sensor_lab,"; ", var_labs$units_lab),
          y = paste0(sensor_Y_labs$sensor_lab,"; ", var_labs$units_lab),
          colour = "Wavelength (nm)") +
     scale_colour_manual(values = colour_nm) +
-    guides(colour = guide_legend(nrow = 1)) +
+    guides(colour = guide_legend(nrow = 1, override.aes = list(alpha = 1.0, size = 3))) +
     coord_fixed(xlim = c(0, max_axis), ylim = c(0, max_axis)) +
     theme_minimal() +
     theme(panel.border = element_rect(fill = NA, color = "black"),
-          legend.title = element_text(size = 12),
-          legend.text = element_text(size = 10),
+          legend.title = element_text(size = 14),
+          legend.text = element_text(size = 12),
           legend.position = "bottom",
-          axis.title.x = element_markdown(),
-          axis.title.y = element_markdown())
+          axis.title.x = element_markdown(size = 12),
+          axis.title.y = element_markdown(size = 12),
+          axis.text = element_text(size = 10))
+  # pl_clean
   return(pl_clean)
 }
 
