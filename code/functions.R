@@ -910,7 +910,7 @@ plot_global_nm <- function(df, var_name, sensor_X, sensor_Y){
     # Add 1:1 line
     geom_abline(slope = 1, intercept = 0, color = "black", linetype = "solid") +
     # Add global stats linear model
-    geom_smooth(method = "lm", formula = y ~ x, colour = "white", linewidth = 1.5, linetype = "dashed", se = FALSE) +
+    geom_smooth(method = "lm", formula = y ~ x, colour = "white", linewidth = 1.5, linetype = "solid", se = FALSE) +
     geom_smooth(method = "lm", formula = y ~ x, colour = "black", linewidth = 1, linetype = "dashed", se = FALSE) +
     # Add dashed linear model lines for each waveband
     # geom_smooth(data = df_sub, method = "lm", formula = y ~ x, linewidth = 1, linetype = "dashed", se = FALSE,

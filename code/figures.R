@@ -262,6 +262,7 @@ pl_spect <- ggplot(data = pro_all_long, aes(x = wavelength, y = rhow, colour = s
         axis.title.y = element_markdown(size = 12),
         axis.text = element_text(size = 10))
 
+# Prep each jpg
 pl_ld <- ggplot() +
   geom_image(aes(x = 0, y = 0), image = hyp_LD, size = 1) +
   labs(title = "<i>L<sub>d</sub></i>") + theme_void() +
@@ -289,7 +290,73 @@ ggsave("figures/fig_3.png", fig_3, width = 12, height = 9)
 # Figure 4 ----------------------------------------------------------------
 
 # Matchup scatterplots for everything shown in Figure 3, with statistic panels in each pane;
-df <- 
+sensor_X <- "HyperPRO"; sensor_Y <- "PACE v2.0"
+sensor_X <- "HyperPRO"; sensor_Y <- "VIIRS SNPP"
+
+df_prep <- pro_all_long |> 
+  filter(sensor %in% c(sensor_X, sensor_Y)) |> 
+  filter(wavelength < 600) |> 
+  mutate(wavelength_group = cut(wavelength,
+                                breaks = c(350, 400, 450, 500, 550, 600, 650, 700, 750, 800),
+                                labels = labels_nm,
+                                include.lowest = FALSE, right = FALSE), .after = "wavelength") |> 
+  pivot_wider(names_from = sensor, values_from = rhow:std_min)
+
+# Get max values
+# NB: max/min is incerted in absolute values
+max_X <- max(df_prep[paste0("std_min_",sensor_X)], na.rm = TRUE)
+max_Y <- max(df_prep[paste0("std_min_",sensor_Y)], na.rm = TRUE)
+max_axis <- max(max_X, max_Y)
+
+# Get global stats
+x_vec <- df_prep[[paste0("rhow_",sensor_X)]]
+y_vec <- df_prep[[paste0("rhow_",sensor_Y)]]
+
+# Calculate statistics
+df_stats <- base_stats(x_vec, y_vec)
+
+# Get pretty labels
+var_labs <- pretty_label_func("RHOW")
+
+# The first points
+if(grepl("VIIRS", sensor_Y)){
+  pl_base <- ggplot(data = df_prep, 
+                    aes_string(x = paste0("rhow_",sensor_X), y = paste0("`rhow_",sensor_Y,"`"))) +
+    geom_errorbar(aes_string(xmin = paste0("std_min_",sensor_X), xmax = paste0("std_max_",sensor_X)), width = 0.0005) +
+    geom_errorbar(aes_string(ymin = paste0("`std_min_",sensor_Y,"`"), ymax = paste0("`std_max_",sensor_Y,"`")), width = 0.0005) +
+    geom_point(aes(colour = wavelength_group), size = 5, alpha = 0.9)
+} else {
+  pl_base <- ggplot(data = df_prep, 
+                      aes_string(x = paste0("rhow_",sensor_X), y = paste0("`rhow_",sensor_Y,"`"))) +
+    geom_point(aes(colour = wavelength_group), size = 3, alpha = 0.9)
+}
+
+pl_single <- pl_base +
+  # Add 1:1 line
+  geom_abline(slope = 1, intercept = 0, color = "black", linetype = "solid") +
+  # Add global stats linear model
+  geom_smooth(method = "lm", formula = y ~ x, colour = "white", linewidth = 1.5, linetype = "solid", se = FALSE) +
+  geom_smooth(method = "lm", formula = y ~ x, colour = "black", linewidth = 1, linetype = "dashed", se = FALSE) +
+  # Add global stats text
+  annotate(geom = "text", x = 0, y = max_axis, hjust = 0, vjust = 1, size = 4,
+           label = paste0("Slope: ", df_stats$Slope, "\nβ: ", df_stats$Bias,"% \nϵ: ",df_stats$Error,"%")) +
+  # Make it pretty
+  labs(x = paste0(sensor_X,"; ", var_labs$units_lab),
+       y = paste0(sensor_Y,"; ", var_labs$units_lab),
+       colour = "Wavelength (nm)") +
+  scale_colour_manual(values = colour_nm) +
+  guides(colour = guide_legend(nrow = 1, override.aes = list(alpha = 1.0, size = 3))) +
+  coord_fixed(xlim = c(0, max_axis), ylim = c(0, max_axis)) +
+  theme_minimal() +
+  theme(panel.border = element_rect(fill = NA, color = "black"),
+        legend.title = element_text(size = 14),
+        legend.text = element_text(size = 12),
+        legend.position = "bottom",
+        axis.title.x = element_markdown(size = 12),
+        axis.title.y = element_markdown(size = 12),
+        axis.text = element_text(size = 10))
+# pl_single
+
 
 # PACE Supp ----------------------------------------------------------------
 
