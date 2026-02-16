@@ -10,6 +10,7 @@ library(ncdf4)
 library(FNN) # Needed for fastest nearest neighbor searching
 library(geosphere) # For determining distance between points
 library(ggtext) # For rich text labels
+library(ggimage) # For adding .jpg files to figures
 library(patchwork) # For complex paneling of figures
 library(doParallel); registerDoParallel(cores = detectCores() - 2)
 

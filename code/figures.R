@@ -205,12 +205,91 @@ pro_viirsn <- read_delim("~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/tara_matc
 pro_hyp <- read_delim("~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_20260203/RHOW_HYPERNETS_vs_HYPERPRO/HYPERNETS_vs_HYPERPRO_vs_20240812T104500_RHOW.csv", delim = ";", col_types = "ccccnnic")
 pro_tri <- read_delim("~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_20260203/RHOW_TRIOS_vs_HYPERPRO/TRIOS_vs_HYPERPRO_vs_20240812T104536_RHOW.csv", delim = ";", col_types = "ccccnnic")
 
+# Load the RGB images taken by HYPERNETS at the closest available timing
+hyp_LD <- "~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/Hypernets_processed_data/12/SEQ20240812T104553/image/HYPERNETS_W_MAFR_IMG_20240812T1045_20240912T1030_006_140_90_v2.0.jpg"
+hyp_LU <- "~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/Hypernets_processed_data/12/SEQ20240812T104553/image/HYPERNETS_W_MAFR_IMG_20240812T1045_20240912T1030_009_40_90_v2.0.jpg"
+hyp_ED <- "~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/Hypernets_processed_data/12/SEQ20240812T104553/image/HYPERNETS_W_MAFR_IMG_20240812T1045_20240912T1030_015_180_90_v2.0.jpg"
+hyp_SUN <- "~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/Hypernets_processed_data/12/SEQ20240812T104553/image/HYPERNETS_W_MAFR_IMG_20240812T1045_20240912T1030_016_0_0_v2.0.jpg"
+
+# Combine wide for reference
+pro_all <- rbind(pro_pace2, pro_pace3, pro_pace31, pro_viirsn, pro_hyp, pro_tri) |> 
+  `colnames<-`(c("sensor", colnames(pro_pace2)[2:329])) |> 
+  filter(!sensor %in% c("HYPERPRO 4", "HYPERPRO 5", "HYPERPRO 6", "HYPERPRO 7")) |> 
+  distinct() |> mutate(sensor = gsub(" 1$| 2$| 3$| 4$| 5$| 6$| 7$| 8$| 9$", "", sensor))
+
+# Melt and prep for plotting
+pro_all_long <- pro_all |> 
+  dplyr::select(-(day:type)) |> 
+  pivot_longer(`380`:`700`, names_to = "wavelength") |> 
+  filter(!is.na(value)) |> 
+  mutate(wavelength = as.numeric(wavelength),
+         data_type = case_when(data_type == "weighted" ~ "rhow", TRUE ~ data_type),
+         sensor = case_when(sensor == "HYPERPRO" ~ "HyperPRO",
+                            sensor == "PACE_V2" ~ "PACE v2.0",
+                            sensor == "PACE_V30" ~ "PACE v3.0",
+                            sensor == "PACE_V31" ~ "PACE v3.1",
+                            sensor == "VIIRS_N" ~ "VIIRS SNPP",
+                            sensor == "Hyp" ~ "HYPERNETS",
+                            sensor == "Hyp_nosc" ~ "HYPERNETS (nosc)",
+                            sensor == "TRIOS" ~ "So-Rad")) |> 
+  pivot_wider(names_from = data_type, values_from = value) |> 
+  filter(wavelength >= 400, wavelength <= 600) |> 
+  filter(sensor != "HYPERNETS (nosc)") |>  # Not interesting for this match-up
+  mutate(sensor = factor(sensor, levels = c("HyperPRO", "So-Rad", "HYPERNETS", "PACE v2.0", "PACE v3.0", "PACE v3.1", "VIIRS SNPP")))
+
+# The hyperspectral plot
+pl_spect <- ggplot(data = pro_all_long, aes(x = wavelength, y = rhow, colour = sensor, fill = sensor)) +
+  # geom_ribbon(data = filter(pro_all_long, sensor != "VIIRS SNPP"),
+  # aes(ymin = std_min, ymax = std_max), alpha = 0.1, colour = NA) +
+  geom_line(data = filter(pro_all_long, sensor != "VIIRS SNPP"), linewidth = 2, alpha = 0.7) +
+  geom_point(data = filter(pro_all_long, sensor == "VIIRS SNPP"), size = 3, show.legend = FALSE) +
+  geom_errorbar(data = filter(pro_all_long, sensor == "VIIRS SNPP"), 
+                aes(ymin = std_min, ymax = std_max), width = 5) +
+  # scale_colour_brewer(palette = "Dark2") +
+  scale_colour_manual(values = c("darkred", "darkorange", "goldenrod", "skyblue", "dodgerblue", "royalblue", "limegreen")) +
+  guides(colour = guide_legend(override.aes = list(alpha = 1.0, linewidth = 3))) +
+  labs(x = "Wavelength (nm)",
+       y = "<i>ρ<sub>w</sub></i> (sr<sup>-1</sup>)",
+       colour = "Sensor") +
+  theme_minimal() +
+  theme(legend.position = "inside",
+        legend.position.inside = c(0.9, 0.75),
+        legend.title = element_text(size = 14),
+        legend.text = element_text(size = 12),
+        legend.background = element_rect(colour = "black", fill = "white"),
+        panel.border = element_rect(fill = NA, color = "black"),
+        axis.title.x = element_text(size = 12),
+        axis.title.y = element_markdown(size = 12),
+        axis.text = element_text(size = 10))
+
+pl_ld <- ggplot() +
+  geom_image(aes(x = 0, y = 0), image = hyp_LD, size = 1) +
+  labs(title = "<i>L<sub>d</sub></i>") + theme_void() +
+  theme(plot.title = element_markdown(hjust = 0.5, vjust = 0))
+pl_lu <- ggplot() +
+  geom_image(aes(x = 0, y = 0), image = hyp_LU, size = 1) +
+  labs(title = "<i>L<sub>u</sub></i>") + theme_void() +
+  theme(plot.title = element_markdown(hjust = 0.5, vjust = 0))
+pl_ed <- ggplot() +
+  geom_image(aes(x = 0, y = 0), image = hyp_ED, size = 1) +
+  labs(title = "<i>E<sub>d</sub></i>") + theme_void() +
+  theme(plot.title = element_markdown(hjust = 0.5, vjust = 0))
+pl_sun <- ggplot() +
+  geom_image(aes(x = 0, y = 0), image = hyp_SUN, size = 1) +
+  labs(title = "<i>Sun</i>") + theme_void() +
+  theme(plot.title = element_markdown(hjust = 0.5, vjust = 0))
+
+# Combine photos into one row
+fig_3_bottom <- ggpubr::ggarrange(pl_ld, pl_lu, pl_ed, pl_sun, nrow = 1, ncol = 4)
+fig_3 <- ggpubr::ggarrange(pl_spect, fig_3_bottom, ncol = 1, nrow = 2, heights = c(2, 1)) +
+  ggpubr::bgcolor("white") + ggpubr::border("white", size = 2)
+ggsave("figures/fig_3.png", fig_3, width = 12, height = 9)
+
 
 # Figure 4 ----------------------------------------------------------------
 
 # Matchup scatterplots for everything shown in Figure 3, with statistic panels in each pane;
-# Add intercept and R2
-
+df <- 
 
 # PACE Supp ----------------------------------------------------------------
 
