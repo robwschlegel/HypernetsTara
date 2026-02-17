@@ -22,7 +22,24 @@ process_sensor("RHOW", "OCI")
 process_sensor("RHOW", "VIIRS")
 process_sensor("RHOW", "OLCI")
 
-# TODO: Write a chunk that gives the range of dates and times of sampling
+# Re-load all single matchups
+matchup_single_all <- map_dfr(dir("output", pattern = "matchup_stats_", full.names = TRUE), read_csv)
+
+# Date and time range of samples per sensor
+matchup_date_time_range <- matchup_single_all |> 
+  dplyr::select(sensor_X, dateTime_X) |> 
+  distinct() |> 
+  mutate(date = as.Date(dateTime_X),
+         time = format(dateTime_X, format = "%H:%M:%S")) |> 
+  summarise(date_min = min(date), date_max = max(date),
+            time_min = min(time), time_max = max(time), .by = "sensor_X")
+
+# Unique number of satellite passes available for each platform+sensor/version
+matchup_sat_uniq <- matchup_single_all |> 
+  dplyr::select(sensor_X, dateTime_X) |> 
+  filter(!(sensor_X %in% c("Hyp", "TRIOS", "HYPERPRO"))) |> 
+  distinct() |> 
+  summarise(sat_count = n(), .by = "sensor_X")
 
 
 # Global statistics --------------------------------------------------------
@@ -42,11 +59,19 @@ process_sensor("RHOW", "VIIRS", "global")
 process_sensor("RHOW", "OLCI", "global")
 process_sensor("RHOW", "OCI", "global")
 
-# Load all global stats to get matchups counts, outliers, etc.
-file_list_global_stats <- dir("output", pattern = "global", full.names = TRUE)
-global_count <- map_dfr(file_list_global_stats, read_csv)
-global_count_var_name <- global_count|> 
-  # filter(var_name == "RHOW") |>
+# Load all global stats
+global_stats_all <- map_dfr(dir("output", pattern = "global", full.names = TRUE), read_csv)
+
+# Visualise difference between linear-space and log-space slopes
+global_stats_all |> 
+  filter(sensor_X %in% c("HYPERNETS", "TRIOS", "HYPERPRO")) |> 
+  ggplot() +
+  geom_histogram(aes(x = Slope), colour = "green", alpha = 0.3, binwidth = 1) +
+  geom_histogram(aes(x = Slope_log), colour = "red", alpha = 0.3, binwidth = 1) +
+  facet_grid(sensor_X ~ sensor_Y)
+
+# Get matchups counts, outliers, etc.
+global_count_var_name <- global_stats_all |> 
   filter(sensor_X %in% c("HYPERNETS", "TRIOS", "HYPERPRO")) |> 
   dplyr::select(var_name:sensor_Y) |> 
   group_by(var_name, sensor_X, sensor_Y) |> 
@@ -54,9 +79,12 @@ global_count_var_name <- global_count|>
   ungroup() |> 
   distinct()
 
-# TODO: Write a chunk that quantifies which sensors matched most closely to which satellites.
-
-# TODO: Write a chunk that loads the global results exactly as they would appear in each table
+# Quantify which sensors matched most closely to which satellites
+global_match_mean <- global_stats_all |> 
+  filter(sensor_X %in% c("HYPERNETS", "TRIOS", "HYPERPRO")) |> 
+  summarise(Slope = mean(Slope),
+            Bias = mean(Bias),
+            Error = mean(Error), .by = c("sensor_X", "sensor_Y"))
 
 
 # Check individual matchups -----------------------------------------------

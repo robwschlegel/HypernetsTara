@@ -14,7 +14,7 @@ source("code/functions.R")
 # var_name = "RHOW"; sensor_Y = "HYPERPRO"
 # var_name = "RHOW"; sensor_Y = "VIIRS_J2"
 # var_name = "RHOW"; sensor_Y = "S3"; panel_labels <- c("a)", "b)", "c)")
-global_triptych <- function(var_name, sensor_Y, panel_labels, cut_legend = NULL){
+global_triptych <- function(var_name, sensor_Y, panel_labels = "", cut_legend = "no"){
   
   # Check that in situ data are being requested if variable is anything other than Rhow
   if(var_name != "RHOW" & sensor_Y != "HYPERPRO") stop("Can only use RHOW with remote data matchups")
@@ -58,25 +58,21 @@ global_triptych <- function(var_name, sensor_Y, panel_labels, cut_legend = NULL)
     match_base_3 <- match_base_3[!match_base_3$file_name %in% outliers_all$file_name,]
   }
   
-  # Filter out wavelengths above 590 if plotting Rhow data
-  if(var_name == "RHOW"){
-    match_base_1 <- filter(match_base_1, wavelength < 600) 
-    match_base_2 <- filter(match_base_2, wavelength < 600) 
-    match_base_3 <- filter(match_base_3, wavelength < 600)
-  } else if (var_name == "LU"){
-    match_base_1 <- filter(match_base_1, wavelength < 600) 
+  # Filter out wavelengths above 590 if plotting Rhow or LW data
+  if(var_name %in% c("RHOW", "LW")){
+    match_base_1 <- filter(match_base_1, wavelength >= 400, wavelength < 600) 
+    match_base_2 <- filter(match_base_2, wavelength >= 400, wavelength < 600) 
+    match_base_3 <- filter(match_base_3, wavelength >= 400, wavelength < 600)
   }
   
   # Create the three figures
   print("Creating figures")
-  if(sensor_Y == "HYPERPRO"){
-    if(var_name %in% c ("LU", "LD")){
-      match_fig_1 <- plot_global_nm(match_base_1, var_name, "TRIOS", "HYPERNETS")
-    } else {
-      match_fig_1 <- plot_global_nm(match_base_1, var_name, "HYPERPRO", "TRIOS")
-      match_fig_2 <- plot_global_nm(match_base_2, var_name, "HYPERPRO", "HYPERNETS")
-      match_fig_3 <- plot_global_nm(match_base_3, var_name, "TRIOS", "HYPERNETS")
-    }
+  if(var_name %in% c ("LU", "LD")){
+    match_fig_1 <- plot_global_nm(match_base_1, var_name, "TRIOS", "HYPERNETS")
+  } else if(sensor_Y == "HYPERPRO"){
+    match_fig_1 <- plot_global_nm(match_base_1, var_name, "HYPERPRO", "TRIOS")
+    match_fig_2 <- plot_global_nm(match_base_2, var_name, "HYPERPRO", "HYPERNETS")
+    match_fig_3 <- plot_global_nm(match_base_3, var_name, "TRIOS", "HYPERNETS")
   } else {
     match_fig_1 <- plot_global_nm(match_base_1, var_name, "HYPERPRO", sensor_Y)
     match_fig_2 <- plot_global_nm(match_base_2, var_name, "TRIOS", sensor_Y)
@@ -91,12 +87,14 @@ global_triptych <- function(var_name, sensor_Y, panel_labels, cut_legend = NULL)
       # theme(legend.position = "right",
             # legend.direction = "horizontal")
     # ggsave(paste0("figures/global_scatter_all_",var_name,"_",sensor_Y,".png"), match_fig, width = 5, height = 5)
-  } else if(!is.null(cut_legend)){
+  } else if(cut_legend == "cut"){
     match_fig_1 <- match_fig_1 + guides(colour = "none")
     match_fig_2 <- match_fig_2 + guides(colour = "none")
     match_fig_3 <- match_fig_3 + guides(colour = "none")
     # match_fig <- match_fig_1 + match_fig_2 + match_fig_3
     match_fig <- ggpubr::ggarrange(match_fig_1, match_fig_2, match_fig_3, ncol = 3, nrow = 1, labels = panel_labels)
+  } else if(cut_legend == "extract"){
+    match_fig <- cowplot::get_legend(match_fig_1)
   } else {
     match_fig <- ggpubr::ggarrange(match_fig_1, match_fig_2, match_fig_3, ncol = 3, nrow = 1,
                                    common.legend = TRUE, legend = "bottom", labels = panel_labels)
@@ -125,16 +123,20 @@ global_triptych_stack <- function(var_name, sensor_Z){
   # Create figures
   if(var_name != "RHOW"){
     fig_a <- global_triptych("ED", "HYPERPRO", cut_legend = "cut", panel_labels = c("a)", "b)", "c)"))
-    fig_b <- global_triptych("LU", "HYPERPRO", cut_legend = "cut", panel_labels = "")
-    fig_c <- global_triptych("LD", "HYPERPRO", cut_legend = "cut", panel_labels = "")
-    fig_d <- global_triptych("LW", "HYPERPRO", panel_labels = c("f)", "g)", "h)"))
+    fig_b <- global_triptych("LU", "HYPERPRO", cut_legend = "cut")
+    fig_c <- global_triptych("LD", "HYPERPRO", cut_legend = "cut")
+    fig_d <- global_triptych("LW", "HYPERPRO", cut_legend = "cut", panel_labels = c("f)", "g)", "h)"))
+    fig_legend <- global_triptych("ED", "HYPERPRO", cut_legend = "extract")
+    # fig_legend_bottom <- cowplot::get_legend(fig_legend)
     
     # Combine into special layout
     fig_mid <- ggpubr::ggarrange(fig_b, fig_c, ncol = 2, nrow = 1, 
-                                 labels = c("d)", "e)"), hjust = c(-4.9, -5.7), vjust = c(0.5, 0.5))
+                                 labels = c("d)", "e)"), hjust = c(-4.7, -5.4), vjust = c(0.5, 0.5))
     fig_stack <- ggpubr::ggarrange(fig_a, fig_mid, fig_d, ncol = 1, nrow = 3, 
                                    # labels = c("a)", "", "d)"), hjust = c(-2.2, 0, -1.5), 
-                                   heights = c(1.09, 1, 1.17)) + 
+                                   # heights = c(1.09, 1, 1.17), 
+                                   legend.grob = fig_legend,
+                                   common.legend = TRUE, legend = "bottom") + 
       ggpubr::bgcolor("white") + ggpubr::border("white", size = 2)
     ggsave(paste0("figures/global_scatter_OTHER_in_situ.png"), fig_stack, width = 11, height = 12)
   } else if(sensor_Z == "HYPERPRO"){
@@ -185,10 +187,10 @@ global_triptych_stack("insitu", "HYPERPRO")
 global_triptych_stack("RHOW", "HYPERPRO")
  
 # Remote
-global_triptych_stack("RHOW", "OCI")
 global_triptych_stack("RHOW", "MODIS")
 global_triptych_stack("RHOW", "VIIRS")
 global_triptych_stack("RHOW", "OLCI")
+global_triptych_stack("RHOW", "OCI")
 
 
 # Figure 3 ----------------------------------------------------------------

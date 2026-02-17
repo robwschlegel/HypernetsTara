@@ -32,7 +32,7 @@ options(scipen = 9999)
 # Function that assembles file directory based on desired variable and sensors
 file_path_build <- function(var_name, sensor_X, sensor_Y){
   file_path <- paste0("~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_20260203/",
-                      toupper(var_name),"_",toupper(sensor_X),"_vs_", toupper(sensor_Y),"/")
+                      toupper(var_name),"_",toupper(sensor_X),"_vs_", toupper(sensor_Y))
 }
 
 # Load a single matchup file and create mean values from all replicates
@@ -98,7 +98,7 @@ load_matchup_long <- function(file_name){
     mutate(wavelength_group = cut(wavelength,
                                   breaks = c(350, 400, 450, 500, 550, 600, 650, 700, 750, 800),
                                   labels = labels_nm,
-                                  include.lowest = FALSE, right = FALSE), .after = "wavelength")
+                                  include.lowest = TRUE, right = FALSE), .after = "wavelength")
 }
 
 # Load all files in a given folder
@@ -125,13 +125,30 @@ load_matchups_folder <- function(var_name, sensor_X, sensor_Y, long = FALSE){
   return(match_base)
 }
 
-# Convenience function to get lon/lat coords from SeaBird files
+# Convenience function to get lon/lat coords from HYPERNETS .nc files
 # file_name <- "~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/Trios_processed_data/TARA_HyperBOOST_Ed_20240323_20240821_Version_20250911.sb"
 # file_name <- "/home/calanus/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/Hypernets_processed_data/07/SEQ20240807T123357/HYPERNETS_W_MAFR_L1B_RAD_20240807T1233_20240912T1039_v2.0.nc"
 # file_name <- "~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/Hypernets_processed_data/10/SEQ20240810T173010/HYPERNETS_W_MAFR_L1B_RAD_20240810T1730_20240912T1013_v2.0.nc"
 # file_name <- "~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/Hypernets_processed_data/18/SEQ20240818T093051/HYPERNETS_W_MAFR_L0A_BLA_20240818T0930_20240912T1031_v2.0.nc"
 load_HYPERNETS_coords <- function(file_name){
   ncdump::NetCDF(file_name)$attribute$global[c("site_longitude", "site_latitude")]
+}
+
+# Convenience function to get lon/lat coords from HyperPRO SeaBird files
+# file_name <- "~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/hyperpro_processed_data/TaraEuropa_HyperPro_20240821T095801_Ed_Lu_Lw_Rrs_R2.sb"
+load_HyperPRO_coords <- function(file_name){
+  start_date <- as.Date(sapply(strsplit(read_lines(file_name, skip = 12, n_max = 1), "="), "[[", 2), format = "%Y%m%d")
+  end_date <- as.Date(sapply(strsplit(read_lines(file_name, skip = 13, n_max = 1), "="), "[[", 2), format = "%Y%m%d")
+  start_time <- sapply(strsplit(read_lines(file_name, skip = 14, n_max = 1), "="), "[[", 2)
+  end_time <- sapply(strsplit(read_lines(file_name, skip = 15, n_max = 1), "="), "[[", 2)
+  lat_N <- as.numeric(gsub("[^0-9.]", "", read_lines(file_name, skip = 16, n_max = 1)))
+  lat_S <- as.numeric(gsub("[^0-9.]", "", read_lines(file_name, skip = 17, n_max = 1)))
+  lon_E <- as.numeric(gsub("[^0-9.]", "", read_lines(file_name, skip = 18, n_max = 1)))
+  lon_W <- as.numeric(gsub("[^0-9.]", "", read_lines(file_name, skip = 19, n_max = 1)))
+  df_res <- data.frame(start_date = start_date, end_date = end_date,
+                       start_time = start_time, end_time = end_time,
+                       lat_N = lat_N, lat_S = lat_S, lon_E = lon_E, lon_W = lon_W)
+  return(df_res)
 }
 
 # Check the amount of variance in satellite files and return a message if there is an issue
@@ -317,24 +334,28 @@ base_stats <- function(x_vec, y_vec){
   lin_fit <- lm(y_vec ~ x_vec)
   slope <- coef(lin_fit)[2]
   
-  # Calculate Bias and Error (Pahlevan's method)
-  log_ratio <- log10(y_vec / x_vec)
-  bias_pahlevan <- median(log_ratio, na.rm = TRUE)
-  bias_pahlevan_final <- sign(bias_pahlevan) * (10^abs(bias_pahlevan) - 1)
-  bias_pahlevan_final_perc <- bias_pahlevan_final * 100
+  # Calculate log-log linear slope
+  log_lin_fit <- lm(log10(y_vec) ~ log10(x_vec))
+  log_slope <- coef(log_lin_fit)[2]
   
-  error_pahlevan <- median(abs(log_ratio), na.rm = TRUE)
-  error_pahlevan_final <- 10^error_pahlevan - 1
-  error_pahlevan_final_in_perc <- error_pahlevan_final * 100
+  # Calculate Bias
+  log_ratio <- log10(y_vec / x_vec)
+  log_ratio_median <- median(log_ratio, na.rm = TRUE)
+  bias_perc <- 100 * (sign(log_ratio_median) * (10^abs(log_ratio_median) - 1))
+  
+  # Calculate error
+  log_ratio_median_abs <- median(abs(log_ratio), na.rm = TRUE)
+  error_perc <- 100 * (10^log_ratio_median_abs - 1)
   
   # Combine int data.frame and exit
   df_stats <- data.frame(row.names = NULL,
                          Slope = round(slope, 2),
-                         RMSE = round(rmse, 4),
-                         MSA = round(msa, 4),
-                         MAPE = round(mape, 1),
-                         Bias = round(bias_pahlevan_final_perc, 1),
-                         Error = round(error_pahlevan_final_in_perc, 1))
+                         Slope_log = round(log_slope, 2),
+                         RMSE = round(rmse, 6),
+                         MSA = round(msa, 6),
+                         MAPE = round(mape, 2),
+                         Bias = round(bias_perc, 2),
+                         Error = round(error_perc, 2))
   return(df_stats)
 }
 
@@ -362,6 +383,7 @@ get_nearest_pixels <- function(df_data, target_lat, target_lon, n_pixels){
 # Function that interrogates each matchup file to produce the needed output for all following comparisons
 # file_path <- "~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_v2/RHOW_HYPERNETS_vs_HYPERPRO/HYPERNETS_vs_HYPERPRO_vs_20240809T073700_RHOW.csv"
 # file_path <- "~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_v2/ED_HYPERNETS_vs_TRIOS/HYPERNETS_vs_TRIOS_vs_20240808T065700_ED.csv"
+# file_path <- "/home/calanus/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_20260203/RHOW_HYPERPRO_vs_PACE_V31/HYPERPRO_vs_PACE_V31_vs_20240814T101100_RHOW.csv"
 # file_path <- file_list[1]
 process_matchup_file <- function(file_path){
   
@@ -393,10 +415,16 @@ process_matchup_file <- function(file_path){
         
         # Melt it for additional stats
         df_sensor_long <- df_sensor_sub |> 
-          pivot_longer(cols = matches("1|2|3|4|5|6|7|8|9"), names_to = "Wavelength", values_to = "Value") |> 
+          pivot_longer(cols = matches("1|2|3|4|5|6|7|8|9"), names_to = "wavelength", values_to = "value") |> 
           dplyr::select(-dateTime, -longitude, -latitude) |> 
-          pivot_wider(names_from = sensor, values_from = Value) |> 
+          pivot_wider(names_from = sensor, values_from = value) |> 
           na.omit()
+        
+        # Filter wavelengths according to variable being compared
+        if(grepl("RHOW|LW", file_path)){
+          df_sensor_long <- df_sensor_long |> 
+            filter(wavelength >= 400, wavelength <= 600)
+        }
         
         # get vectors
         x_vec <- df_sensor_long[[sensors[i]]]
@@ -419,11 +447,12 @@ process_matchup_file <- function(file_path){
                              diff_time = time_diff,
                              n = nrow(df_sensor_long),
                              Slope = df_stats$Slope,
-                             # RMSE = df_stats$RMSE,
-                             # MSA = df_stats$MSA,
-                             MAPE = df_stats$MAPE,
+                             Slope_log = df_stats$Slope_log,
                              Bias = df_stats$Bias,
-                             Error = df_stats$Error)
+                             Error = df_stats$Error,
+                             RMSE = df_stats$RMSE,
+                             MSA = df_stats$MSA,
+                             MAPE = df_stats$MAPE)
         df_results <- rbind(df_results, df_res)
       }
     }
@@ -435,6 +464,7 @@ process_matchup_file <- function(file_path){
 }
 
 # Function that runs this over all matchup files in a directory
+# var_name = "RHOW"; sensor_X = "HYPERNETS"; sensor_Y = "HYPERPRO"
 # var_name = "RHOW"; sensor_X = "HYPERPRO"; sensor_Y = "PACE_v31"
 # var_name = "RHOW"; sensor_X = "HYPERNETS"; sensor_Y = "AQUA"
 # var_name = "RHOW"; sensor_X = "HYPERNETS"; sensor_Y = "AQUA"
@@ -459,7 +489,8 @@ process_matchup_folder <- function(var_name, sensor_X, sensor_Y){
 # Process multiple folders based on request
 # var_name = "LU"; sensor_Z = "HYPERPRO"
 # var_name = "ED"; sensor_Z = "HYPERPRO"
-# var_name = "RHOW"; sensor_Z = "VIIRS"
+# var_name = "RHOW"; sensor_Z = "HYPERPRO"
+# var_name = "RHOW"; sensor_Z = "OCI"
 # var_name = "RHOW"; sensor_Z = "OLCI"; stat_choice = "global"
 process_sensor <- function(var_name, sensor_Z, stat_choice = "matchup"){
   
@@ -486,16 +517,13 @@ process_sensor <- function(var_name, sensor_Z, stat_choice = "matchup"){
   
   # Process matchups and save output
   if(stat_choice == "matchup"){
-    proc_res <- plyr::mdply(ply_grid, process_matchup_folder, .parallel = TRUE)
+    proc_res <- plyr::mdply(ply_grid, process_matchup_folder, .parallel = FALSE)
     write_csv(proc_res, paste0("output/matchup_stats_",var_name,"_",sensor_Z,".csv"))
   } else {
     proc_res <- plyr::mdply(ply_grid, global_stats, .parallel = TRUE)
     write_csv(proc_res, paste0("output/global_stats_",var_name,"_",sensor_Z,".csv"))
   }
 }
-
-
-# Global matchup stats ----------------------------------------------------
 
 # Global stats per matchup wavelength
 # testers..
@@ -505,14 +533,13 @@ process_sensor <- function(var_name, sensor_Z, stat_choice = "matchup"){
 # var_name = "RHOW"; sensor_X = "TRIOS"; sensor_Y = "AQUA"
 # var_name = "RHOW"; sensor_X = "HYPERNETS"; sensor_Y = "PACE_V31"
 # var_name = "RHOW"; sensor_X = "HYPERNETS"; sensor_Y = "S3_all"
-# W_nm = c(412, 443, 488, 531, 555, 667)
 global_stats <- function(var_name, sensor_X, sensor_Y){
   
   # Create multiple folder paths if requested
   if(sensor_Y == "S3_all"){
     folder_path <- c(file_path_build(var_name, sensor_X, "S3A"),
                      file_path_build(var_name, sensor_X, "S3B"))
-    # NB: Different wavebands for VIIRS_N than VIIRS_J1 and VIIRS_J2
+  # NB: Different wavebands for VIIRS_N than VIIRS_J1 and VIIRS_J2
   # } else if(sensor_Y == "VIIRS_all"){
   #   folder_path <- c(file_path_build(var_name, sensor_X, "VIIRS_N"),
   #                    file_path_build(var_name, sensor_X, "VIIRS_J1"),
@@ -634,21 +661,29 @@ global_stats <- function(var_name, sensor_X, sensor_Y){
       
       # Create data.frame of results and add them to df_results
       df_XY <- data.frame(row.names = NULL,
-                            n_w_nm = n_match,
-                            sensor_X = sensor_X,
-                            sensor_Y = sensor_Y,
-                            Wavelength_nm = W_nm[i],
-                            Slope = df_stats_XY$Slope,
-                            Bias = df_stats_XY$Bias,
-                            Error = df_stats_XY$Error)
+                          n_w_nm = n_match,
+                          sensor_X = sensor_X,
+                          sensor_Y = sensor_Y,
+                          Wavelength_nm = W_nm[i],
+                          Slope = df_stats_XY$Slope,
+                          Slope_log = df_stats_XY$Slope_log,
+                          Bias = df_stats_XY$Bias,
+                          Error = df_stats_XY$Error,
+                          RMSE = df_stats_XY$RMSE,
+                          MSA = df_stats_XY$MSA,
+                          MAPE = df_stats_XY$MAPE)
       df_YX <- data.frame(row.names = NULL,
                           n_w_nm = n_match,
                           sensor_X = sensor_Y,
                           sensor_Y = sensor_X,
                           Wavelength_nm = W_nm[i],
                           Slope = df_stats_YX$Slope,
+                          Slope_log = df_stats_YX$Slope_log,
                           Bias = df_stats_YX$Bias,
-                          Error = df_stats_YX$Error)
+                          Error = df_stats_YX$Error,
+                          RMSE = df_stats_YX$RMSE,
+                          MSA = df_stats_YX$MSA,
+                          MAPE = df_stats_YX$MAPE)
       df_temp <- rbind(df_XY, df_YX)
       df_results <- rbind(df_results, df_temp)
     } else {
@@ -861,11 +896,11 @@ plot_matchup_single_nm <- function(df, sensor_X, sensor_Y){
   # Prep data
   df_prep <- df |> 
     filter(sensor %in% c(sensor_X, sensor_Y)) |> 
-    filter(wavelength < 600) |> 
+    filter(wavelength >= 400, wavelength < 600) |> 
     mutate(wavelength_group = cut(wavelength,
                                   breaks = c(350, 400, 450, 500, 550, 600, 650, 700, 750, 800),
                                   labels = labels_nm,
-                                  include.lowest = FALSE, right = FALSE), .after = "wavelength") |> 
+                                  include.lowest = TRUE, right = FALSE), .after = "wavelength") |> 
     pivot_wider(names_from = sensor, values_from = rhow:std_min)
   
   # Get max values
@@ -907,11 +942,11 @@ plot_matchup_single_nm <- function(df, sensor_X, sensor_Y){
     # Add 1:1 line
     geom_abline(slope = 1, intercept = 0, color = "black", linetype = "solid") +
     # Add global stats linear model
-    geom_smooth(method = "lm", formula = y ~ x, colour = "white", linewidth = 1.5, linetype = "solid", se = FALSE) +
+    geom_smooth(method = "lm", formula = y ~ x, colour = "white", alpha = 0.5, linewidth = 1.5, linetype = "solid", se = FALSE) +
     geom_smooth(method = "lm", formula = y ~ x, colour = "black", linewidth = 1, linetype = "dashed", se = FALSE) +
     # Add global stats text
     annotate(geom = "text", x = 0, y = max_axis, hjust = 0, vjust = 1, size = 4,
-             label = paste0("Slope: ", df_stats$Slope, "\nβ: ", df_stats$Bias,"% \nϵ: ",df_stats$Error,"%")) +
+             label = paste0("S: ", df_stats$Slope, "\nβ: ", df_stats$Bias,"% \nϵ: ",df_stats$Error,"%")) +
     # Make it pretty
     labs(x = paste0(sensor_X,"; ", var_labs$units_lab),
          y = paste0(sensor_Y,"; ", var_labs$units_lab),
@@ -998,7 +1033,7 @@ plot_global_nm <- function(df, var_name, sensor_X, sensor_Y){
                 aes(colour = wavelength_group, group = as.factor(wavelength)), alpha = 0.7, show.legend = FALSE) +
     # Add global stats text
     annotate(geom = "text", x = 0, y = max_axis, hjust = 0, vjust = 1, size = 4,
-             label = paste0("Slope: ", df_stats$Slope, "\nβ: ", df_stats$Bias,"% \nϵ: ",df_stats$Error,"%")) +
+             label = paste0("S: ", df_stats$Slope, "\nβ: ", df_stats$Bias,"% \nϵ: ",df_stats$Error,"%")) +
     # Make it pretty
     labs(x = paste0(sensor_X_labs$sensor_lab,"; ", var_labs$units_lab),
          y = paste0(sensor_Y_labs$sensor_lab,"; ", var_labs$units_lab),

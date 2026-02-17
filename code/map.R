@@ -29,19 +29,19 @@ station_GPS_unique <- station_GPS |>
   distinct()
 
 # Get raw Trios coordinates
-station_Trios <- read_csv("~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/Trios_processed_data/TARA_HyperBOOST_Rrs_20240323_20240821_Version_20250911.sb",
-                           col_select = 1:4, skip = 31, col_names = c("date", "time", "lat", "lon"))
+station_Trios <- map_dfr(dir("~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/Trios_processed_data/", full.names = TRUE),
+                         read_csv, col_select = 1:4, skip = 31, col_names = c("date", "time", "lat", "lon"))
 station_Trios_unique <- station_Trios |> 
   dplyr::rename(latitude = lat, longitude = lon) |> 
-  dplyr::select(longitude, latitude) |> 
+  mutate(date = as.Date(as.character(date), format = "%Y%m%d")) |> 
+  filter(date >= "2024-08-06", date <= "2024-08-21") |>
+  dplyr::select(date, longitude, latitude) |> 
   mutate(longitude = round(longitude, 2),
          latitude = round(latitude, 2)) |> 
   distinct()
 
 # Get raw HyperPRO coords
-# NB: These values appear to not have been transformed correctly to the study site region
-station_Pro <- read_csv("~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/hyperpro_processed_data/TaraEuropa_HyperPro_20240808T092219_Ed_Lu_Lw_Rrs_R2.sb",
-                          col_select = 1:4, skip = 33, col_names = c("date", "time", "lat", "lon"))
+station_Pro <- map_dfr(dir("~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/hyperpro_processed_data", full.names = TRUE), load_HyperPRO_coords)
 station_Pro_unique <- station_Pro |> 
   dplyr::rename(latitude = lat, longitude = lon) |> 
   dplyr::select(longitude, latitude) |> 
@@ -176,21 +176,20 @@ MODIS_water_df <- as.data.frame(MODIS_water, xy = TRUE, na.rm = TRUE) |>
 
 # Map of Tara mission -----------------------------------------------------
 
-# TODO: Constrain pixel values from 0 - 0.1
-
 # Map
 pl_map <- ggplot(data = station_in_situ, aes(x = longitude, y = latitude)) +
   annotation_borders(fill = "grey80") +
   geom_tile(data = MODIS_water_df, aes(x = x, y = y, fill = sur_refl_b01)) +
   # geom_path(data = station_GPS_unique) +
   geom_point(data = station_GPS_unique, size = 0.1) +
+  # Show Trios raw collection points
+  # geom_path(data = station_Trios_unique, colour = "red") +
+  # geom_point(data = station_Trios_unique, colour = "black") +
+  # The sampling stations
   geom_point(colour = "black", size = 5.5) +
   geom_point(aes(colour = as.factor(date)), size = 5) +
   geom_point(data = filter(station_in_situ, sensor == "HYPERPRO"), 
              colour = "maroon", size = 7, shape = 5, stroke = 2) +
-  # Show Trios raw collection points
-  # geom_path(data = station_Trios_unique, colour = "red") +
-  # geom_point(data = station_Trios_unique, colour = "red") +
   scale_fill_viridis_c(option = "D", breaks = c(0.03, 0.06, 0.1), labels = c("0.03", "0.06", ">0.10")) +
   scale_colour_discrete(palette = "Set3") +
   # scale_fill_viridis_c() +
