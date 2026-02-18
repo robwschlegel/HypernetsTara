@@ -134,7 +134,7 @@ global_triptych_stack <- function(var_name, sensor_Z){
                                  labels = c("d)", "e)"), hjust = c(-4.7, -5.4), vjust = c(0.5, 0.5))
     fig_stack <- ggpubr::ggarrange(fig_a, fig_mid, fig_d, ncol = 1, nrow = 3, 
                                    # labels = c("a)", "", "d)"), hjust = c(-2.2, 0, -1.5), 
-                                   # heights = c(1.09, 1, 1.17), 
+                                   heights = c(1.0, 0.91, 0.95),
                                    legend.grob = fig_legend,
                                    common.legend = TRUE, legend = "bottom") + 
       ggpubr::bgcolor("white") + ggpubr::border("white", size = 2)

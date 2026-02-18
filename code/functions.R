@@ -242,7 +242,7 @@ sensor_grid <- function(var_name, sensor_Z){
 W_nm_out <- function(sensor_Y, var_name){
   if(sensor_Y %in% c("HYPERNETS", "TRIOS", "HYPERPRO")){
     # NB: This allows for comparisons of higher wavelengths to be made for ED etc.
-    if(var_name != "RHOW"){
+    if(!(var_name %in% c("RHOW", "LW"))){
       W_nm <- c(400, 412, 443, 490, 510, 560, 620, 673)
     } else {
       W_nm <- c(400, 412, 443, 490, 510, 560)
@@ -946,7 +946,9 @@ plot_matchup_single_nm <- function(df, sensor_X, sensor_Y){
     geom_smooth(method = "lm", formula = y ~ x, colour = "black", linewidth = 1, linetype = "dashed", se = FALSE) +
     # Add global stats text
     annotate(geom = "text", x = 0, y = max_axis, hjust = 0, vjust = 1, size = 4,
-             label = paste0("S: ", df_stats$Slope, "\nβ: ", df_stats$Bias,"% \nϵ: ",df_stats$Error,"%")) +
+             label = paste0("S: ", sprintf("%.2f", df_stats$Slope), 
+                            "\nβ: ", sprintf("%.1f", df_stats$Bias),
+                            "% \nϵ: ", sprintf("%.1f", df_stats$Error),"%")) +
     # Make it pretty
     labs(x = paste0(sensor_X,"; ", var_labs$units_lab),
          y = paste0(sensor_Y,"; ", var_labs$units_lab),
@@ -994,7 +996,7 @@ plot_global_nm <- function(df, var_name, sensor_X, sensor_Y){
   # Calculate statistics
   df_stats <- base_stats(x_vec, y_vec)
   
-  if(sensor_Y %in% sensor_Y %in% c("PACE_V2", "PACE_V30", "PACE_V31")){
+  if(sensor_Y %in% sensor_Y %in% c("PACE_V2", "PACE_V30", "PACE_V31", "HYPERPRO", "TRIOS")){
     point_alpha <- 0.3
   } else if(var_name != "RHOW"){
     point_alpha <- 0.3
@@ -1033,7 +1035,9 @@ plot_global_nm <- function(df, var_name, sensor_X, sensor_Y){
                 aes(colour = wavelength_group, group = as.factor(wavelength)), alpha = 0.7, show.legend = FALSE) +
     # Add global stats text
     annotate(geom = "text", x = 0, y = max_axis, hjust = 0, vjust = 1, size = 4,
-             label = paste0("S: ", df_stats$Slope, "\nβ: ", df_stats$Bias,"% \nϵ: ",df_stats$Error,"%")) +
+             label = paste0("S: ", sprintf("%.2f", df_stats$Slope), 
+                            "\nβ: ", sprintf("%.1f", df_stats$Bias),
+                            "% \nϵ: ", sprintf("%.1f", df_stats$Error),"%")) +
     # Make it pretty
     labs(x = paste0(sensor_X_labs$sensor_lab,"; ", var_labs$units_lab),
          y = paste0(sensor_Y_labs$sensor_lab,"; ", var_labs$units_lab),

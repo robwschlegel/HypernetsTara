@@ -18,9 +18,9 @@ process_sensor("LW", "HYPERPRO")
 process_sensor("RHOW", "HYPERPRO")
 ## Satellite
 process_sensor("RHOW", "MODIS")
-process_sensor("RHOW", "OCI")
 process_sensor("RHOW", "VIIRS")
 process_sensor("RHOW", "OLCI")
+process_sensor("RHOW", "OCI")
 
 # Re-load all single matchups
 matchup_single_all <- map_dfr(dir("output", pattern = "matchup_stats_", full.names = TRUE), read_csv)
@@ -73,6 +73,7 @@ global_stats_all |>
 # Get matchups counts, outliers, etc.
 global_count_var_name <- global_stats_all |> 
   filter(sensor_X %in% c("HYPERNETS", "TRIOS", "HYPERPRO")) |> 
+  # filter(var_name == "RHOW") |> 
   dplyr::select(var_name:sensor_Y) |> 
   group_by(var_name, sensor_X, sensor_Y) |> 
   filter(n_w_nm == max(n_w_nm)) |> 
