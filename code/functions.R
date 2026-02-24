@@ -5,7 +5,6 @@
 # Libraries ---------------------------------------------------------------
 
 library(tidyverse)
-# library(readxl)
 library(ncdf4)
 library(FNN) # Needed for fastest nearest neighbor searching
 library(geosphere) # For determining distance between points
@@ -866,11 +865,11 @@ pretty_label_func <- function(char_string){
   if(char_string == "ED"){
     units_lab <- "<i>E<sub>d</sub></i> (W m<sup>-2</sup> nm<sup>-1</sup>)"
   } else if(char_string == "LD"){
-    units_lab <- "<i>L<sub>d</sub></i> (W m<sup>-2</sup> sr<sup>-1</sup>)"
+    units_lab <- "<i>L<sub>d</sub></i> (W m<sup>-2</sup> sr<sup>-1</sup> nm<sup>-1</sup>)"
   } else if(char_string == "LU"){
-    units_lab <- "<i>L<sub>u</sub></i> (W m<sup>-2</sup> sr<sup>-1</sup>)"
+    units_lab <- "<i>L<sub>u</sub></i> (W m<sup>-2</sup> sr<sup>-1</sup> nm<sup>-1</sup>)"
   } else if(char_string == "LW"){
-    units_lab <- "<i>L<sub>w</sub></i> (W m<sup>-2</sup> sr<sup>-1</sup>)"
+    units_lab <- "<i>L<sub>w</sub></i> (W m<sup>-2</sup> sr<sup>-1</sup> nm<sup>-1</sup>)"
   } else if(char_string == "RHOW"){
     units_lab <- "<i>ρ<sub>w</sub></i> (sr<sup>-1</sup>)"
   }
@@ -996,9 +995,7 @@ plot_global_nm <- function(df, var_name, sensor_X, sensor_Y){
   # Calculate statistics
   df_stats <- base_stats(x_vec, y_vec)
   
-  if(sensor_Y %in% sensor_Y %in% c("PACE_V2", "PACE_V30", "PACE_V31", "HYPERPRO", "TRIOS")){
-    point_alpha <- 0.3
-  } else if(var_name != "RHOW"){
+  if(sensor_Y %in% c("PACE_V2", "PACE_V30", "PACE_V31", "HYPERPRO", "TRIOS", "HYPERNETS")){
     point_alpha <- 0.3
   } else {
     point_alpha <- 0.9

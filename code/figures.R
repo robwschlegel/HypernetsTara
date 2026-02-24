@@ -134,7 +134,7 @@ global_triptych_stack <- function(var_name, sensor_Z){
                                  labels = c("d)", "e)"), hjust = c(-4.7, -5.4), vjust = c(0.5, 0.5))
     fig_stack <- ggpubr::ggarrange(fig_a, fig_mid, fig_d, ncol = 1, nrow = 3, 
                                    # labels = c("a)", "", "d)"), hjust = c(-2.2, 0, -1.5), 
-                                   heights = c(1.0, 0.91, 0.95),
+                                   heights = c(1.0, 0.84, 0.90),
                                    legend.grob = fig_legend,
                                    common.legend = TRUE, legend = "bottom") + 
       ggpubr::bgcolor("white") + ggpubr::border("white", size = 2)
@@ -348,12 +348,16 @@ v31_413 <- read_csv("data/PACE/PACE_OCI.20240809T105059.L2.OC_AOP.V3_1_rrs_413.c
   summarise(Rrs = mean(Rrs, na.rm = TRUE), .by = c("longitude", "latitude")) |> 
   dplyr::rename(v31_Rrs = Rrs)
 
+# Determine the cuts for the discrete groups
+# comp_cut <- c(-200, -150, -100, -50, -25, -5, 5, 25, 50, 100, 150, 200)
+comp_cut <- c(-200, -100, -50, -25, -5, 5, 25, 200)
+
 # Combine and compare
 vall_413 <- left_join(v2_413, v3_413, by = join_by(latitude, longitude)) |> 
   left_join(v31_413, by = join_by(latitude, longitude)) |> 
-  mutate(v2_v3 = ((v2_Rrs / v3_Rrs)*100)-100,
-         v2_v31 = ((v2_Rrs / v31_Rrs)*100)-100,
-         v3_v31 = ((v3_Rrs / v31_Rrs)*100)-100) |> 
+  mutate(v2_v3 = round(((v2_Rrs / v3_Rrs)*100)-100),
+         v2_v31 = round(((v2_Rrs / v31_Rrs)*100)-100),
+         v3_v31 = round(((v3_Rrs / v31_Rrs)*100)-100)) |> 
   mutate(v2_v3 = ifelse(v2_v3 > 200, 200, v2_v3),
          v2_v31 = ifelse(v2_v31 > 200, 200, v2_v31),
          v3_v31 = ifelse(v3_v31 > 200, 200, v3_v31),
@@ -363,39 +367,55 @@ vall_413 <- left_join(v2_413, v3_413, by = join_by(latitude, longitude)) |>
   # mutate(v2_v3 = cut(v2_v3, seq(-200, 200, 50)),
   #        v2_v31 = cut(v2_v31, seq(-200, 200, 50)),
   #        v3_v31 = cut(v3_v31, seq(-200, 200, 50)))
-  mutate(v2_v3_cut = cut(v2_v3, c(-200, -100, 0, 50, 80, 90, 100, 110, 120, 150, 200)),
-         v2_v31_cut = cut(v2_v31, c(-200, -100, 0, 50, 80, 90, 100, 110, 120, 150, 200)),
-         v3_v31_cut = cut(v3_v31, c(-200, -100, 0, 50, 80, 90, 100, 110, 120, 150, 200)))
+  mutate(v2_v3_cut = cut(v2_v3, comp_cut, include.lowest = TRUE),
+         v2_v31_cut = cut(v2_v31, comp_cut, include.lowest = TRUE),
+         v3_v31_cut = cut(v3_v31, comp_cut, include.lowest = TRUE))
 
 # Pivot longer for plotting
 v_comp_long <- vall_413 |> 
-  dplyr::select(longitude, latitude, v2_v3:v3_v31) |> 
-  pivot_longer(v2_v3:v3_v31, names_to = "ver") |> 
+  dplyr::select(longitude, latitude, v2_v3:v3_v31) |>
+  pivot_longer(v2_v3:v3_v31, names_to = "ver") |>
   mutate(ver = factor(ver, levels = c("v2_v3", "v2_v31", "v3_v31"),
-                      labels = c("v2 / v3", "v2 / v3.1", "v3 / v3.1"))) |> 
+                      labels = c("v2 / v3", "v2 / v3.1", "v3 / v3.1"))) |>
   filter(!is.na(value))
 
+# Another version as discrete cuts
+v_comp_long_cut <- vall_413 |> 
+  dplyr::select(longitude, latitude, v2_v3_cut:v3_v31_cut) |>
+  pivot_longer(v2_v3_cut:v3_v31_cut, names_to = "ver") |>
+  mutate(ver = factor(ver, levels = c("v2_v3_cut", "v2_v31_cut", "v3_v31_cut"),
+                      labels = c("v2.0 / v3.0", "v2.0 / v3.1", "v3.0 / v3.1"))) |> 
+  filter(!is.na(value))
+
+# Get map data for plotting
+map_df <- map_data("world")
+
+# Pre-determine discrete colours for plotting
+pixel_fill_d <- RColorBrewer::brewer.pal(8, "RdBu")
+pixel_fill_d <- c(pixel_fill_d[1:4], "white", pixel_fill_d[6], pixel_fill_d[8])
+
 # Plot map differences
-pl_top <- ggplot(data = v_comp_long) +
-  # borders(fill = "grey80") +
+pl_top <- ggplot(data = v_comp_long_cut) +
+  geom_polygon(data = map_df, fill = "grey80", #colour = "black",
+               aes(x = long, y = lat, group = group)) +
   geom_tile(aes(x = longitude, y = latitude, fill = value)) +
   annotate(geom = "point", x = v_all_spectra$longitude[1], y = v_all_spectra$latitude[1]) +
   # geom_contour(aes(x = longitude, y = latitude, z = value),
   #              breaks = c(1.0), color = "black") +
-  # scale_colour_viridis_c(aesthetics = c("colour", "fill")) +
-  scale_fill_gradient() +
-  # scale_fill_viridis_d() +
-  labs(x = NULL, y = NULL, fill = "Difference (%)") +
+  scale_fill_manual(values = pixel_fill_d) +
+  guides(fill = guide_legend(nrow = 1)) +
+  labs(x = "Longitude (°E)", y = "Latitude (°N)", fill = "Difference (%)") +
   facet_wrap(~ver) +
   coord_quickmap(xlim = c(min(v_comp_long$longitude), max(v_comp_long$longitude)),
                  ylim = c(min(v_comp_long$latitude), max(v_comp_long$latitude))) +
-  theme(panel.background = element_rect(colour = "black", fill = "grey90"),
+  theme(panel.border = element_rect(colour = "black", fill = "grey90"),
         legend.position = "top")
+# pl_top
 
 # Plot percent difference as non-map
-pl_left <- v_comp_long |> 
+pl_left <- v_comp_long_cut |> 
   summarise(cut_n = n(), .by = c("ver", "value")) |> 
-  # complete(ver, value)
+  # complete(ver, value) |> 
   ggplot() +
   geom_col(aes(x = value, y = cut_n, fill = ver), 
            position = "dodge", colour = "black") +
@@ -405,8 +425,9 @@ pl_left <- v_comp_long |>
   scale_fill_brewer(palette = "Accent") +
   # scale_fill_viridis_d(option = "A") + # yuck
   labs(x = "Difference (%)", y = "Pixel count (n)", fill = "Comparison") +
-  theme(panel.background = element_rect(colour = "black", fill = "grey90"),
+  theme(panel.border = element_rect(colour = "black", fill = "grey90"),
         legend.position = "bottom")
+# pl_left
 
 # Plot spectra differences
 pl_right <- ggplot(v_all_spectra_long) +
@@ -414,14 +435,16 @@ pl_right <- ggplot(v_all_spectra_long) +
             linewidth = 2, alpha = 0.8) +
   geom_vline(xintercept = 413) +
   labs(x = "Wavelength (nm)", y = "Remote sensing reflectance (Rrs)") +
-  scale_color_brewer(palette = "YlGnBu") +
+  scale_color_brewer("Version", palette = "YlGnBu") +
   # scale_colour_viridis_d(option = "B") + # yuck
   scale_y_continuous(expand = c(-0.1, 0.005)) +
-  theme(panel.background = element_rect(colour = "black", fill = "grey90"),
+  theme(panel.border = element_rect(colour = "black", fill = "grey90"),
         legend.position = "bottom")
+# pl_right
 
 # Put it all together
-pl_all <- (pl_top / (pl_left + pl_right)) +
+pl_all <- (pl_top / (pl_left + pl_right)) + 
+  plot_layout(heights = c(1, 0.9)) +
   plot_annotation(tag_levels = 'a', tag_suffix = ')')
 ggsave("figures/fig_S1.png", pl_all, height = 9, width = 14)
 

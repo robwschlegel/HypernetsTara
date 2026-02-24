@@ -83,9 +83,61 @@ global_count_var_name <- global_stats_all |>
 # Quantify which sensors matched most closely to which satellites
 global_match_mean <- global_stats_all |> 
   filter(sensor_X %in% c("HYPERNETS", "TRIOS", "HYPERPRO")) |> 
+  # filter(var_name == "RHOW") |> 
   summarise(Slope = mean(Slope),
-            Bias = mean(Bias),
-            Error = mean(Error), .by = c("sensor_X", "sensor_Y"))
+            Bias_mean = mean(Bias),
+            Bias_abs = mean(abs(Bias)),
+            Error = mean(Error), .by = c("var_name", "sensor_X", "sensor_Y"))
+
+# Mean again
+global_match_mean_mean <- global_match_mean |> 
+  filter(!(sensor_Y %in% c("HYPERNETS", "TRIOS", "HYPERPRO"))) |> 
+  summarise(Slope = mean(Slope),
+            Bias_mean = mean(Bias_mean),
+            Bias_abs = mean(Bias_abs),
+            Error = mean(Error), .by = c("var_name", "sensor_X"))
+
+# Global mean matchups from the perspective of the satellites
+global_match_sat_mean <- global_stats_all |> 
+  filter(!(sensor_Y %in% c("HYPERNETS", "TRIOS", "HYPERPRO"))) |> 
+  summarise(Slope = mean(Slope),
+            Bias_mean = mean(Bias),
+            Bias_abs = mean(abs(Bias)),
+            Error = mean(Error), .by = c("sensor_Y"))
+
+# Count of number of wavebands with negative or positive biases
+global_match_bias_sign <- global_stats_all |> 
+  filter(sensor_X %in% c("HYPERNETS", "TRIOS", "HYPERPRO")) |> 
+  # filter(var_name == "RHOW") |> 
+  mutate(Bias_positive = case_when(Bias > 0 ~ 1, TRUE ~ 0),
+         Bias_negative = case_when(Bias < 0 ~ 1, TRUE ~ 0)) |> 
+  summarise(Bias_positive = sum(Bias_positive),
+            Bias_negative = sum(Bias_negative), .by = c("var_name", "sensor_X", "sensor_Y"))
+
+# Summarise per in situ platform against satellites
+global_match_bias_sign_remote <- global_match_bias_sign |> 
+  filter(!(sensor_Y %in% c("HYPERNETS", "TRIOS", "HYPERPRO"))) |> 
+  filter(var_name == "RHOW") |> 
+  summarise(Bias_positive = sum(Bias_positive),
+            Bias_negative = sum(Bias_negative), .by = c("sensor_X"))
+
+# Average bias and error values per waveband
+global_waveband_mean <- global_stats_all |> 
+  filter(sensor_X %in% c("HYPERNETS", "TRIOS", "HYPERPRO")) |> 
+  filter(!(sensor_Y %in% c("HYPERNETS", "TRIOS", "HYPERPRO"))) |> 
+  filter(var_name == "RHOW") |>
+  summarise(Slope = mean(Slope),
+            Bias_mean = mean(Bias),
+            Bias_abs = mean(abs(Bias)),
+            Error = mean(Error), .by = c("Wavelength_nm"))
+
+# Plot the gblobal mean matchups per in istu sensor
+global_match_mean |> 
+  filter(!(sensor_Y %in% c("HYPERNETS", "TRIOS", "HYPERPRO"))) |> 
+  ggplot(aes(x = sensor_X, y = Error)) +
+  geom_boxplot(aes(fill = sensor_X))
+
+# ANOVA for difference in error between in situ sensors and satellites
 
 
 # Check individual matchups -----------------------------------------------
