@@ -246,6 +246,7 @@ W_nm_out <- function(sensor_Y, var_name){
     } else {
       W_nm <- c(400, 412, 443, 490, 510, 560)
     }
+    # TODO: Change this to be all available wavelengths
   } else if(sensor_Y %in% c("PACE_V2", "PACE_V30", "PACE_V31")){
     W_nm <- c(412, 443, 490, 510, 560)#, 673)
   } else if(sensor_Y == "AQUA"){
@@ -884,7 +885,7 @@ pretty_label_func <- function(char_string){
   } else if(char_string == "LW"){
     units_lab <- "<i>L<sub>w</sub></i> (W m<sup>-2</sup> sr<sup>-1</sup> nm<sup>-1</sup>)"
   } else if(char_string == "RHOW"){
-    units_lab <- "<i>ρ<sub>w</sub></i> (sr<sup>-1</sup>)"
+    units_lab <- "<i>ρ<sub>w</sub></i>"
   }
   
   # Combine into data.frame

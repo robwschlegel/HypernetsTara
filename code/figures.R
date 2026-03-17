@@ -251,7 +251,7 @@ pl_spect <- ggplot(data = pro_all_long, aes(x = wavelength, y = rhow, colour = s
   scale_colour_manual(values = c("darkred", "darkorange", "goldenrod", "skyblue", "dodgerblue", "royalblue", "limegreen")) +
   guides(colour = guide_legend(override.aes = list(alpha = 1.0, linewidth = 3))) +
   labs(x = "Wavelength (nm)",
-       y = "<i>ρ<sub>w</sub></i> (sr<sup>-1</sup>)",
+       y = "<i>ρ<sub>w</sub></i>",
        colour = "Sensor") +
   theme_minimal() +
   theme(legend.position = "inside",
