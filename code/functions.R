@@ -320,6 +320,19 @@ base_stats <- function(x_vec, y_vec){
   if(!is.numeric(x_vec)) stop("x_vec is not numeric")
   if(!is.numeric(y_vec)) stop("y_vec is not numeric")
   
+  if(length(x_vec) < 3){
+    return(data.frame(zone = zone,
+                      variable = variable,
+                      n = length(x_vec),
+                      Slope = NA,
+                      Slope_log = NA,
+                      RMSE = NA,
+                      MSA = NA,
+                      MAPE = NA,
+                      Bias = NA,
+                      Error = NA))
+  }
+  
   # Calculate RMSE (Root Mean Square Error)
   rmse <- sqrt(mean((y_vec - x_vec)^2, na.rm = TRUE))
   
