@@ -83,8 +83,8 @@ global_count_var_name <- global_stats_all |>
 # Quantify which sensors matched most closely to which satellites
 global_match_mean <- global_stats_all |> 
   filter(sensor_X %in% c("HYPERNETS", "TRIOS", "HYPERPRO")) |> 
-  # filter(var_name == "RHOW") |> 
-  summarise(Slope = mean(Slope),
+  # filter(var_name == "RHOW") |>
+  summarise(Slope = mean(Slope, na.rm = TRUE),
             Bias_mean = mean(Bias),
             Bias_abs = mean(abs(Bias)),
             Error = mean(Error), .by = c("var_name", "sensor_X", "sensor_Y"))
@@ -136,8 +136,6 @@ global_match_mean |>
   filter(!(sensor_Y %in% c("HYPERNETS", "TRIOS", "HYPERPRO"))) |> 
   ggplot(aes(x = sensor_X, y = Error)) +
   geom_boxplot(aes(fill = sensor_X))
-
-# ANOVA for difference in error between in situ sensors and satellites
 
 
 # Check individual matchups -----------------------------------------------

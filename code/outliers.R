@@ -23,18 +23,26 @@ base_ED_in_situ <- plyr::ldply(list.files(c(file_path_build("ED", "Hypernets", "
                                           pattern = "*.csv", full.names = TRUE), 
                                load_matchup_long, .parallel = TRUE)
 
-# Join for full range of stats
-join_ED_in_situ <- left_join(base_ED_in_situ, matchup_ED_in_situ, by = join_by(file_name))
+# Join for full range of stats and to remove matchups outside of time diff limit
+join_ED_in_situ <- right_join(base_ED_in_situ, matchup_ED_in_situ, by = join_by(file_name))
 
-# Plot matchup by MAPE + Bias
-plot_matchup_MAPE_Bias(join_ED_in_situ, "Ed", "Hyp", "TRIOS") # MAPE > 20
-plot_matchup_MAPE_Bias(join_ED_in_situ, "Ed", "HYPERPRO", "Hyp") # OK
-plot_matchup_MAPE_Bias(join_ED_in_situ, "Ed", "HYPERPRO", "TRIOS") # OK
+# Plot matchup by Error + Bias
+plot_matchup_Error_Bias(join_ED_in_situ, "Ed", "Hyp", "TRIOS") # Bias < -50
+plot_matchup_Error_Bias(join_ED_in_situ, "Ed", "HYPERPRO", "Hyp") # OK
+plot_matchup_Error_Bias(join_ED_in_situ, "Ed", "HYPERPRO", "TRIOS") # OK
 
-# Filter all by MAPE or Bias to get an initial idea of the issues
-filter_ED_in_situ <- filter(matchup_ED_in_situ, MAPE >= 20) |> mutate(val_filter = "MAPE >= 20")
-filter_join_ED_in_situ <- right_join(base_ED_in_situ, filter_ED_in_situ, by = join_by(file_name))
-clean_join_ED_in_situ <- anti_join(base_ED_in_situ, filter_ED_in_situ, by = join_by(file_name))
+# Manual image checks
+manual_ED_check <- base_ED_in_situ |> 
+  filter(file_name == "HYPERNETS_vs_TRIOS_vs_20240810T151500_ED.csv") |> 
+  distinct(file_name) |> 
+  left_join(matchup_ED_in_situ, by = "file_name") |> 
+  mutate(val_filter = "Manual image check")
+
+# Filter all by Bias to get an initial idea of the issues
+filter_ED_in_situ <- filter(matchup_ED_in_situ, Bias <= -50) |> mutate(val_filter = "Bias <= -50%") |> 
+  bind_rows(manual_ED_check)
+filter_join_ED_in_situ <- right_join(join_ED_in_situ, filter_ED_in_situ)
+clean_join_ED_in_situ <- anti_join(join_ED_in_situ, filter_ED_in_situ)
 
 # Plot all wavelength matchups
 plot_matchup_nm(join_ED_in_situ, "Ed", "Hyp", "TRIOS")
@@ -42,15 +50,16 @@ plot_matchup_nm(filter_join_ED_in_situ, "Ed", "Hyp", "TRIOS")
 plot_matchup_nm(clean_join_ED_in_situ, "Ed", "Hyp", "TRIOS")
 
 # Plot matchups by date
+plot_matchup_date(join_ED_in_situ, "Ed", "Hyp", "TRIOS")
 plot_matchup_date(filter_join_ED_in_situ, "Ed", "Hyp", "TRIOS")
-plot_matchup_date(filter_join_ED_in_situ, "Ed", "Hyp", "HYPERPRO")
-plot_matchup_date(filter_join_ED_in_situ, "Ed", "Hyp", "TRIOS")
+plot_matchup_date(filter_join_ED_in_situ, "Ed", "Hyp", "HYPERPRO") # OK
+plot_matchup_date(filter_join_ED_in_situ, "Ed", "HYPERPRO", "TRIOS") # OK
 
 
 ## LU ----------------------------------------------------------------------
 
 # Load processed in situ matchups
-matchup_LU_in_situ <- read_csv("output/matchup_stats_LU_in_situ.csv") |> 
+matchup_LU_in_situ <- read_csv("output/matchup_stats_LU_Hyp_vs_Trios.csv") |> 
   mutate(comp_sensors = paste0(sensor_X," vs ",sensor_Y)) |> 
   filter(comp_sensors %in% c("Hyp vs TRIOS", "HYPERPRO vs Hyp", "HYPERPRO vs TRIOS"))
 
@@ -62,16 +71,16 @@ base_LU_in_situ <- plyr::ldply(list.files(c(file_path_build("LU", "Hypernets", "
                                load_matchup_long, .parallel = TRUE)
 
 # Join for full range of stats
-join_LU_in_situ <- left_join(base_LU_in_situ, matchup_LU_in_situ, by = join_by(file_name))
+join_LU_in_situ <- right_join(base_LU_in_situ, matchup_LU_in_situ, by = join_by(file_name))
 
-# Plot matchup by MAPE + Bias
+# Plot matchup by Error + Bias
 # NB: Only HypStar vs Trios
-plot_matchup_MAPE_Bias(join_LU_in_situ, "Lu", "Hyp", "TRIOS") # Bias < -50
+plot_matchup_Error_Bias(join_LU_in_situ, "Lu", "Hyp", "TRIOS") # Bias < -50
 
-# Filter all by MAPE to get an initial idea of the issues
-filter_LU_in_situ <- filter(matchup_LU_in_situ, Bias <= -50) |> mutate(val_filter = "Bias <= -50")
-filter_join_LU_in_situ <- right_join(base_LU_in_situ, filter_LU_in_situ)
-clean_join_LU_in_situ <- anti_join(base_LU_in_situ, filter_LU_in_situ)
+# Filter all by Error to get an initial idea of the issues
+filter_LU_in_situ <- filter(matchup_LU_in_situ, Bias <= -50) |> mutate(val_filter = "Bias <= -50%")
+filter_join_LU_in_situ <- right_join(join_LU_in_situ, filter_LU_in_situ)
+clean_join_LU_in_situ <- anti_join(join_LU_in_situ, filter_LU_in_situ)
 
 # Plot all wavelength matchups
 plot_matchup_nm(join_LU_in_situ, "LU", "Hyp", "TRIOS")
@@ -80,14 +89,6 @@ plot_matchup_nm(clean_join_LU_in_situ, "LU", "Hyp", "TRIOS")
 
 # Plot matchups by date
 plot_matchup_date(filter_join_LU_in_situ, "LU", "Hyp", "TRIOS")
-
-# Plot HyperPRO wavelength matchups for interest
-plot_matchup_nm(join_LU_in_situ, "LU", "HYPERPRO", "Hyp")
-plot_matchup_nm(clean_join_LU_in_situ, "LU", "HYPERPRO", "Hyp")
-ggsave("figures/global_scatter_LU_hyperpro_hypstar.png", height = 7, width = 6)
-plot_matchup_nm(join_LU_in_situ, "LU", "HYPERPRO", "TRIOS")
-plot_matchup_nm(clean_join_LU_in_situ, "LU", "HYPERPRO", "TRIOS")
-ggsave("figures/global_scatter_LU_hyperpro_trios.png", height = 7, width = 6)
 
 
 ## LD ----------------------------------------------------------------------
@@ -105,16 +106,16 @@ base_LD_in_situ <- plyr::ldply(list.files(c(file_path_build("LD", "Hypernets", "
                                load_matchup_long, .parallel = TRUE)
 
 # Join for full range of stats
-join_LD_in_situ <- left_join(base_LD_in_situ, matchup_LD_in_situ, by = join_by(file_name))
+join_LD_in_situ <- right_join(base_LD_in_situ, matchup_LD_in_situ, by = join_by(file_name))
 
-# Plot matchup by MAPE + Bias
+# Plot matchup by Error + Bias
 # NB: Only HypStar vs Trios
-plot_matchup_MAPE_Bias(join_LD_in_situ, "Ld", "Hyp", "TRIOS") # Bias < -50
+plot_matchup_Error_Bias(join_LD_in_situ, "Ld", "Hyp", "TRIOS") # Bias < -50
 
-# Filter all by MAPE to get an initial idea of the issues
-filter_LD_in_situ <- filter(matchup_LD_in_situ, Bias <= -50) |> mutate(val_filter = "Bias <= -50")
-filter_join_LD_in_situ <- right_join(base_LD_in_situ, filter_LD_in_situ, by = join_by(file_name))
-clean_join_LD_in_situ <- anti_join(base_LD_in_situ, filter_LD_in_situ, by = join_by(file_name))
+# Filter all by Error to get an initial idea of the issues
+filter_LD_in_situ <- filter(matchup_LD_in_situ, Bias <= -50) |> mutate(val_filter = "Bias <= -50%")
+filter_join_LD_in_situ <- right_join(join_LD_in_situ, filter_LD_in_situ)
+clean_join_LD_in_situ <- anti_join(join_LD_in_situ, filter_LD_in_situ)
 
 # Plot all wavelength matchups
 plot_matchup_nm(join_LD_in_situ, "LD", "Hyp", "TRIOS")
@@ -139,6 +140,14 @@ base_LW_in_situ <- plyr::ldply(list.files(c(file_path_build("LW", "Hypernets", "
                                           pattern = "*.csv", full.names = TRUE), 
                                load_matchup_long, .parallel = TRUE)
 
+# Join for full range of stats
+join_LW_in_situ <- right_join(base_LW_in_situ, matchup_LW_in_situ, by = join_by(file_name))
+
+# Plot matchup by Error + Bias
+plot_matchup_Error_Bias(join_LW_in_situ, "Lw", "Hyp", "TRIOS") # Bias < -50
+plot_matchup_Error_Bias(join_LW_in_situ, "Lw", "HYPERPRO", "Hyp") # OK
+plot_matchup_Error_Bias(join_LW_in_situ, "Lw", "HYPERPRO", "TRIOS") # OK
+
 # List of files with negative HypStar values
 neg_LW_hypstar <- base_LW_in_situ |> 
   filter(Hyp < 0) |> 
@@ -146,19 +155,18 @@ neg_LW_hypstar <- base_LW_in_situ |>
   left_join(matchup_LW_in_situ) |> 
   mutate(val_filter = "Negative HypStar values")
 
-# Join for full range of stats
-join_LW_in_situ <- left_join(base_LW_in_situ, matchup_LW_in_situ, by = join_by(file_name)) |> 
-  anti_join(neg_LW_hypstar, by = join_by(file_name))
+# Manual removals after image check
+manual_LW_check <- base_LW_in_situ |> 
+  filter(file_name == "HYPERNETS_vs_HYPERPRO_vs_20240812T104500_LW.csv") |>
+  distinct(file_name) |> 
+  left_join(matchup_LW_in_situ) |> 
+  mutate(val_filter = "Manual image check")
 
-# Plot matchup by MAPE + Bias
-plot_matchup_MAPE_Bias(join_LW_in_situ, "Lw", "Hyp", "TRIOS") # Bias < -100
-plot_matchup_MAPE_Bias(join_LW_in_situ, "Lw", "HYPERPRO", "Hyp") # Bias > 50
-plot_matchup_MAPE_Bias(join_LW_in_situ, "Lw", "HYPERPRO", "TRIOS") # OK
-
-# Filter all by MAPE to get an initial idea of the issues
-filter_LW_in_situ <- filter(matchup_LW_in_situ, Bias <= -100 | Bias >= 50) |> mutate(val_filter = "Bias <= -100 | Bias >= 50")
-filter_join_LW_in_situ <- right_join(base_LW_in_situ, filter_LW_in_situ, by = join_by(file_name))
-clean_join_LW_in_situ <- anti_join(base_LW_in_situ, filter_LW_in_situ, by = join_by(file_name))
+# Filter all by Error to get an initial idea of the issues
+filter_LW_in_situ <- filter(matchup_LW_in_situ, Bias <= -50) |> mutate(val_filter = "Bias <= -50%") |> 
+  bind_rows(neg_LW_hypstar, manual_LW_check)
+filter_join_LW_in_situ <- right_join(join_LW_in_situ, filter_LW_in_situ)
+clean_join_LW_in_situ <- anti_join(join_LW_in_situ, filter_LW_in_situ)
 
 # Plot all wavelength matchups
 plot_matchup_nm(join_LW_in_situ, "LW", "Hyp", "TRIOS")
@@ -190,26 +198,27 @@ base_RHOW_in_situ <- plyr::ldply(list.files(c(file_path_build("RHOW", "Hypernets
                                             pattern = "*.csv", full.names = TRUE), 
                                  load_matchup_long, .parallel = TRUE)
 
+# Join for full range of stats
+join_RHOW_in_situ <- right_join(base_RHOW_in_situ, matchup_RHOW_in_situ, by = join_by(file_name))
+
+# Plot matchup by Error + Bias
+plot_matchup_Error_Bias(join_RHOW_in_situ, "RHOW", "Hyp", "TRIOS") # OK
+plot_matchup_Error_Bias(join_RHOW_in_situ, "RHOW", "HYPERPRO", "Hyp") # OK
+plot_matchup_Error_Bias(join_RHOW_in_situ, "RHOW", "HYPERPRO", "TRIOS") # OK
+
 # List of files with negative HypStar values
 neg_RHOW_hypstar <- base_RHOW_in_situ |> 
   filter(Hyp < 0) |> 
   distinct(file_name) |> 
   left_join(matchup_RHOW_in_situ) |> 
+  filter(!is.na(var_name)) |> 
   mutate(val_filter = "Negative HypStar values")
 
-# Join for full range of stats
-join_RHOW_in_situ <- left_join(base_RHOW_in_situ, matchup_RHOW_in_situ, by = join_by(file_name)) |> 
-  anti_join(neg_RHOW_hypstar, by = join_by(file_name))
-
-# Plot matchup by MAPE + Bias
-plot_matchup_MAPE_Bias(join_RHOW_in_situ, "RHOW", "Hyp", "TRIOS") # MAPE > 50
-plot_matchup_MAPE_Bias(join_RHOW_in_situ, "RHOW", "HYPERPRO", "Hyp") # MAPE > 50
-plot_matchup_MAPE_Bias(join_RHOW_in_situ, "RHOW", "HYPERPRO", "TRIOS") # MAPE > 50
-
-# Filter all by MAPE to get an initial idea of the issues
-filter_RHOW_in_situ <- filter(matchup_RHOW_in_situ, MAPE >= 50) |> mutate(val_filter = "MAPE >= 50")
-filter_join_RHOW_in_situ <- right_join(base_RHOW_in_situ, filter_RHOW_in_situ)
-clean_join_RHOW_in_situ <- anti_join(base_RHOW_in_situ, filter_RHOW_in_situ)
+# Filter all by Error to get an initial idea of the issues
+filter_RHOW_in_situ <- filter(matchup_RHOW_in_situ, Bias >= 50) |> mutate(val_filter = "Bias >= 50%") |> 
+  bind_rows(neg_RHOW_hypstar)
+filter_join_RHOW_in_situ <- right_join(join_RHOW_in_situ, filter_RHOW_in_situ)
+clean_join_RHOW_in_situ <- anti_join(join_RHOW_in_situ, filter_RHOW_in_situ)
 
 # Plot all wavelength matchups
 plot_matchup_nm(join_RHOW_in_situ, "RHOW", "Hyp", "TRIOS")
@@ -234,10 +243,10 @@ plot_matchup_date(filter_join_RHOW_in_situ, "RHOW", "HYPERPRO", "TRIOS")
 in_situ_outliers <- rbind(filter_ED_in_situ, filter_LD_in_situ, filter_LU_in_situ, 
                           filter_LW_in_situ, neg_LW_hypstar, 
                           filter_RHOW_in_situ, neg_RHOW_hypstar) |> 
-  dplyr::select(file_name, var_name, sensor_X, sensor_Y, dist, diff_time,MAPE, Bias)
+  dplyr::select(file_name, sensor_X, sensor_Y, var_name, comp_sensors, dateTime_X, dateTime_Y, Slope, Error, Bias, val_filter)
 write_csv(in_situ_outliers, "meta/in_situ_outliers.csv")
 
-# Scatterplots of difftime and distance for MAPE and Bias
+# Scatterplots of difftime and distance for Error and Bias
 plot_matchup_scatter(matchup_ED_in_situ, "ED")
 plot_matchup_scatter(matchup_LD_in_situ, "LD")
 plot_matchup_scatter(matchup_LU_in_situ, "LU")
@@ -262,26 +271,27 @@ file_list_MODIS <- list.files(dir("~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/
 base_MODIS <- plyr::ldply(file_list_MODIS, load_matchup_long, .parallel = TRUE)
 
 # Join for full range of stats
-join_MODIS <- left_join(base_MODIS, matchup_MODIS, by = join_by(file_name))
+join_MODIS <- right_join(base_MODIS, matchup_MODIS, by = join_by(file_name))
+
+# Plot matchup by Error + Bias
+plot_matchup_Error_Bias(join_MODIS, "Rhow", "Hyp", "AQUA") # Error > 50
+plot_matchup_Error_Bias(join_MODIS, "Rhow", "TRIOS", "AQUA") # Error > 50
+plot_matchup_Error_Bias(join_MODIS, "Rhow", "HYPERPRO", "AQUA") # OK
 
 # Check satellite variance in files
-sat_var_MODIS <- plyr::ldply(file_list_MODIS, sat_var_check, .parallel = TRUE)
+sat_var_MODIS <- plyr::ldply(file_list_MODIS, sat_var_check, .parallel = TRUE) # OK
 
-# Plot matchup by MAPE + Bias
-plot_matchup_MAPE_Bias(join_MODIS, "Rhow", "Hyp", "AQUA") # MAPE > 200
-plot_matchup_MAPE_Bias(join_MODIS, "Rhow", "TRIOS", "AQUA") # MAPE > 300
-plot_matchup_MAPE_Bias(join_MODIS, "Rhow", "HYPERPRO", "AQUA") # MAPE > 150
-
-# Filter all by MAPE or Bias to get an initial idea of the issues
-# No need to filter by satellite variance, there is one bad AQUA matchup across all sensors and datetimes
-filter_MODIS <- filter(matchup_MODIS, Bias >= 50) |> mutate(val_filter = "MAPE >= 50")
-filter_join_MODIS <- right_join(base_MODIS, filter_MODIS, by = join_by(file_name))
-clean_join_MODIS <- anti_join(base_MODIS, filter_MODIS, by = join_by(file_name))
+# Filter all by Error or Bias to get an initial idea of the issues
+# No need to filter by satellite variance, there are two bad AQUA matchup across all sensors and dateTimes
+# 2024-08-11 09:45:01 ; 2024-08-15 10:45:01
+filter_MODIS <- filter(matchup_MODIS, Error >= 50) |> mutate(val_filter = "Error >= 50%")
+filter_join_MODIS <- right_join(join_MODIS, filter_MODIS)
+clean_join_MODIS <- anti_join(join_MODIS, filter_MODIS)
 
 # Plot matchups by date
 plot_matchup_date(filter_join_MODIS, "Rhow", "Hyp", "AQUA")
 plot_matchup_date(filter_join_MODIS, "Rhow", "TRIOS", "AQUA")
-plot_matchup_date(filter_join_MODIS, "Rhow", "HYPERPRO", "AQUA")
+plot_matchup_date(filter_join_MODIS, "Rhow", "HYPERPRO", "AQUA") # OK
 
 # Plot all wavelength matchups
 plot_matchup_nm(join_MODIS, "Rhow", "Hyp", "AQUA")
@@ -291,7 +301,7 @@ plot_matchup_nm(join_MODIS, "Rhow", "TRIOS", "AQUA")
 plot_matchup_nm(filter_join_MODIS, "Rhow", "TRIOS", "AQUA")
 plot_matchup_nm(clean_join_MODIS, "Rhow", "TRIOS", "AQUA")
 plot_matchup_nm(join_MODIS, "Rhow", "HYPERPRO", "AQUA")
-plot_matchup_nm(filter_join_MODIS, "Rhow", "HYPERPRO", "AQUA")
+plot_matchup_nm(filter_join_MODIS, "Rhow", "HYPERPRO", "AQUA") # OK
 plot_matchup_nm(clean_join_MODIS, "Rhow", "HYPERPRO", "AQUA")
 
 
@@ -310,32 +320,37 @@ file_list_VIIRS <- list.files(dir("~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/
 base_VIIRS <- plyr::ldply(file_list_VIIRS, load_matchup_long, .parallel = TRUE)
 
 # Join for full range of stats
-join_VIIRS <- left_join(base_VIIRS, matchup_VIIRS, by = join_by(file_name))
+join_VIIRS <- right_join(base_VIIRS, matchup_VIIRS, by = join_by(file_name))
+                           
+# Plot matchup by Error + Bias
+# NB: VIIRS_N is visually the least similar, so using this for base reference
+plot_matchup_Error_Bias(join_VIIRS, "Rhow", "Hyp", "VIIRS_N") # Error > 50
+plot_matchup_Error_Bias(join_VIIRS, "Rhow", "TRIOS", "VIIRS_N") # Error > 50
+plot_matchup_Error_Bias(join_VIIRS, "Rhow", "HYPERPRO", "VIIRS_N") # OK
 
 # Check satellite variance in files
 sat_var_VIIRS <- plyr::ldply(file_list_VIIRS, sat_var_check, .parallel = TRUE)
+filter_var_VIIRS <- filter(matchup_VIIRS, file_name %in% sat_var_VIIRS$file_name) |> mutate(val_filter = "CV >= 20%")
 
-# Plot matchup by MAPE + Bias
-# NB: VIIRS_N is visually the least similar, so using this for base reference
-plot_matchup_MAPE_Bias(join_VIIRS, "Rhow", "Hyp", "VIIRS_N") # MAPE > 100
-plot_matchup_MAPE_Bias(join_VIIRS, "Rhow", "TRIOS", "VIIRS_N") # MAPE > 100
-plot_matchup_MAPE_Bias(join_VIIRS, "Rhow", "HYPERPRO", "VIIRS_N") # MAPE > 100
-
-# Filter all by MAPE or Bias to get an initial idea of the issues
-filter_VIIRS <- filter(matchup_VIIRS, MAPE >= 100) |> mutate(val_filter = "MAPE >= 100") |>
-  right_join(sat_var_VIIRS, by = join_by(file_name)) |> 
-  filter(!is.na(var_name))
-filter_join_VIIRS <- right_join(base_VIIRS, filter_VIIRS, by = join_by(file_name))
-clean_join_VIIRS <- anti_join(base_VIIRS, filter_VIIRS, by = join_by(file_name))
+# Filter all by Error or Bias to get an initial idea of the issues
+filter_VIIRS <- matchup_VIIRS |> 
+  filter(!file_name %in% filter_var_VIIRS$file_name) |> 
+  filter(Error >= 50) |> mutate(val_filter = "Error >= 50%") |> 
+  bind_rows(filter_var_VIIRS) |> 
+  filter(!file_name %in% c("TRIOS_vs_VIIRS_N_vs_20240813T100254_RHOW.csv",
+                           "TRIOS_vs_VIIRS_N_vs_20240813T101805_RHOW.csv",
+                           "TRIOS_vs_VIIRS_N_vs_20240813T102853_RHOW.csv")) # Manually checked, not an outlier
+filter_join_VIIRS <- right_join(join_VIIRS, filter_VIIRS)
+clean_join_VIIRS <- anti_join(join_VIIRS, filter_VIIRS)
 
 # Plot matchups by date
-plot_matchup_date(filter_join_VIIRS, "Rhow", "Hyp", "VIIRS_N") # OK
+plot_matchup_date(filter_join_VIIRS, "Rhow", "Hyp", "VIIRS_N")
 plot_matchup_date(filter_join_VIIRS, "Rhow", "TRIOS", "VIIRS_N")
 plot_matchup_date(filter_join_VIIRS, "Rhow", "HYPERPRO", "VIIRS_N")
 
 # Plot all wavelength matchups
 plot_matchup_nm(join_VIIRS, "Rhow", "Hyp", "VIIRS_N")
-plot_matchup_nm(filter_join_VIIRS, "Rhow", "Hyp", "VIIRS_N") # OK
+plot_matchup_nm(filter_join_VIIRS, "Rhow", "Hyp", "VIIRS_N")
 plot_matchup_nm(clean_join_VIIRS, "Rhow", "Hyp", "VIIRS_N")
 plot_matchup_nm(join_VIIRS, "Rhow", "TRIOS", "VIIRS_N")
 plot_matchup_nm(filter_join_VIIRS, "Rhow", "TRIOS", "VIIRS_N")
@@ -360,25 +375,25 @@ file_list_OLCI <- list.files(dir("~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/t
 base_OLCI <- plyr::ldply(file_list_OLCI, load_matchup_long, .parallel = TRUE)
 
 # Join for full range of stats
-join_OLCI <- left_join(base_OLCI, matchup_OLCI, by = join_by(file_name))
+join_OLCI <- right_join(base_OLCI, matchup_OLCI, by = join_by(file_name))
 
 # Check satellite variance in files
 sat_var_OLCI <- plyr::ldply(file_list_OLCI, sat_var_check, .parallel = TRUE)
 
-# Plot matchup by MAPE + Bias
+# Plot matchup by Error + Bias
 # NB: There are more S3A matchups, so using that sensor for analysis
-plot_matchup_MAPE_Bias(join_OLCI, "Rhow", "Hyp", "S3A") # The MAPE > 200 does not appear to be an outlier
-plot_matchup_MAPE_Bias(join_OLCI, "Rhow", "TRIOS", "S3A") # MAPE > 300
-plot_matchup_MAPE_Bias(join_OLCI, "Rhow", "HYPERPRO", "S3A") # OK
+plot_matchup_Error_Bias(join_OLCI, "Rhow", "Hyp", "S3A") # OK
+plot_matchup_Error_Bias(join_OLCI, "Rhow", "TRIOS", "S3A") # Error > 50
+plot_matchup_Error_Bias(join_OLCI, "Rhow", "HYPERPRO", "S3A") # OK
 
-# Filter all by MAPE or Bias to get an initial idea of the issues
-filter_OLCI <- filter(matchup_OLCI, Bias >= 100) |> mutate(val_filter = "Bias >= 100") |> 
+# Filter all by Error or Bias to get an initial idea of the issues
+filter_OLCI <- filter(matchup_OLCI, Error >= 50) |> mutate(val_filter = "Error >= 50%") |> 
   filter(file_name != "TRIOS_vs_S3B_vs_20240813T101805_RHOW.csv") # Manually checked, not an outlier, just a poor matchup
-filter_join_OLCI <- right_join(base_OLCI, filter_OLCI, by = join_by(file_name))
-clean_join_OLCI <- anti_join(base_OLCI, filter_OLCI, by = join_by(file_name))
+filter_join_OLCI <- right_join(join_OLCI, filter_OLCI)
+clean_join_OLCI <- anti_join(join_OLCI, filter_OLCI)
 
 # Plot matchups by date
-plot_matchup_date(filter_join_OLCI, "Rhow", "Hyp", "S3A")
+plot_matchup_date(filter_join_OLCI, "Rhow", "Hyp", "S3A") # OK
 plot_matchup_date(filter_join_OLCI, "Rhow", "TRIOS", "S3A")
 plot_matchup_date(filter_join_OLCI, "Rhow", "HYPERPRO", "S3A") # OK
 
@@ -410,22 +425,25 @@ file_list_OCI <- file_list_OCI[!grepl("RHOW_PACE_V2_vs_PACE_V30_vs_PACE_V31", fi
 base_OCI <- plyr::ldply(file_list_OCI, load_matchup_long, .parallel = TRUE)
 
 # Join for full range of stats
-join_OCI <- left_join(base_OCI, matchup_OCI, by = join_by(file_name))
+join_OCI <- right_join(base_OCI, matchup_OCI, by = join_by(file_name))
+
+# Plot matchup by Error + Bias
+# NB: PACE_v30 is visually the least similar, so using this for base reference
+# NB: There are many PACE files with negative values
+plot_matchup_Error_Bias(join_OCI, "Rhow", "Hyp", "PACE_V30") # Bias < -50
+plot_matchup_Error_Bias(join_OCI, "Rhow", "TRIOS", "PACE_V30") # Bias < -50
+plot_matchup_Error_Bias(join_OCI, "Rhow", "HYPERPRO", "PACE_V30") # Bias < -50
 
 # Check satellite variance in files
 sat_var_OCI <- plyr::ldply(file_list_OCI, sat_var_check, .parallel = TRUE)
+filter_var_OCI <- filter(matchup_OCI, file_name %in% sat_var_OCI$file_name) |> mutate(val_filter = "CV >= 20%")
 
-# Plot matchup by MAPE + Bias
-# NB: PACE_v30 is visually the least similar, so using this for base reference
-# NB: There are many PACE files with negative values
-plot_matchup_MAPE_Bias(join_OCI, "Rhow", "Hyp", "PACE_V30") # Bias < -50
-plot_matchup_MAPE_Bias(join_OCI, "Rhow", "TRIOS", "PACE_V30") # Bias < -50
-plot_matchup_MAPE_Bias(join_OCI, "Rhow", "HYPERPRO", "PACE_V30") # Bias < -50
-
-# Filter all by MAPE or Bias to get an initial idea of the issues
-filter_OCI <- filter(matchup_OCI, Bias <= -50) |> mutate(val_filter = "Bias <= -50") |>
-  right_join(sat_var_OCI, by = join_by(file_name)) |> 
-  filter(!is.na(var_name))
+# Filter all by Error or Bias to get an initial idea of the issues
+filter_OCI <- matchup_OCI |> 
+  filter(!file_name %in% filter_var_OCI$file_name) |> 
+  filter(Error >= 50) |> mutate(val_filter = "Error >= 50%") |> 
+  bind_rows(filter_var_OCI) |> 
+  filter(!file_name %in% c("HYPERNETS_vs_PACE_V31_vs_20240814T123100_RHOW.csv")) # Manually checked, not an outlier
 filter_join_OCI <- right_join(base_OCI, filter_OCI, by = join_by(file_name))
 clean_join_OCI <- anti_join(base_OCI, filter_OCI, by = join_by(file_name))
 
@@ -450,7 +468,7 @@ plot_matchup_nm(clean_join_OCI, "Rhow", "HYPERPRO", "PACE_V30")
 
 # Stack all filtered data.frames with file names that appear to be outliers
 satellite_outliers <- rbind(filter_OLCI, filter_VIIRS, filter_MODIS, filter_OCI) |> 
-  dplyr::select(file_name, var_name, sensor_X, sensor_Y, dist, diff_time,MAPE, Bias)
+  dplyr::select(file_name, sensor_X, sensor_Y, var_name, comp_sensors, dateTime_X, dateTime_Y, Slope, Error, Bias, val_filter)
 write_csv(satellite_outliers, "meta/satellite_outliers.csv")
 
 

@@ -41,13 +41,13 @@ station_Trios_unique <- station_Trios |>
   distinct()
 
 # Get raw HyperPRO coords
-station_Pro <- map_dfr(dir("~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/hyperpro_processed_data", full.names = TRUE), load_HyperPRO_coords)
-station_Pro_unique <- station_Pro |> 
-  dplyr::rename(latitude = lat, longitude = lon) |> 
-  dplyr::select(longitude, latitude) |> 
-  mutate(longitude = round(longitude, 2),
-         latitude = round(latitude, 2)) |> 
-  distinct()
+# station_Pro <- map_dfr(dir("~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/hyperpro_processed_data", full.names = TRUE), load_HyperPRO_coords)
+# station_Pro_unique <- station_Pro |> 
+#   dplyr::rename(latitude = lat, longitude = lon) |> 
+#   dplyr::select(longitude, latitude) |> 
+#   mutate(longitude = round(longitude, 2),
+#          latitude = round(latitude, 2)) |> 
+#   distinct()
 
 # Get HYPERNETS raw coordinates
 # NB: Only contains four distinct points
@@ -169,9 +169,9 @@ plot(MODIS_water)
 
 # Convert to data.frame for easy plotting
 MODIS_water_df <- as.data.frame(MODIS_water, xy = TRUE, na.rm = TRUE) |> 
-  mutate(sur_refl_b01 = case_when(sur_refl_b01 > 0.1 ~ 0.1, 
-                                  sur_refl_b01 < 0.0 ~ 0.0,
-                                  TRUE ~ sur_refl_b01))
+  mutate(sur_refl_b03 = case_when(sur_refl_b03 > 0.1 ~ 0.1, 
+                                  sur_refl_b03 < 0.0 ~ 0.0,
+                                  TRUE ~ sur_refl_b03))
 
 
 # Map of Tara mission -----------------------------------------------------
@@ -179,7 +179,7 @@ MODIS_water_df <- as.data.frame(MODIS_water, xy = TRUE, na.rm = TRUE) |>
 # Map
 pl_map <- ggplot(data = station_in_situ, aes(x = longitude, y = latitude)) +
   annotation_borders(fill = "grey80") +
-  geom_tile(data = MODIS_water_df, aes(x = x, y = y, fill = sur_refl_b01)) +
+  geom_tile(data = MODIS_water_df, aes(x = x, y = y, fill = sur_refl_b03)) +
   # geom_path(data = station_GPS_unique) +
   geom_point(data = station_GPS_unique, size = 0.1) +
   # Show Trios raw collection points
@@ -201,7 +201,7 @@ pl_map <- ggplot(data = station_in_situ, aes(x = longitude, y = latitude)) +
                                                   fill = c(RColorBrewer::brewer.pal(n = 11, name = "Set3"))))) +
   labs(x = "Longitude (°E)", y = "Latitude (°N)", 
        colour = "Measurement<br>date", 
-       fill = "<i>R<sub>rs</sub></i><br>(sr<sup>-1</sup>; 459-479 nm) ") +
+       fill = "<i>ρ<sub>w</sub></i>  (Band 3; 459-479 nm)") +
   coord_quickmap(xlim = c(7, 25), ylim = c(35, 42)) +
   theme(panel.border = element_rect(colour = "black", fill = NA),
         legend.position = "top",

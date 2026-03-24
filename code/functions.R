@@ -12,7 +12,6 @@ library(ggtext) # For rich text labels
 library(ggimage) # For adding .jpg files to figures
 library(patchwork) # For complex paneling of figures
 library(doParallel); registerDoParallel(cores = detectCores() - 2)
-# library(futurize); plan(multicore, workers = parallel::detectCores()-2) # Won't run in RStudio
 
 
 # Setup -------------------------------------------------------------------
@@ -156,7 +155,8 @@ load_HyperPRO_coords <- function(file_name){
 # file_name <- "~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_20260203/RHOW_TRIOS_vs_VIIRS_N/TRIOS_vs_VIIRS_N_vs_20240812T121332_RHOW.csv"
 # file_name <- "/home/calanus/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_20260203/RHOW_HYPERPRO_vs_S3A/HYPERPRO_vs_S3A_vs_20240809T084500_RHOW.csv"
 # file_name <- "/home/calanus/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_20260203/RHOW_HYPERNETS_vs_PACE_V2/HYPERNETS_vs_PACE_V2_vs_20240809T090000_RHOW.csv"
-sat_var_check <- function(file_name, var_limit = 0.1){
+# file_name <- "/home/calanus/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_20260203/RHOW_HYPERPRO_vs_PACE_V2/HYPERPRO_vs_PACE_V2_vs_20240812T105300_RHOW.csv"
+sat_var_check <- function(file_name, cv_limit = 0.2){
   
   # Load the csv file
   suppressMessages(
@@ -178,20 +178,27 @@ sat_var_check <- function(file_name, var_limit = 0.1){
     pivot_longer(cols = matches("1|2|3|4|5|6|7|8|9"), names_to = "wavelength", values_to = "value") |> 
     pivot_wider(names_from = data_type, values_from = value) |>
     na.omit() |> 
-    mutate(max_sd_diff = weighted / std_max,
-           min_sd_diff = weighted / std_min,
+    mutate(max_sd_diff = abs(weighted - std_max),
+           min_sd_diff = abs(weighted - std_min),
+           # Max and min should be the same, but this addresses any rounding issues
+           sd = (max_sd_diff + min_sd_diff)/2,
+           cv = sd/weighted,
            wavelength = as.numeric(wavelength)) |> 
-    filter(wavelength <= 500)
+    filter(wavelength <= 600, wavelength >= 400)
   
   # If variables are too different, issue a warning and omit file from being loaded
-  # TODO: Change this to a flat 25% difference from min to max
-  if(any(df_check$max_sd_diff >= 1+var_limit) | any(df_check$min_sd_diff <= 1-var_limit)){
-    # warning(paste0("Weighted mean has too much variance in file : ", file_name))
-    # return(basename(file_name))
-    file_check <- basename(file_name)
+  if(nrow(df_check) > 0){
+    if(mean(df_check$cv, na.rm = TRUE) >= cv_limit){
+      # warning(paste0("Weighted mean has too much variance in file : ", file_name))
+      # return(basename(file_name))
+      file_check <- basename(file_name)
+    } else {
+      file_check <- NULL
+    }
   } else {
     file_check <- NULL
   }
+
   return(data.frame(file_name = file_check))
 }
 
@@ -250,8 +257,7 @@ W_nm_out <- function(sensor_Y, var_name){
     # TODO: Change this to be all available wavelengths
   } else if(sensor_Y %in% c("PACE_V2", "PACE_V30", "PACE_V31")){
     # The available data in the project structure go from 380:699
-    # This could be increased past 700, but would require some re-working
-    W_nm <- 400:699 
+    W_nm <- 400:600 
     # W_nm <- c(412, 443, 490, 510, 560)#, 673)
   } else if(sensor_Y == "AQUA"){
     W_nm <- c(412, 443, 488, 531, 555)#, 667)
@@ -300,7 +306,7 @@ MODIS_proc <- function(file_names, bbox, water_mask = FALSE){
     data_base <- terra::ifel(data_merge %in% c(1, 2, 3, 4, 5), NA, data_merge)
     # plot(data_base)
   } else {
-    data_layers <- lapply(file_names, rast, subds = 3) # Blue green band width; 459-479 nm
+    data_layers <- lapply(file_names, rast, lyrs = 3) # Blue green band width; 459-479 nm
     data_base <- do.call(merge, data_layers)
     # plot(data_base)
   }
@@ -325,10 +331,8 @@ base_stats <- function(x_vec, y_vec){
   if(!is.numeric(x_vec)) stop("x_vec is not numeric")
   if(!is.numeric(y_vec)) stop("y_vec is not numeric")
   
-  if(length(x_vec) < 3){
-    return(data.frame(zone = zone,
-                      variable = variable,
-                      n = length(x_vec),
+  if(length(x_vec) < 2){
+    return(data.frame(row.names = NULL,
                       Slope = NA,
                       Slope_log = NA,
                       RMSE = NA,
@@ -535,6 +539,17 @@ process_sensor <- function(var_name, sensor_Z, stat_choice = "matchup"){
   # Process matchups and save output
   if(stat_choice == "matchup"){
     proc_res <- plyr::mdply(ply_grid, process_matchup_folder, .parallel = FALSE)
+    # Enforce time and distance constraint
+    proc_res <- proc_res |> 
+      mutate(diff_time_limit = case_when(sensor_X %in% c("Hyp", "TRIOS", "HYPERPRO") & sensor_Y %in% c("Hyp", "TRIOS", "HYPERPRO") ~ 20,
+                                         sensor_X == "HYPERPRO" & !(sensor_Y %in% c("Hyp", "TRIOS", "HYPERPRO")) ~ 240,
+                                         sensor_X %in% c("Hyp", "TRIOS") & !(sensor_Y %in% c("Hyp", "TRIOS", "HYPERPRO")) ~ 120,
+                                         sensor_Y == "HYPERPRO" & !(sensor_X %in% c("Hyp", "TRIOS", "HYPERPRO")) ~ 240,
+                                         sensor_Y %in% c("Hyp", "TRIOS") & !(sensor_X %in% c("Hyp", "TRIOS", "HYPERPRO")) ~ 120,
+                                         TRUE ~ NA),
+             .after = diff_time) |> 
+      filter(diff_time <= diff_time_limit,
+             dist <= 10)
     write_csv(proc_res, paste0("output/matchup_stats_",var_name,"_",sensor_Z,".csv"))
   } else {
     proc_res <- plyr::mdply(ply_grid, global_stats, .parallel = TRUE)
@@ -556,11 +571,6 @@ global_stats <- function(var_name, sensor_X, sensor_Y){
   if(sensor_Y == "S3_all"){
     folder_path <- c(file_path_build(var_name, sensor_X, "S3A"),
                      file_path_build(var_name, sensor_X, "S3B"))
-  # NB: Different wavebands for VIIRS_N than VIIRS_J1 and VIIRS_J2
-  # } else if(sensor_Y == "VIIRS_all"){
-  #   folder_path <- c(file_path_build(var_name, sensor_X, "VIIRS_N"),
-  #                    file_path_build(var_name, sensor_X, "VIIRS_J1"),
-  #                    file_path_build(var_name, sensor_X, "VIIRS_J2"))
   } else {
     folder_path <- file_path_build(var_name, sensor_X, sensor_Y)
   }
@@ -581,7 +591,7 @@ global_stats <- function(var_name, sensor_X, sensor_Y){
   file_list_clean <- file_list[!basename(file_list) %in% outliers_all$file_name]
   
   # Load data
-  match_base <- map_dfr(file_list_clean, load_matchup_long)# |> futurize()
+  match_base <- map_dfr(file_list_clean, load_matchup_long)
   
   # Melt if S3_all
   if(sensor_Y == "S3_all"){
@@ -775,17 +785,17 @@ plot_matchup_dateTime <- function(df, var_name, x_sensor, y_sensor, date_filter)
 }
 
 # Plot scatterplot based on the MAPE values of each comparison
-plot_matchup_MAPE_Bias <- function(df, var_name, x_sensor, y_sensor){
-  pl_MAPE <- df |> 
+plot_matchup_Error_Bias <- function(df, var_name, x_sensor, y_sensor){
+  pl_Error <- df |> 
     filter(!is.na(!!sym(x_sensor)), !is.na(!!sym(y_sensor))) |> 
     ggplot(aes_string(x = x_sensor, y = y_sensor)) +
-    geom_point(aes(colour = MAPE)) +
+    geom_point(aes(colour = Error)) +
     geom_abline(slope = 1, intercept = 0, color = "black", linetype = "dashed") +
     scale_colour_viridis_c(option = "D") +
-    labs(title = paste(var_name,"-", x_sensor, "vs", y_sensor,"- MAPE"),
+    labs(title = paste(var_name,"-", x_sensor, "vs", y_sensor,"- Error"),
          x = paste(var_name, x_sensor),
          y = paste(var_name, y_sensor),
-         colour = "MAPE [%]") +
+         colour = "Error [%]") +
     theme_minimal() +
     theme(panel.border = element_rect(fill = NA, color = "black"),
           legend.position = "bottom")
@@ -802,7 +812,7 @@ plot_matchup_MAPE_Bias <- function(df, var_name, x_sensor, y_sensor){
     theme_minimal() +
     theme(panel.border = element_rect(fill = NA, color = "black"),
           legend.position = "bottom")
-  ggpubr::ggarrange(pl_MAPE, pl_Bias, nrow = 2, ncol = 1)
+  ggpubr::ggarrange(pl_Error, pl_Bias, nrow = 2, ncol = 1)
 }
 
 # Plot the relationship between difftime and distance for MAPE and bias for all variables
@@ -810,20 +820,20 @@ plot_matchup_MAPE_Bias <- function(df, var_name, x_sensor, y_sensor){
 plot_matchup_scatter <- function(df, var_name, pl_height = 6, pl_width = 9){
   
   # Relationship between MAPE, distance and difftime
-  pl_MAPE <- df |> 
+  pl_Error <- df |> 
     mutate(comp_sensors = paste0(sensor_X," vs ",sensor_Y)) |> 
     filter(comp_sensors %in% c("Hyp vs TRIOS", "Hyp vs HYPERPRO", "TRIOS vs HYPERPRO")) |> 
-    ggplot(aes(x = diff_time, y = MAPE)) +
+    ggplot(aes(x = diff_time, y = Error)) +
     geom_point(aes(colour = dist), size = 3, alpha = 0.7) +
     geom_smooth(method = "lm", se = FALSE) +
     scale_colour_viridis_c() +
-    labs(x = "Time difference [minutes]", y = "MAPE [%]", colour = "Distance\n[km]",
-         title = paste0(var_name," - MAPE (%) : Effect of sampling time difference"),
+    labs(x = "Time difference [minutes]", y = "Error [%]", colour = "Distance\n[km]",
+         title = paste0(var_name," - Error (%) : Effect of sampling time difference"),
          subtitle = "Colour shows distance (km) between samples") +
     facet_wrap(~comp_sensors) +
     theme(panel.border = element_rect(colour = "black"))#, 
   # legend.position = "bottom")
-  # pl_MAPE
+  # pl_Error
   
   # The same but for bias
   pl_Bias <- df |> 
@@ -841,7 +851,7 @@ plot_matchup_scatter <- function(df, var_name, pl_height = 6, pl_width = 9){
   # legend.position = "bottom")
   # pl_Bias
   
-  pl_combi <- ggpubr::ggarrange(pl_MAPE, pl_Bias, nrow = 2, ncol = 1)
+  pl_combi <- ggpubr::ggarrange(pl_Error, pl_Bias, nrow = 2, ncol = 1)
   ggsave(paste0("figures/outliers_",var_name,"_in_situ.png"), pl_combi, height = pl_height, width = pl_width)
   # pl_combi
 }

@@ -307,9 +307,7 @@ fig_4 <- ggpubr::ggarrange(fig_4_a, fig_4_b, fig_4_c, fig_4_d, fig_4_e, fig_4_f,
 ggsave("figures/fig_4.png", fig_4, width = 12, height = 9)
 
 
-# PACE Supp ----------------------------------------------------------------
-
-# TODO: Change colour palette for differences to blue-red
+# Fig S1 ------------------------------------------------------------------
 
 # Load one slice of PACE v3.1 data at 413 nm
 ## Visualise all five days to pick the best coverage
@@ -448,3 +446,10 @@ pl_all <- (pl_top / (pl_left + pl_right)) +
   plot_annotation(tag_levels = 'a', tag_suffix = ')')
 ggsave("figures/fig_S1.png", pl_all, height = 9, width = 14)
 
+
+# Fig S2 ------------------------------------------------------------------
+
+# Barplot of all PACE wavelength matchups
+global_stats_OCI <- read_csv("output/global_stats_RHOW_OCI.csv")
+
+  
