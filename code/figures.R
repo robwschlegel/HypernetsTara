@@ -12,12 +12,40 @@ source("code/functions.R")
 # Takes variable and Y sensor as input to automagically create global scatterplot triptych
 # var_name = "LU"; sensor_Y = "HYPERPRO"
 # var_name = "RHOW"; sensor_Y = "HYPERPRO"
-# var_name = "RHOW"; sensor_Y = "VIIRS_J2"
+# var_name = "RHOW"; sensor_Y = "AQUA"
 # var_name = "RHOW"; sensor_Y = "S3"; panel_labels <- c("a)", "b)", "c)")
 global_triptych <- function(var_name, sensor_Y, panel_labels = "", cut_legend = "no"){
   
   # Check that in situ data are being requested if variable is anything other than Rhow
   if(var_name != "RHOW" & sensor_Y != "HYPERPRO") stop("Can only use RHOW with remote data matchups")
+  
+  # Continue with satellite versions if necessary
+  if(sensor_Y  == "AQUA"){
+    sensor_Z <- "MODIS"
+  } else if(sensor_Y %in% c("PACE_V2", "PACE_V30", "PACE_V31")){
+    sensor_Z <- "OCI"
+  } else if(sensor_Y %in% c("VIIRS_N", "VIIRS_J1", "VIIRS_J2", "VIIRS_all")){
+    sensor_Z <- "VIIRS"
+  } else if(sensor_Y %in% c("S3A", "S3B", "S3_all", "S3")){
+    sensor_Z <- "OLCI"
+  } else {
+    sensor_Z <- sensor_Y
+  }
+  
+  # Get filestub based on sensor_Y and var_name
+  if(var_name %in% c("ED", "LW")){
+    filestub <- "_in_situ.csv"
+  } else if(var_name %in% c("LU", "LD")){
+    filestub <- "_Hyp_vs_Trios.csv"
+  } else if(sensor_Y %in% c("TRIOS", "HYPERPRO")){
+    filestub <- "_in_situ.csv"
+  } else {
+    filestub <- paste0("_",sensor_Z,".csv")
+  }
+  
+  # Load individual matchup results to filter file list and for further use
+  match_base_details <- read_csv(paste0("output/matchup_stats_",var_name,filestub)) |> 
+    dplyr::select(file_name) |> distinct()
   
   # Load outliers to screen them from being plotted
   suppressMessages(
@@ -26,7 +54,7 @@ global_triptych <- function(var_name, sensor_Y, panel_labels = "", cut_legend = 
   suppressMessages(
     outliers_insitu <- read_csv("meta/in_situ_outliers.csv")
   )
-  outliers_all <- bind_rows(outliers_sat, outliers_insitu)
+  outliers_all <- bind_rows(outliers_sat, outliers_insitu) |> distinct()
   
   # Load data based on in situ comparisons or not
   print("Loading matchups")
@@ -51,14 +79,18 @@ global_triptych <- function(var_name, sensor_Y, panel_labels = "", cut_legend = 
   
   # Filter out outliers
   if(var_name %in% c("LU", "LD")){
+    match_base_1 <- match_base_1[match_base_1$file_name %in% match_base_details$file_name,]
     match_base_1 <- match_base_1[!match_base_1$file_name %in% outliers_all$file_name,]
   } else {
+    match_base_1 <- match_base_1[match_base_1$file_name %in% match_base_details$file_name,]
+    match_base_2 <- match_base_2[match_base_2$file_name %in% match_base_details$file_name,]
+    match_base_3 <- match_base_3[match_base_3$file_name %in% match_base_details$file_name,]
     match_base_1 <- match_base_1[!match_base_1$file_name %in% outliers_all$file_name,]
     match_base_2 <- match_base_2[!match_base_2$file_name %in% outliers_all$file_name,]
     match_base_3 <- match_base_3[!match_base_3$file_name %in% outliers_all$file_name,]
   }
   
-  # Filter out wavelengths above 590 if plotting Rhow or LW data
+  # Filter out wavelengths above 600 if plotting Rhow or LW data
   if(var_name %in% c("RHOW", "LW")){
     match_base_1 <- filter(match_base_1, wavelength >= 400, wavelength < 600) 
     match_base_2 <- filter(match_base_2, wavelength >= 400, wavelength < 600) 

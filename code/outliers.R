@@ -243,7 +243,9 @@ plot_matchup_date(filter_join_RHOW_in_situ, "RHOW", "HYPERPRO", "TRIOS")
 in_situ_outliers <- rbind(filter_ED_in_situ, filter_LD_in_situ, filter_LU_in_situ, 
                           filter_LW_in_situ, neg_LW_hypstar, 
                           filter_RHOW_in_situ, neg_RHOW_hypstar) |> 
-  dplyr::select(file_name, sensor_X, sensor_Y, var_name, comp_sensors, dateTime_X, dateTime_Y, Slope, Error, Bias, val_filter)
+  dplyr::select(file_name, sensor_X, sensor_Y, var_name, comp_sensors, 
+                dateTime_X, dateTime_Y, Slope, Error, Bias, val_filter) |> 
+  distinct()
 write_csv(in_situ_outliers, "meta/in_situ_outliers.csv")
 
 # Scatterplots of difftime and distance for Error and Bias
@@ -275,15 +277,15 @@ join_MODIS <- right_join(base_MODIS, matchup_MODIS, by = join_by(file_name))
 
 # Plot matchup by Error + Bias
 plot_matchup_Error_Bias(join_MODIS, "Rhow", "Hyp", "AQUA") # Error > 50
-plot_matchup_Error_Bias(join_MODIS, "Rhow", "TRIOS", "AQUA") # Error > 50
+plot_matchup_Error_Bias(join_MODIS, "Rhow", "TRIOS", "AQUA") # OK
 plot_matchup_Error_Bias(join_MODIS, "Rhow", "HYPERPRO", "AQUA") # OK
 
 # Check satellite variance in files
 sat_var_MODIS <- plyr::ldply(file_list_MODIS, sat_var_check, .parallel = TRUE) # OK
 
 # Filter all by Error or Bias to get an initial idea of the issues
-# No need to filter by satellite variance, there are two bad AQUA matchup across all sensors and dateTimes
-# 2024-08-11 09:45:01 ; 2024-08-15 10:45:01
+# No need to filter by satellite variance, there is one bad AQUA matchup across all sensors and dateTimes
+# 2024-08-15 10:45:01
 filter_MODIS <- filter(matchup_MODIS, Error >= 50) |> mutate(val_filter = "Error >= 50%")
 filter_join_MODIS <- right_join(join_MODIS, filter_MODIS)
 clean_join_MODIS <- anti_join(join_MODIS, filter_MODIS)
@@ -388,7 +390,8 @@ plot_matchup_Error_Bias(join_OLCI, "Rhow", "HYPERPRO", "S3A") # OK
 
 # Filter all by Error or Bias to get an initial idea of the issues
 filter_OLCI <- filter(matchup_OLCI, Error >= 50) |> mutate(val_filter = "Error >= 50%") |> 
-  filter(file_name != "TRIOS_vs_S3B_vs_20240813T101805_RHOW.csv") # Manually checked, not an outlier, just a poor matchup
+  filter(!file_name %in% c("TRIOS_vs_S3B_vs_20240813T101805_RHOW.csv",
+                           "TRIOS_vs_S3A_vs_20240818T092817_RHOW.csv")) # Manually checked, not an outlier, just a poor matchup
 filter_join_OLCI <- right_join(join_OLCI, filter_OLCI)
 clean_join_OLCI <- anti_join(join_OLCI, filter_OLCI)
 
@@ -468,7 +471,9 @@ plot_matchup_nm(clean_join_OCI, "Rhow", "HYPERPRO", "PACE_V30")
 
 # Stack all filtered data.frames with file names that appear to be outliers
 satellite_outliers <- rbind(filter_OLCI, filter_VIIRS, filter_MODIS, filter_OCI) |> 
-  dplyr::select(file_name, sensor_X, sensor_Y, var_name, comp_sensors, dateTime_X, dateTime_Y, Slope, Error, Bias, val_filter)
+  dplyr::select(file_name, sensor_X, sensor_Y, var_name, comp_sensors, 
+                dateTime_X, dateTime_Y, Slope, Error, Bias, val_filter) |> 
+  distinct()
 write_csv(satellite_outliers, "meta/satellite_outliers.csv")
 
 

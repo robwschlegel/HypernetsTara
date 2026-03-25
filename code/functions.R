@@ -30,7 +30,7 @@ options(scipen = 9999)
 
 # Function that assembles file directory based on desired variable and sensors
 file_path_build <- function(var_name, sensor_X, sensor_Y){
-  file_path <- paste0("~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_20260203/",
+  file_path <- paste0("~/pCloud Drive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_20260203/",
                       toupper(var_name),"_",toupper(sensor_X),"_vs_", toupper(sensor_Y))
 }
 
@@ -539,7 +539,7 @@ process_sensor <- function(var_name, sensor_Z, stat_choice = "matchup"){
   # Process matchups and save output
   if(stat_choice == "matchup"){
     proc_res <- plyr::mdply(ply_grid, process_matchup_folder, .parallel = FALSE)
-    # Enforce time and distance constraint
+    # Set time limits
     proc_res <- proc_res |> 
       mutate(diff_time_limit = case_when(sensor_X %in% c("Hyp", "TRIOS", "HYPERPRO") & sensor_Y %in% c("Hyp", "TRIOS", "HYPERPRO") ~ 20,
                                          sensor_X == "HYPERPRO" & !(sensor_Y %in% c("Hyp", "TRIOS", "HYPERPRO")) ~ 240,
@@ -548,9 +548,21 @@ process_sensor <- function(var_name, sensor_Z, stat_choice = "matchup"){
                                          sensor_Y %in% c("Hyp", "TRIOS") & !(sensor_X %in% c("Hyp", "TRIOS", "HYPERPRO")) ~ 120,
                                          TRUE ~ NA),
              .after = diff_time) |> 
-      filter(diff_time <= diff_time_limit,
-             dist <= 10)
-    write_csv(proc_res, paste0("output/matchup_stats_",var_name,"_",sensor_Z,".csv"))
+      mutate(dist_limit = case_when(sensor_X %in% c("Hyp", "TRIOS", "HYPERPRO") & sensor_Y %in% c("Hyp", "TRIOS", "HYPERPRO") ~ 10,
+                                    sensor_X == "HYPERPRO" & !(sensor_Y %in% c("Hyp", "TRIOS", "HYPERPRO")) ~ 40,
+                                    sensor_X %in% c("Hyp", "TRIOS") & !(sensor_Y %in% c("Hyp", "TRIOS", "HYPERPRO")) ~ 10,
+                                    sensor_Y == "HYPERPRO" & !(sensor_X %in% c("Hyp", "TRIOS", "HYPERPRO")) ~ 40,
+                                    sensor_Y %in% c("Hyp", "TRIOS") & !(sensor_X %in% c("Hyp", "TRIOS", "HYPERPRO")) ~ 10,
+                                    TRUE ~ NA),
+             .after = dist)
+    # Enforce time and distance constraint
+    proc_res_clean <- proc_res |> 
+      filter(diff_time <= diff_time_limit) |> 
+      filter(dist <= dist_limit)
+    write_csv(proc_res_clean, paste0("output/matchup_stats_",var_name,"_",sensor_Z,".csv"))
+    # Save the matchups removed this way
+    proc_res_unclean <- proc_res[!proc_res$file_name %in% proc_res_clean$file_name,]
+    write_csv(proc_res_unclean, paste0("output/matchup_noQC_stats_",var_name,"_",sensor_Z,".csv"))
   } else {
     proc_res <- plyr::mdply(ply_grid, global_stats, .parallel = TRUE)
     write_csv(proc_res, paste0("output/global_stats_",var_name,"_",sensor_Z,".csv"))
@@ -1019,8 +1031,12 @@ plot_global_nm <- function(df, var_name, sensor_X, sensor_Y){
   }
   
   # Get pre-determined wavelengths
-  W_nm <- W_nm_out(sensor_Y, var_name)
-  
+  if(sensor_Y %in% c("PACE_V2", "PACE_V30", "PACE_V31")){
+    W_nm <- c(412, 443, 490, 510, 560)
+  } else {
+    W_nm <- W_nm_out(sensor_Y, var_name)
+  }
+
   # Filter dataframe to only plot linear models for chosen wavebands
   df_sub <- filter(df_prep, wavelength %in% W_nm)
   

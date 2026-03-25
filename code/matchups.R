@@ -59,8 +59,20 @@ process_sensor("RHOW", "VIIRS", "global")
 process_sensor("RHOW", "OLCI", "global")
 process_sensor("RHOW", "OCI", "global")
 
+# Load outlier reports
+outliers_sat <- read_csv("meta/satellite_outliers.csv") |> distinct()
+outliers_insitu <- read_csv("meta/in_situ_outliers.csv") |> distinct()
+
+# Load PACE separately to filter specific wavebands
+global_stats_PACE <- read_csv("output/global_stats_RHOW_OCI.csv") |> 
+  filter(Wavelength_nm %in% c(412, 443, 490, 510, 560))
+# write_csv(global_stats_PACE, file = "output/global_stats_PACE.csv")
+
 # Load all global stats
-global_stats_all <- map_dfr(dir("output", pattern = "global", full.names = TRUE), read_csv)
+global_stats_all <- map_dfr(dir("output", pattern = "global", full.names = TRUE), read_csv) |> 
+  filter(!sensor_X %in% c("PACE_V2", "PACE_V30", "PACE_V31"),
+         !sensor_Y %in% c("PACE_V2", "PACE_V30", "PACE_V31")) |> 
+  bind_rows(global_stats_PACE)
 
 # Visualise difference between linear-space and log-space slopes
 global_stats_all |> 
@@ -73,7 +85,7 @@ global_stats_all |>
 # Get matchups counts, outliers, etc.
 global_count_var_name <- global_stats_all |> 
   filter(sensor_X %in% c("HYPERNETS", "TRIOS", "HYPERPRO")) |> 
-  # filter(var_name == "RHOW") |> 
+  filter(var_name == "RHOW") |>
   dplyr::select(var_name:sensor_Y) |> 
   group_by(var_name, sensor_X, sensor_Y) |> 
   filter(n_w_nm == max(n_w_nm)) |> 
@@ -83,8 +95,9 @@ global_count_var_name <- global_stats_all |>
 # Quantify which sensors matched most closely to which satellites
 global_match_mean <- global_stats_all |> 
   filter(sensor_X %in% c("HYPERNETS", "TRIOS", "HYPERPRO")) |> 
-  # filter(var_name == "RHOW") |>
-  summarise(Slope = mean(Slope, na.rm = TRUE),
+  filter(var_name == "RHOW") |>
+  summarise(n = n(),
+            Slope = mean(Slope, na.rm = TRUE),
             Bias_mean = mean(Bias),
             Bias_abs = mean(abs(Bias)),
             Error = mean(Error), .by = c("var_name", "sensor_X", "sensor_Y"))
@@ -131,7 +144,7 @@ global_waveband_mean <- global_stats_all |>
             Bias_abs = mean(abs(Bias)),
             Error = mean(Error), .by = c("Wavelength_nm"))
 
-# Plot the gblobal mean matchups per in istu sensor
+# Plot the global mean matchups per in situ sensor
 global_match_mean |> 
   filter(!(sensor_Y %in% c("HYPERNETS", "TRIOS", "HYPERPRO"))) |> 
   ggplot(aes(x = sensor_X, y = Error)) +
