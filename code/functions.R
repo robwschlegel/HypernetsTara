@@ -562,8 +562,8 @@ process_sensor <- function(var_name, sensor_Z, stat_choice = "matchup"){
 # var_name = "ED"; sensor_X = "HYPERNETS"; sensor_Y = "TRIOS"
 # var_name = "LU"; sensor_X = "HYPERNETS"; sensor_Y = "TRIOS"
 # var_name = "RHOW"; sensor_X = "HYPERNETS"; sensor_Y = "TRIOS"
-# var_name = "RHOW"; sensor_X = "TRIOS"; sensor_Y = "AQUA"
-# var_name = "RHOW"; sensor_X = "HYPERNETS"; sensor_Y = "PACE_V31"
+# var_name = "RHOW"; sensor_X = "TRIOS"; sensor_Y = "VIIRS_N"
+# var_name = "RHOW"; sensor_X = "HYPERNETS"; sensor_Y = "PACE_V30"
 # var_name = "RHOW"; sensor_X = "HYPERNETS"; sensor_Y = "S3_all"
 global_stats <- function(var_name, sensor_X, sensor_Y){
   
@@ -573,32 +573,6 @@ global_stats <- function(var_name, sensor_X, sensor_Y){
                      file_path_build(var_name, sensor_X, "S3B"))
   } else {
     folder_path <- file_path_build(var_name, sensor_X, sensor_Y)
-  }
-  
-  # List all files in directory
-  file_list <- list.files(folder_path, pattern = "*.csv", full.names = TRUE)
-  
-  # Get outlier lists
-  suppressMessages(
-    outliers_sat <- read_csv("meta/satellite_outliers.csv")
-  )
-  suppressMessages(
-    outliers_insitu <- read_csv("meta/in_situ_outliers.csv")
-  )
-  outliers_all <- bind_rows(outliers_sat, outliers_insitu)
-  
-  # Filter accordingly
-  file_list_clean <- file_list[!basename(file_list) %in% outliers_all$file_name]
-  
-  # Load data
-  match_base <- map_dfr(file_list_clean, load_matchup_long)
-  
-  # Melt if S3_all
-  if(sensor_Y == "S3_all"){
-    match_base <- match_base |> 
-      pivot_longer(S3A:S3B, names_to = "name", values_to = "S3_all") |> 
-      dplyr::select(-name) |> 
-      filter(!is.na(S3_all))
   }
   
   # Continue with satellite versions if necessary
@@ -631,26 +605,43 @@ global_stats <- function(var_name, sensor_X, sensor_Y){
     sensor_X_filt <- sensor_X
   }
   
-  # Load individual matchup results to access difftime values
+  # List all files in directory
+  file_list <- list.files(folder_path, pattern = "*.csv", full.names = TRUE)
+  
+  # Load individual matchup results to filter file list and for further use
   suppressMessages(
     match_base_details <- read_csv(paste0("output/matchup_stats_",var_name,filestub))
   )
-  match_base_details <- dplyr::select(match_base_details, var_name, file_name, dist, diff_time) |> distinct()
+  match_base_details <- dplyr::select(match_base_details, file_name) |> distinct()
   if(nrow(match_base_details) == 0) stop("Individual matchup file not loaded correctly.")
   
-  # Join for further use
-  match_base_plus <- left_join(match_base, match_base_details, by = join_by(file_name))
+  # Filter accordingly
+  # NB: This creates the list of valid matchups after screening for spatiotemporal range
+  file_list_clean <- file_list[basename(file_list) %in% match_base_details$file_name]
   
-  # Filter out matches outside of allowed time window
-  if(!(sensor_Y %in% c("HYPERNETS", "TRIOS", "HYPERPRO"))){
-    time_window <- 240
-  } else {
-    time_window <- 20
+  # Get outlier lists
+  suppressMessages(
+    outliers_sat <- read_csv("meta/satellite_outliers.csv")
+  )
+  suppressMessages(
+    outliers_insitu <- read_csv("meta/in_situ_outliers.csv")
+  )
+  outliers_all <- bind_rows(outliers_sat, outliers_insitu)
+
+  # Remove outlier files
+  # NB: This creates the list of valid matchups after screening for outliers in the single matchup QC process
+  file_list_no_out <- file_list_clean[!basename(file_list_clean) %in% outliers_all$file_name]
+  
+  # Load data
+  match_base <- map_dfr(file_list_no_out, load_matchup_long)
+  
+  # Melt if S3_all
+  if(sensor_Y == "S3_all"){
+    match_base <- match_base |> 
+      pivot_longer(S3A:S3B, names_to = "name", values_to = "S3_all") |> 
+      dplyr::select(-name) |> 
+      filter(!is.na(S3_all))
   }
-  match_base_filt <- filter(match_base_plus, diff_time <= time_window)
-  
-  # Get the count of matchups after filtering by time window
-  match_count_difftime <- length(unique(match_base_filt$file_name))
   
   # Get pre-determined wavelengths
   W_nm <- W_nm_out(sensor_Y, var_name)
@@ -660,7 +651,7 @@ global_stats <- function(var_name, sensor_X, sensor_Y){
   for(i in 1:length(W_nm)){
     
     # Get data.frame for matchup based on the wavelength of choice
-    matchup_filt <- filter(match_base_filt, wavelength == W_nm[i])
+    matchup_filt <- filter(match_base, wavelength == W_nm[i])
     n_match <- nrow(matchup_filt)
     
     # Calculate stats
@@ -720,10 +711,8 @@ global_stats <- function(var_name, sensor_X, sensor_Y){
   
   # Add matchup count and exit
   df_results <- df_results |> 
-    mutate(n_base = length(file_list),
-           n_clean = length(file_list_clean),
-           diff_time_window = time_window, 
-           n_diff_time = match_count_difftime,
+    mutate(n_clean = length(file_list_clean),
+           n_no_out = length(file_list_no_out),
            .before = "n_w_nm")
   return(df_results)
 }
