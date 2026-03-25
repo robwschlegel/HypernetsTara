@@ -449,7 +449,55 @@ ggsave("figures/fig_S1.png", pl_all, height = 9, width = 14)
 
 # Fig S2 ------------------------------------------------------------------
 
+# Uniquely for this plot
+library(patchwork)
+
 # Barplot of all PACE wavelength matchups
 global_stats_OCI <- read_csv("output/global_stats_RHOW_OCI.csv")
 
-  
+# Prep for plotting
+global_stats_OCI_pretty <- global_stats_OCI |> 
+  filter(sensor_X %in% c("HYPERNETS", "TRIOS", "HYPERPRO")) |> 
+  mutate(sensor_X = factor(sensor_X,
+                           levels = c("HYPERPRO", "TRIOS", "HYPERNETS"),
+                           labels = c("HyperPRO", "So-Rad", "HYPERNETS")),
+         sensor_Y = factor(sensor_Y,
+                           levels = c("PACE_V2", "PACE_V30", "PACE_V31"),
+                           labels = c("PACE v2.0", "PACE v3.0", "PACE v3.1"))) |> 
+  dplyr::rename(`Wavelength (nm)` = Wavelength_nm)
+
+# Create the histogram plot
+## Error
+pl_Error_OCI <- ggplot(data = global_stats_OCI_pretty, aes(x = `Wavelength (nm)`, y = Error)) +
+  geom_col(aes(fill = sensor_Y), position = "dodge", show.legend = FALSE) +
+  labs(y = "Error  (%)") +
+  facet_grid(sensor_Y~sensor_X) +
+  # theme_minimal() +
+  theme(panel.border = element_rect(fill = NA, color = "black"),
+        legend.title = element_text(size = 14),
+        legend.text = element_text(size = 12),
+        legend.position = "bottom",
+        axis.title.x = element_markdown(size = 12),
+        axis.title.y = element_markdown(size = 12),
+        axis.text = element_text(size = 10))
+# pl_Error_OCI
+
+## Bias
+pl_Bias_OCI <- ggplot(data = global_stats_OCI_pretty, aes(x = `Wavelength (nm)`, y = Bias)) +
+  geom_col(aes(fill = sensor_Y), position = "dodge", show.legend = FALSE) +
+  labs(y = "Bias  (%)") +
+  facet_grid(sensor_Y~sensor_X) +
+  # theme_minimal() +
+  theme(panel.border = element_rect(fill = NA, color = "black"),
+        legend.title = element_text(size = 14),
+        legend.text = element_text(size = 12),
+        legend.position = "bottom",
+        axis.title.x = element_markdown(size = 12),
+        axis.title.y = element_markdown(size = 12),
+        axis.text = element_text(size = 10))
+# pl_Bias_OCI
+
+# Steek'em
+fig_S2 <- pl_Error_OCI / pl_Bias_OCI + plot_annotation(tag_levels = "a", tag_suffix = ")")
+ggsave("figures/fig_S2.png", fig_S2, width = 9, height = 12)
+
