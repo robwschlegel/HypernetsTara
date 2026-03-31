@@ -15,6 +15,7 @@
 
 # Large data outpputs
 data
+tara_all_5x5_20240808_20240818.db
 
 # Output files from R CMD build
 /*.tar.gz
