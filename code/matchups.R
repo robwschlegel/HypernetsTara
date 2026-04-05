@@ -25,6 +25,11 @@ process_sensor("RHOW", "OCI")
 # Re-load all single matchups
 matchup_single_all <- map_dfr(dir("output", pattern = "matchup_stats_", full.names = TRUE), read_csv)
 
+# Extract only Sentinel-3
+matchup_single_S3 <- matchup_single_all |> 
+  filter(sensor_Y %in% c("S3A", "S3B"))
+write.csv(matchup_single_S3, "meta/matchup_single_S3.csv")
+
 # Date and time range of samples per sensor
 matchup_date_time_range <- matchup_single_all |> 
   dplyr::select(sensor_X, dateTime_X) |> 

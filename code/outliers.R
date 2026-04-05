@@ -481,6 +481,14 @@ write_csv(satellite_outliers, "meta/satellite_outliers.csv")
 
 # This section of code investigates a specific S3A error to demonstrate a visual inspection of the data
 
+# Create list of all OLCI granules used
+granule_list_OLCIA <- dir("/media/calanus/HDD2TB/home/calanus/data/Tara_Images_satelites/OLCI/S3A")
+granule_list_OLCIB <- dir("/media/calanus/HDD2TB/home/calanus/data/Tara_Images_satelites/OLCI/S3B")
+
+# Combine and save
+granule_list_OLCI <- data.frame(granule = c(granule_list_OLCIA, granule_list_OLCIB))
+write.csv(granule_list_OLCI, "meta/granule_list_OLCI.csv", row.names = FALSE)
+
 # Load matchup
 S3A_match <- read_delim("~/Downloads/TRIOS_vs_HYPERPRO_vs_S3A_vs_20240814T082814_RHOW.csv", delim = ";", col_types = "cccc")
 colnames(S3A_match)[1] <- "sensor"
