@@ -47,6 +47,12 @@ matchup_sat_uniq <- matchup_single_all |>
   summarise(sat_count = n(), .by = "sensor_X")
 
 
+# Uncertainties ----------------------------------------------------------
+
+var_ed_hyperpro <- sensor_uncertainty("ED", "HYPERPRO")
+var_ld_trios <- sensor_uncertainty("LD", "TRIOS")
+
+
 # Global statistics --------------------------------------------------------
 
 # NB: Run code/outliers.R before the global stats in order to filter outliers

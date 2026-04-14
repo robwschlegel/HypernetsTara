@@ -11,7 +11,8 @@ library(geosphere) # For determining distance between points
 library(ggtext) # For rich text labels
 library(ggimage) # For adding .jpg files to figures
 library(patchwork) # For complex paneling of figures
-library(doParallel); registerDoParallel(cores = detectCores() - 2)
+library(furrr)
+# library(doParallel); registerDoParallel(cores = detectCores() - 2)
 
 
 # Setup -------------------------------------------------------------------
@@ -98,6 +99,38 @@ load_matchup_long <- function(file_name){
                                   breaks = c(350, 400, 450, 500, 550, 600, 650, 700, 750, 800),
                                   labels = labels_nm,
                                   include.lowest = TRUE, right = FALSE), .after = "wavelength")
+}
+
+# Load the variance data for a matchup file
+load_matchup_var <- function(file_name){
+
+  # Load the csv file
+  suppressMessages(
+    df_match <- read_delim(file_name, delim = ";", col_types = "ccccnnic")
+  )
+  colnames(df_match)[1] <- "sensor"
+
+  # Determine variable name for use below
+  var_name <- gsub(".csv", "", str_split(basename(file_name), "_")[[1]][6])
+  var_name_lower <- tolower(var_name)
+  
+  # Calculate uncertainties per wavelength
+  df_var <- df_match |> 
+    mutate(sensor = gsub(" 1$| 2$| 3$| 4$| 5$| 6$| 7$| 8$| 9$", "", sensor),
+           var_name = var_name) |>
+    filter(!(sensor %in% c("Hyp_nosc"))) |> 
+    # distinct() |> 
+    dplyr::select(-day, -time, -latitude, -longitude, -radiometer_id, -type) |> 
+    mutate(data_type = case_when(data_type == var_name_lower ~ "var_value", TRUE ~ data_type)) |> 
+    pivot_longer( cols = matches("1|2|3|4|5|6|7|8|9"), names_to = "wavelength", values_to = "value") |> 
+    pivot_wider(names_from = data_type, values_from = value) |>
+    # na.omit() |> 
+    mutate(max_sd_diff = abs(var_value - std_max),
+           min_sd_diff = abs(var_value - std_min),
+           # Max and min should be the same, but this addresses any rounding issues
+           sd = (max_sd_diff + min_sd_diff)/2,
+           cv = sd/var_value,
+           wavelength = as.numeric(wavelength))
 }
 
 # Load all files in a given folder
@@ -312,11 +345,11 @@ MODIS_proc <- function(file_names, bbox, water_mask = FALSE){
   }
   
   # Project to EPSG:4326
-  data_base_proj <- project(data_base, y = "EPSG:4326")
+  data_base_proj <- raster::project(data_base, y = "EPSG:4326")
   # plot(data_base_proj)
   
   # Crop to bbox and exit
-  data_crop <- crop(data_base_proj, bbox)
+  data_crop <- raster::crop(data_base_proj, bbox)
   # plot(data_crop)
   return(data_crop)
 }
@@ -378,6 +411,83 @@ base_stats <- function(x_vec, y_vec){
                          Bias = round(bias_perc, 2),
                          Error = round(error_perc, 2))
   return(df_stats)
+}
+
+# Extract all files for a given sensor and determine measurement uncertainty
+# var_name = "ED"; sensor_X = "HYPERPRO"
+# var_name = "LD"; sensor_X = "TRIOS"
+sensor_uncertainty <- function(var_name, sensor_X){
+  
+  # List of all viable folders
+  folder_options <- dir("~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_20260203", full.names = TRUE)
+
+  # Create file path
+  folder_paths <- folder_options[grepl(var_name, folder_options)]
+  folder_paths <- folder_paths[grepl(sensor_X, folder_paths)]
+  # folder_paths <- folder_options[grepl(sensor_X, folder_options)]
+
+  # List all files in directory
+  file_list <- list.files(folder_paths, pattern = "*.csv", full.names = TRUE)
+  
+  # Remove stats output files
+  file_list_clean <- file_list[!grepl("all|global", file_list)]
+
+  # Get sensor name that matches files, not folders
+  if(sensor_X == "HYPERPRO"){
+    sensor_X_col <- "Hyp"
+  } else {
+    sensor_X_col <- sensor_X
+  }
+  var_name_lower <- tolower(var_name)
+  
+  # Read all file variances in one go
+  # plan(multisession, workers = 14)
+  # match_base <- future_map_dfr(file_list_clean, load_matchup_var,
+  #                             .options = furrr_options(globals = c("load_matchup_var")))
+  # match_base <- future_map_dfr(file_list_clean, read_delim, delim = ";", col_types = "ccccnnic")
+  # plan(sequential)
+  suppressMessages(
+  match_base <- map_dfr(file_list_clean, read_delim, delim = ";", col_types = "ccccnnic")
+  )
+
+  # Load the csv file
+  # suppressMessages(
+  #   df_match <- read_delim(file_name, delim = ";", col_types = "ccccnnic")
+  # )
+  # colnames(df_match)[1] <- "sensor"
+
+  # Determine variable name for use below
+  # var_name <- gsub(".csv", "", str_split(basename(file_name), "_")[[1]][6])
+
+  
+  # Calculate uncertainties per wavelength
+  df_var <- df_match |> 
+    mutate(sensor = gsub(" 1$| 2$| 3$| 4$| 5$| 6$| 7$| 8$| 9$", "", sensor),
+           var_name = var_name) |>
+    filter(!(sensor %in% c("Hyp_nosc"))) |> 
+    # distinct() |> 
+    dplyr::select(-day, -time, -latitude, -longitude, -radiometer_id, -type) |> 
+    mutate(data_type = case_when(data_type == var_name_lower ~ "var_value", TRUE ~ data_type)) |> 
+    pivot_longer( cols = matches("1|2|3|4|5|6|7|8|9"), names_to = "wavelength", values_to = "value") |> 
+    pivot_wider(names_from = data_type, values_from = value) |>
+    # na.omit() |> 
+    mutate(max_sd_diff = abs(var_value - std_max),
+           min_sd_diff = abs(var_value - std_min),
+           # Max and min should be the same, but this addresses any rounding issues
+           sd = (max_sd_diff + min_sd_diff)/2,
+           cv = sd/var_value,
+           wavelength = as.numeric(wavelength))
+
+
+  # Clean up
+  match_base_clean <- match_base |> 
+    filter(sensor == sensor_X_col, var_name == var_name) |> 
+    distinct() |> 
+    summarise(sd_min = min(sd, na.rm = TRUE),
+              sd_mean = mean(sd, na.rm = TRUE),
+              sd_median = median(sd, na.rm = TRUE),
+              sd_max = max(sd, na.rm = TRUE), .by = c("sensor", "var_name", "wavelength"))
+  return(match_base)
 }
 
 
