@@ -78,6 +78,11 @@ Rrs_HyperPRO <- read_csv("data/HyperBoost_dataset_AOPs_2023_2024_10042026_Rrs_HT
          system = "HyperPRO")
 Rrs_both <- rbind(Rrs_SoRad, Rrs_HyperPRO)
 
+# Mean values
+Rrs_both |> 
+  summarise(cv_median = median(cv_perc),
+            cv_mean = mean(cv_perc), .by = "system")
+
 # Plot
 ggplot(data = Rrs_both, aes(x = system, y = cv_perc, fill = system)) +
   # geom_violin(show.legend = FALSE) +
@@ -87,6 +92,26 @@ ggplot(data = Rrs_both, aes(x = system, y = cv_perc, fill = system)) +
        subtitle = "Values within boxplots show the spread across all wavelengths and samples",
        x = "System", y = "Coefficient of variation (%)")
 ggsave("figures/test_sensors_var_Rrs.png", width = 10, height = 6)
+
+# Load HyperPRO seaBird files directly
+
+# Load So-Rad seaBird files directly
+
+# Load HYPERNETS NetCDF files directly
+L1C_HYPERNETS_files <- dir("~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/Hypernets_processed_data",
+                          full.names = TRUE, recursive = TRUE, pattern = "_L1C_")
+L1C_HYPERNETS_files <- L1C_HYPERNETS_files[grepl("v2.0.nc", L1C_HYPERNETS_files)]
+nc_info <- ncdump::NetCDF(L1C_HYPERNETS_files[1])
+L2_HYPERNETS_files <- dir("~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/Hypernets_processed_data",
+                          full.names = TRUE, recursive = TRUE, pattern = "_L2A_")
+L2_HYPERNETS_files <- L2_HYPERNETS_files[grepl("v2.0.nc", L2_HYPERNETS_files)]
+nc_info <- ncdump::NetCDF(L2_HYPERNETS_files[1])
+nc_info$variable
+
+
+
+nc_hyp <- tidync(L1C_HYPERNETS_files[1]) |> 
+  hyper_tibble()
 
 # Calculate variance stats from Hypernets_matchups .csv output files
 sensor_uncertainty("ED", "HYPERPRO")

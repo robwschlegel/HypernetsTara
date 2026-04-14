@@ -6,6 +6,7 @@
 
 library(tidyverse)
 library(ncdf4)
+library(tidync)
 library(FNN) # Needed for fastest nearest neighbor searching
 library(geosphere) # For determining distance between points
 library(ggtext) # For rich text labels
@@ -165,6 +166,10 @@ load_matchups_folder <- function(var_name, sensor_X, sensor_Y, long = FALSE){
 load_HYPERNETS_coords <- function(file_name){
   ncdump::NetCDF(file_name)$attribute$global[c("site_longitude", "site_latitude")]
 }
+
+# Process HYPERNETS files to get mean and sd per wavelength per sequence
+# NB: Designed to work on L1C files
+proc_HYPERNETS <- function(file_name)
 
 # Convenience function to get lon/lat coords from HyperPRO SeaBird files
 # file_name <- "~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/hyperpro_processed_data/TaraEuropa_HyperPro_20240821T095801_Ed_Lu_Lw_Rrs_R2.sb"
