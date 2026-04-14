@@ -416,6 +416,8 @@ base_stats <- function(x_vec, y_vec){
 # Extract all files for a given sensor and determine measurement uncertainty
 # var_name = "ED"; sensor_X = "HYPERPRO"
 # var_name = "LD"; sensor_X = "TRIOS"
+# var_name = "LU"; sensor_X = "HYPERNETS"
+# var_name = "RHOW"; sensor_X = "PACE_V2"
 sensor_uncertainty <- function(var_name, sensor_X){
   
   # List of all viable folders
@@ -430,43 +432,51 @@ sensor_uncertainty <- function(var_name, sensor_X){
   file_list <- list.files(folder_paths, pattern = "*.csv", full.names = TRUE)
   
   # Remove stats output files
-  file_list_clean <- file_list[!grepl("all|global", file_list)]
+  file_list_clean <- file_list[!grepl("all|global|AQUA|S3|VIIRS", file_list)]
+  if(!grepl("PACE", sensor_X)) file_list_clean <- file_list_clean[!grepl("PACE", file_list_clean)]
+
+  # Load relevant mathcup files to use for screening bad files
+  match_base_files <- dir("~/HypernetsTara/output", pattern = paste0("matchup_stats_",var_name), full.names = TRUE)
+  if(var_name == "RHOW"){
+    if(grepl("PACE", sensor_X)){
+      match_base_files <- match_base_files[grepl("OCI", match_base_files)]
+    } else {
+      match_base_files <- match_base_files[grepl("in)situ", match_base_files)]
+    }
+  }
+  suppressMessages(
+    match_base_details <- read_csv(match_base_files)
+  )
+  match_base_details <- dplyr::select(match_base_details, file_name) |> distinct()
+  if(nrow(match_base_details) == 0) stop("Individual matchup file not loaded correctly.")
+  
+  # Filter accordingly
+  # NB: This creates the list of valid matchups after screening for spatiotemporal range
+  file_list_clean <- file_list_clean[basename(file_list_clean) %in% match_base_details$file_name]
 
   # Get sensor name that matches files, not folders
-  if(sensor_X == "HYPERPRO"){
+  if(sensor_X == "HYPERNETS"){
     sensor_X_col <- "Hyp"
   } else {
     sensor_X_col <- sensor_X
   }
   var_name_lower <- tolower(var_name)
-  
+
   # Read all file variances in one go
-  # plan(multisession, workers = 14)
-  # match_base <- future_map_dfr(file_list_clean, load_matchup_var,
-  #                             .options = furrr_options(globals = c("load_matchup_var")))
-  # match_base <- future_map_dfr(file_list_clean, read_delim, delim = ";", col_types = "ccccnnic")
-  # plan(sequential)
   suppressMessages(
   match_base <- map_dfr(file_list_clean, read_delim, delim = ";", col_types = "ccccnnic")
   )
-
-  # Load the csv file
-  # suppressMessages(
-  #   df_match <- read_delim(file_name, delim = ";", col_types = "ccccnnic")
-  # )
-  # colnames(df_match)[1] <- "sensor"
-
-  # Determine variable name for use below
-  # var_name <- gsub(".csv", "", str_split(basename(file_name), "_")[[1]][6])
-
+  colnames(match_base)[1] <- "sensor"
   
   # Calculate uncertainties per wavelength
-  df_var <- df_match |> 
+  match_base_sensor <- match_base |> 
     mutate(sensor = gsub(" 1$| 2$| 3$| 4$| 5$| 6$| 7$| 8$| 9$", "", sensor),
            var_name = var_name) |>
-    filter(!(sensor %in% c("Hyp_nosc"))) |> 
-    # distinct() |> 
-    dplyr::select(-day, -time, -latitude, -longitude, -radiometer_id, -type) |> 
+    filter(sensor == sensor_X_col) |> 
+    # filter(!(sensor %in% c("Hyp_nosc"))) |> 
+    distinct() |> 
+    dplyr::select(-radiometer_id, -type) |> 
+    # dplyr::select(-day, -time, -latitude, -longitude, -radiometer_id, -type) |> 
     mutate(data_type = case_when(data_type == var_name_lower ~ "var_value", TRUE ~ data_type)) |> 
     pivot_longer( cols = matches("1|2|3|4|5|6|7|8|9"), names_to = "wavelength", values_to = "value") |> 
     pivot_wider(names_from = data_type, values_from = value) |>
@@ -476,18 +486,24 @@ sensor_uncertainty <- function(var_name, sensor_X){
            # Max and min should be the same, but this addresses any rounding issues
            sd = (max_sd_diff + min_sd_diff)/2,
            cv = sd/var_value,
-           wavelength = as.numeric(wavelength))
-
+           wavelength = as.numeric(wavelength)) |> 
+    filter(var_value > 0)
 
   # Clean up
-  match_base_clean <- match_base |> 
+  match_base_res <- match_base_sensor |> 
     filter(sensor == sensor_X_col, var_name == var_name) |> 
     distinct() |> 
     summarise(sd_min = min(sd, na.rm = TRUE),
-              sd_mean = mean(sd, na.rm = TRUE),
               sd_median = median(sd, na.rm = TRUE),
-              sd_max = max(sd, na.rm = TRUE), .by = c("sensor", "var_name", "wavelength"))
-  return(match_base)
+              sd_mean = mean(sd, na.rm = TRUE),
+              sd_max = max(sd, na.rm = TRUE),
+              cv_min = min(cv, na.rm = TRUE),
+              cv_median = median(cv, na.rm = TRUE),
+              cv_mean = mean(cv, na.rm = TRUE),
+              cv_max = max(cv, na.rm = TRUE), .by = c("sensor", "var_name", "wavelength"))
+  # return(match_base_res)
+  # Save and exit
+  write_csv(match_base_res, file = paste0("output/var_stats_",var_name,"_", sensor_X,".csv"))
 }
 
 

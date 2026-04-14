@@ -49,8 +49,46 @@ matchup_sat_uniq <- matchup_single_all |>
 
 # Uncertainties ----------------------------------------------------------
 
+# Calculate one-by-one
+# TODO: Consider wrapping these up in a walk and saving the output as .csv, then load them in one go
 var_ed_hyperpro <- sensor_uncertainty("ED", "HYPERPRO")
+var_ed_trios <- sensor_uncertainty("ED", "TRIOS")
+var_ed_hypenets <- sensor_uncertainty("ED", "HYPERNETS")
 var_ld_trios <- sensor_uncertainty("LD", "TRIOS")
+var_ld_hypernets <- sensor_uncertainty("LD", "HYPERNETS")
+var_lu_trios <- sensor_uncertainty("LU", "TRIOS")
+var_lu_hypernets <- sensor_uncertainty("LU", "HYPERNETS")
+var_lw_hyperpro <- sensor_uncertainty("LW", "HYPERPRO")
+var_lw_trios <- sensor_uncertainty("LW", "TRIOS")
+var_lw_hypenets <- sensor_uncertainty("LW", "HYPERNETS")
+var_rhow_hyperpro <- sensor_uncertainty("RHOW", "HYPERPRO")
+var_rhow_trios <- sensor_uncertainty("RHOW", "TRIOS")
+# var_rhow_hypernets <- sensor_uncertainty("RHOW", "HYPERNETS") # No SD values for Hypernets
+var_rhow_pace2 <- sensor_uncertainty("RHOW", "PACE_V2")
+var_rhow_pace3 <- sensor_uncertainty("RHOW", "PACE_V30")
+var_rhow_pace31 <- sensor_uncertainty("RHOW", "PACE_V31")
+
+# Combine all
+var_sensors <- rbind(var_ed_hyperpro, var_ed_trios, var_ed_hypenets,
+                     var_ld_trios, var_ld_hypernets,
+                     var_lu_trios, var_lu_hypernets,
+                     var_lw_hyperpro, var_lw_trios, var_lw_hypenets,
+                     var_rhow_hyperpro, var_rhow_trios,
+                     var_rhow_pace2, var_rhow_pace3, var_rhow_pace31) |> 
+  mutate(cv_median_perc = cv_median * 100,
+         sensor = case_when(sensor == "Hyp" ~ "HYPERNETS",
+                            sensor == "HYPERPRO" ~ "HyperPRO",
+                            sensor == "TRIOS" ~ "So-Rad",
+                            TRUE ~ sensor))
+
+# Plot
+ggplot(data = var_sensors, aes(x = sensor, y = cv_median_perc, fill = sensor)) +
+  # geom_violin(show.legend = FALSE) +
+  geom_boxplot(show.legend = FALSE, outliers = FALSE) +
+  facet_wrap(~var_name, scales = "free") +
+  labs(title = "Comparison of uncertainties (median CV %) between sensors and variables",
+       subtitle = "Values within boxplots show the spread across all available wavelengths")
+ggsave("figures/test_sensors_var.png", width = 10, height = 6)
 
 
 # Global statistics --------------------------------------------------------
