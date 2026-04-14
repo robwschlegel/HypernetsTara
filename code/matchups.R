@@ -49,32 +49,65 @@ matchup_sat_uniq <- matchup_single_all |>
 
 # Uncertainties ----------------------------------------------------------
 
-# Calculate one-by-one
-# TODO: Consider wrapping these up in a walk and saving the output as .csv, then load them in one go
-var_ed_hyperpro <- sensor_uncertainty("ED", "HYPERPRO")
-var_ed_trios <- sensor_uncertainty("ED", "TRIOS")
-var_ed_hypenets <- sensor_uncertainty("ED", "HYPERNETS")
-var_ld_trios <- sensor_uncertainty("LD", "TRIOS")
-var_ld_hypernets <- sensor_uncertainty("LD", "HYPERNETS")
-var_lu_trios <- sensor_uncertainty("LU", "TRIOS")
-var_lu_hypernets <- sensor_uncertainty("LU", "HYPERNETS")
-var_lw_hyperpro <- sensor_uncertainty("LW", "HYPERPRO")
-var_lw_trios <- sensor_uncertainty("LW", "TRIOS")
-var_lw_hypenets <- sensor_uncertainty("LW", "HYPERNETS")
-var_rhow_hyperpro <- sensor_uncertainty("RHOW", "HYPERPRO")
-var_rhow_trios <- sensor_uncertainty("RHOW", "TRIOS")
-# var_rhow_hypernets <- sensor_uncertainty("RHOW", "HYPERNETS") # No SD values for Hypernets
-var_rhow_pace2 <- sensor_uncertainty("RHOW", "PACE_V2")
-var_rhow_pace3 <- sensor_uncertainty("RHOW", "PACE_V30")
-var_rhow_pace31 <- sensor_uncertainty("RHOW", "PACE_V31")
+# Load the sd values directly from the base data report
+Rrs_SoRad <- read_csv("data/HyperBoost_dataset_AOPs_2023_2024_10042026_Rrs_SoRad.csv",
+                      show_col_types = FALSE) |> 
+  filter(N > 0) |> 
+  pivot_longer(cols = `Rrs_SoRad_355.2`:`Rrs_SoRad_800.7_std`) |> 
+  mutate(var_name = case_when(grepl("std", name) ~ "sd",
+                              TRUE ~ "mean"),
+         wavelength = gsub("Rrs_SoRad_", "", name),
+         wavelength = as.numeric(gsub("_std", "", wavelength))) |> 
+  dplyr::select(StationNumber, N, wavelength, var_name, value) |> 
+  pivot_wider(values_from = value, names_from = var_name) |> 
+  mutate(cv = sd / mean,
+         cv_perc = cv*100,
+         system = "So-Rad")
+Rrs_HyperPRO <- read_csv("data/HyperBoost_dataset_AOPs_2023_2024_10042026_Rrs_HTSRB.csv",
+                      show_col_types = FALSE) |> 
+  filter(N > 0) |> 
+  pivot_longer(cols = `Rrs_HTSRB_349.58`:`Rrs_HTSRB_802.42_std`) |> 
+  mutate(var_name = case_when(grepl("std", name) ~ "sd",
+                              TRUE ~ "mean"),
+         wavelength = gsub("Rrs_HTSRB_", "", name),
+         wavelength = as.numeric(gsub("_std", "", wavelength))) |> 
+  dplyr::select(StationNumber, N, wavelength, var_name, value) |> 
+  pivot_wider(values_from = value, names_from = var_name) |> 
+  mutate(cv = sd / mean,
+         cv_perc = cv*100,
+         system = "HyperPRO")
+Rrs_both <- rbind(Rrs_SoRad, Rrs_HyperPRO)
+
+# Plot
+ggplot(data = Rrs_both, aes(x = system, y = cv_perc, fill = system)) +
+  # geom_violin(show.legend = FALSE) +
+  geom_boxplot(show.legend = FALSE, outliers = FALSE) +
+  # facet_wrap(~var_name, scales = "free") +
+  labs(title = "Comparison of uncertainty between So-Rad and HyperPRO for Rrs",
+       subtitle = "Values within boxplots show the spread across all wavelengths and samples",
+       x = "System", y = "Coefficient of variation (%)")
+ggsave("figures/test_sensors_var_Rrs.png", width = 10, height = 6)
+
+# Calculate variance stats from Hypernets_matchups .csv output files
+sensor_uncertainty("ED", "HYPERPRO")
+sensor_uncertainty("ED", "TRIOS")
+sensor_uncertainty("ED", "HYPERNETS")
+sensor_uncertainty("LD", "TRIOS")
+sensor_uncertainty("LD", "HYPERNETS")
+sensor_uncertainty("LU", "TRIOS")
+sensor_uncertainty("LU", "HYPERNETS")
+sensor_uncertainty("LW", "HYPERPRO")
+sensor_uncertainty("LW", "TRIOS")
+sensor_uncertainty("LW", "HYPERNETS")
+sensor_uncertainty("RHOW", "HYPERPRO")
+sensor_uncertainty("RHOW", "TRIOS")
+# sensor_uncertainty("RHOW", "HYPERNETS") # No SD values for Hypernets
+sensor_uncertainty("RHOW", "PACE_V2")
+sensor_uncertainty("RHOW", "PACE_V30")
+sensor_uncertainty("RHOW", "PACE_V31")
 
 # Combine all
-var_sensors <- rbind(var_ed_hyperpro, var_ed_trios, var_ed_hypenets,
-                     var_ld_trios, var_ld_hypernets,
-                     var_lu_trios, var_lu_hypernets,
-                     var_lw_hyperpro, var_lw_trios, var_lw_hypenets,
-                     var_rhow_hyperpro, var_rhow_trios,
-                     var_rhow_pace2, var_rhow_pace3, var_rhow_pace31) |> 
+var_sensors <- map_dfr(dir("output", pattern = "var_stats_", full.names = TRUE), read_csv) |> 
   mutate(cv_median_perc = cv_median * 100,
          sensor = case_when(sensor == "Hyp" ~ "HYPERNETS",
                             sensor == "HYPERPRO" ~ "HyperPRO",
@@ -86,8 +119,9 @@ ggplot(data = var_sensors, aes(x = sensor, y = cv_median_perc, fill = sensor)) +
   # geom_violin(show.legend = FALSE) +
   geom_boxplot(show.legend = FALSE, outliers = FALSE) +
   facet_wrap(~var_name, scales = "free") +
-  labs(title = "Comparison of uncertainties (median CV %) between sensors and variables",
-       subtitle = "Values within boxplots show the spread across all available wavelengths")
+  labs(title = "Comparison of uncertainty between sensors and variables",
+       subtitle = "Values within boxplots show the spread across all wavelengths and samples",
+       x = "System / Version", y = "Coefficient of variation (%)")
 ggsave("figures/test_sensors_var.png", width = 10, height = 6)
 
 

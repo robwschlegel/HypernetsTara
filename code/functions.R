@@ -417,6 +417,7 @@ base_stats <- function(x_vec, y_vec){
 # var_name = "ED"; sensor_X = "HYPERPRO"
 # var_name = "LD"; sensor_X = "TRIOS"
 # var_name = "LU"; sensor_X = "HYPERNETS"
+# var_name = "RHOW"; sensor_X = "HYPERPRO"
 # var_name = "RHOW"; sensor_X = "PACE_V2"
 sensor_uncertainty <- function(var_name, sensor_X){
   
@@ -441,7 +442,7 @@ sensor_uncertainty <- function(var_name, sensor_X){
     if(grepl("PACE", sensor_X)){
       match_base_files <- match_base_files[grepl("OCI", match_base_files)]
     } else {
-      match_base_files <- match_base_files[grepl("in)situ", match_base_files)]
+      match_base_files <- match_base_files[grepl("in_situ", match_base_files)]
     }
   }
   suppressMessages(
