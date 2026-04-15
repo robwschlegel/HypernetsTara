@@ -12,8 +12,8 @@ library(geosphere) # For determining distance between points
 library(ggtext) # For rich text labels
 library(ggimage) # For adding .jpg files to figures
 library(patchwork) # For complex paneling of figures
-library(furrr)
-# library(doParallel); registerDoParallel(cores = detectCores() - 2)
+# library(furrr)
+library(doParallel); registerDoParallel(cores = detectCores() - 2)
 
 
 # Setup -------------------------------------------------------------------
@@ -168,8 +168,67 @@ load_HYPERNETS_coords <- function(file_name){
 }
 
 # Process HYPERNETS files to get mean and sd per wavelength per sequence
-# NB: Designed to work on L1C files
-proc_HYPERNETS <- function(file_name)
+# file_name <- L1C_HYPERNETS_files[10]
+proc_HYPERNETS_L1C <- function(file_name, stat_calc = TRUE){
+
+  print(file_name)
+
+  # Get file info for use later
+  suppressWarnings(nc_info <- ncdump::NetCDF(file_name))
+  
+  # Process data
+  df_base <- tidync(file_name) |> 
+    hyper_tibble() |> 
+    mutate(Rrs = reflectance / pi, .before = "downwelling_radiance")
+  
+  # Calculate stats if desired
+  if(stat_calc){
+
+    df_res <- df_base |> 
+      pivot_longer(Rrs:reflectance_nosc) |> 
+      mutate(wavelength = round(as.numeric(wavelength))) |> 
+      summarise(n = n(),
+                mean = mean(value, na.rm = TRUE),
+                sd = sd(value, na.rm = TRUE), .by = c("wavelength", "name")) |> #, "scan")) |> 
+      # filter(name != "reflectance_nosc") |> 
+      mutate(cv = sd / mean,
+            lon = nc_info$attribute$global$site_longitude,
+            lat = nc_info$attribute$global$site_latitude,
+            date = as.POSIXct(sub("SEQ", "", nc_info$attribute$global$source_file),
+              format = "%Y%m%dT%H%M%S", tz = "UTC"),
+            system = "HYPERNETS") |> 
+      mutate(name = case_when(name == "reflectance" ~ "Rhow",
+                              name == "reflectance_nosc" ~ "Rhow_nosc",
+                              name == "water_leaving_radiance" ~ "Lw",
+                              name == "downwelling_radiance" ~ "Ld",
+                              name == "upwelling_radiance" ~ "Lu",
+                              name == "irradiance" ~ "Ed",
+                              TRUE ~ name)) |> 
+      dplyr::select(system, lon, lat, date, name, wavelength, n, mean, sd, cv)
+
+  } else {
+
+    df_res <- df_base |> 
+      pivot_longer(Rrs:reflectance_nosc) |> 
+      mutate(wavelength = round(as.numeric(wavelength)),
+            lon = nc_info$attribute$global$site_longitude,
+            lat = nc_info$attribute$global$site_latitude,
+            date = as.POSIXct(sub("SEQ", "", nc_info$attribute$global$source_file),
+              format = "%Y%m%dT%H%M%S", tz = "UTC"),
+            system = "HYPERNETS") |> 
+      mutate(name = case_when(name == "reflectance" ~ "Rhow",
+                              name == "reflectance_nosc" ~ "Rhow_nosc",
+                              name == "water_leaving_radiance" ~ "Lw",
+                              name == "downwelling_radiance" ~ "Ld",
+                              name == "upwelling_radiance" ~ "Lu",
+                              name == "irradiance" ~ "Ed",
+                              TRUE ~ name)) |> 
+      dplyr::select(system, lon, lat, date, name, wavelength, value)
+  }
+  
+  # Exit
+  return(df_res)
+}
 
 # Convenience function to get lon/lat coords from HyperPRO SeaBird files
 # file_name <- "~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/hyperpro_processed_data/TaraEuropa_HyperPro_20240821T095801_Ed_Lu_Lw_Rrs_R2.sb"
@@ -186,6 +245,79 @@ load_HyperPRO_coords <- function(file_name){
                        start_time = start_time, end_time = end_time,
                        lat_N = lat_N, lat_S = lat_S, lon_E = lon_E, lon_W = lon_W)
   return(df_res)
+}
+
+# Load the base values from a seaBass So-Rad file
+# file_name <- base_SoRad_files[7]
+proc_seaBass_SoRad <- function(file_name){
+  
+  # Set header rows
+  header_row <- 26
+  head_skip <- 28
+  
+  # Get base data loaded
+  df_headers <- strsplit(str_remove(read_lines(file_name, skip = header_row-1, n_max = 1), "/fields="), ",")[[1]]
+
+  # Lop through rows if the proper header line wasn't found
+  while(!any(grepl("date", df_headers))){
+    head_skip <- head_skip+1
+    header_row <- header_row+1
+    df_headers <- strsplit(str_remove(read_lines(file_name, skip = header_row-1, n_max = 1), "/fields="), ",")[[1]]
+  }
+
+  # Load the seaBass file as a .csv
+  df_base <- read_csv(file_name, skip = head_skip, col_names = df_headers, show_col_types = FALSE)
+
+  # Pivot longer, clean, and exit
+  df_res <- df_base |> 
+    pivot_longer(cols = -c(date:bincount)) |> 
+    mutate(var_name = case_when(grepl("unc", name) ~ "unc", TRUE ~ "mean"),
+           name = gsub("_unc", "", name),
+           val_name = str_extract(name, "^[A-Za-z]+"),
+           wavelength   = as.numeric(str_extract(name, "[0-9.]+"))) |> 
+    pivot_wider(names_from = var_name, values_from = value) |> 
+    mutate(cv_unc = unc / mean,
+           system = "So-Rad") |> # NB: Not technically CV because using uncertainty, not SD
+    dplyr::select(system, val_name, wavelength, bincount, mean, unc, cv_unc) |> 
+    dplyr::rename(n = bincount, name = val_name)
+}
+
+
+# Load the base values from a seaBass HyperPRO file
+# file_name <- base_HyperPRO_files[2]
+proc_seaBass_HyperPRO <- function(file_name){
+  
+  # Set column header rows
+  header_row <- 31
+  head_skip <- 33
+    
+  # Get base data loaded
+  df_headers <- strsplit(str_remove(read_lines(file_name, skip = header_row-1, n_max = 1), "/fields="), ",")[[1]]
+
+  # Lop through rows if the proper header line wasn't found
+  while(!any(grepl("wavelength", df_headers))){
+    head_skip <- head_skip+1
+    header_row <- header_row+1
+    df_headers <- strsplit(str_remove(read_lines(file_name, skip = header_row-1, n_max = 1), "/fields="), ",")[[1]]
+  }
+
+  # Load the seaBass file as a .csv
+  df_base <- read_csv(file_name, skip = head_skip, col_names = df_headers, show_col_types = FALSE)
+
+  # get bincount from first row
+  bincount <- df_base$Ed_bincount[1]
+  
+  # Pivot longer, clean, and exit
+  df_res <- df_base |> 
+    dplyr::select(wavelength:Rrs_unc) |> 
+    pivot_longer(cols = Ed:Rrs_unc) |> 
+    mutate(var_name = case_when(grepl("unc", name) ~ "unc", TRUE ~ "mean"),
+           name = gsub("_unc", "", name)) |> 
+    pivot_wider(names_from = var_name, values_from = value) |> 
+    mutate(cv_unc = unc / mean,
+           n = bincount,
+           system = "HyperPRO") |> # NB: Not technically CV because using uncertainty, not SD
+    dplyr::select(system, name, wavelength, n, mean, unc, cv_unc)
 }
 
 # Check the amount of variance in satellite files and return a message if there is an issue

@@ -49,69 +49,149 @@ matchup_sat_uniq <- matchup_single_all |>
 
 # Uncertainties ----------------------------------------------------------
 
+## Rrs for CTD stations ---------------------------------------------------
+
+# Load mission metadata for reference
+Hyperboost_meta <- read_csv("data/HyperBoost_dataset_AOPs_2023_2024_10042026_Metadata.csv", 
+    show_col_types = FALSE) |> 
+  filter(Cruise == "TARA RETURN LEG") |> 
+  mutate(CTD_time = as.POSIXct(CTD_time, format = "%d/%m/%Y %H:%M", tz = "UTC")) |> 
+  dplyr::select(Cruise:StationName, Latitude_oN_, Longitude_oE_, CTD_time)
+
+# Load the cleaned files
+# NB: After further reflection, it is probably incorrect at this stage to screen the data
+match_base_files <- read_csv("~/HypernetsTara/output/matchup_stats_RHOW_in_situ.csv", 
+    show_col_types = FALSE) |> 
+  filter(sensor_X == "Hyp") |> 
+  separate(file_name, into = c("1", "2", "3", "4", "stub", "5"), sep = "_") |> 
+  mutate(stub = str_sub(stub, 1, -3))
+stubs <- paste(match_base_files$stub, collapse = "|")
+
+# Get HYPERNETS files
+L1C_HYPERNETS_files <- dir("~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/Hypernets_processed_data",
+  full.names = TRUE, recursive = TRUE, pattern = "_L1C_")
+L1C_HYPERNETS_files <- L1C_HYPERNETS_files[grepl("v2.0.nc", L1C_HYPERNETS_files)]
+# L1C_HYPERNETS_files <- L1C_HYPERNETS_files[grepl(stubs, L1C_HYPERNETS_files)] # Clean files only
+# NB: Rather get base values from L1C and compute SD etc.
+# Also, this doesn't work as we are comparing Rrs, and we can't get the SD for that from the L2A files
+# L2A_HYPERNETS_files <- dir("~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/Hypernets_processed_data",
+#   full.names = TRUE, recursive = TRUE, pattern = "_L2A_")
+# L2A_HYPERNETS_files <- L2A_HYPERNETS_files[grepl("v2.0.nc", L2A_HYPERNETS_files)]
+
+# Load HYPERNETS NetCDF files directly
+# NB: Seems to struggle on multiple cores
+var_HYPERNETS_L1C <- plyr::ldply(L1C_HYPERNETS_files, proc_HYPERNETS_L1C, .parallel = FALSE)
+var_HYPERNETS_L1C_raw <- plyr::ldply(L1C_HYPERNETS_files, proc_HYPERNETS_L1C, .parallel = FALSE, stat_calc = FALSE)
+# var_HYPERNETS_L2A <- plyr::ldply(L1C_HYPERNETS_files, proc_HYPERNETS_L2A, .parallel = FALSE)
+
+# Filter out the HYPERNETS samples to within +-30 minutes of the CTD stations during the mission
+sd_Rrs_HYPERNETS <- var_HYPERNETS |> 
+  filter(name == "Rrs",
+         cv > 0,
+         cv < 3) |>
+  cross_join(Hyperboost_meta) |> 
+  mutate(diff_time = abs(difftime(date, CTD_time, units = "mins"))) |> 
+  filter(diff_time <= 30) |> 
+  distinct() |> 
+  dplyr::rename(value = mean) |> 
+  summarise(mean = mean(value),
+            sd = sd(value),
+            cv = sd / mean,
+            cv_perc = cv * 100,
+            N = n(), .by = c("system", "StationNumber", "wavelength"))
+
 # Load the sd values directly from the base data report
-Rrs_SoRad <- read_csv("data/HyperBoost_dataset_AOPs_2023_2024_10042026_Rrs_SoRad.csv",
+sd_Rrs_SoRad <- read_csv("data/HyperBoost_dataset_AOPs_2023_2024_10042026_Rrs_SoRad.csv",
                       show_col_types = FALSE) |> 
   filter(N > 0) |> 
   pivot_longer(cols = `Rrs_SoRad_355.2`:`Rrs_SoRad_800.7_std`) |> 
-  mutate(var_name = case_when(grepl("std", name) ~ "sd",
-                              TRUE ~ "mean"),
+  mutate(var_name = case_when(grepl("std", name) ~ "sd", TRUE ~ "mean"),
          wavelength = gsub("Rrs_SoRad_", "", name),
-         wavelength = as.numeric(gsub("_std", "", wavelength))) |> 
+         wavelength = round(as.numeric(gsub("_std", "", wavelength)))) |> 
   dplyr::select(StationNumber, N, wavelength, var_name, value) |> 
   pivot_wider(values_from = value, names_from = var_name) |> 
   mutate(cv = sd / mean,
          cv_perc = cv*100,
-         system = "So-Rad")
-Rrs_HyperPRO <- read_csv("data/HyperBoost_dataset_AOPs_2023_2024_10042026_Rrs_HTSRB.csv",
+         system = "So-Rad") |> 
+  filter(StationNumber %in% 189:202)
+sd_Rrs_HyperPRO <- read_csv("data/HyperBoost_dataset_AOPs_2023_2024_10042026_Rrs_HTSRB.csv",
                       show_col_types = FALSE) |> 
   filter(N > 0) |> 
   pivot_longer(cols = `Rrs_HTSRB_349.58`:`Rrs_HTSRB_802.42_std`) |> 
-  mutate(var_name = case_when(grepl("std", name) ~ "sd",
-                              TRUE ~ "mean"),
+  mutate(var_name = case_when(grepl("std", name) ~ "sd", TRUE ~ "mean"),
          wavelength = gsub("Rrs_HTSRB_", "", name),
-         wavelength = as.numeric(gsub("_std", "", wavelength))) |> 
+         wavelength = round(as.numeric(gsub("_std", "", wavelength)))) |> 
   dplyr::select(StationNumber, N, wavelength, var_name, value) |> 
   pivot_wider(values_from = value, names_from = var_name) |> 
   mutate(cv = sd / mean,
          cv_perc = cv*100,
-         system = "HyperPRO")
-Rrs_both <- rbind(Rrs_SoRad, Rrs_HyperPRO)
+         system = "HyperPRO") |> 
+  filter(StationNumber %in% 189:202)
+
+# Combine for comparisons
+sd_Rrs_all <- bind_rows(sd_Rrs_SoRad, sd_Rrs_HyperPRO, sd_Rrs_HYPERNETS) |> 
+  filter(wavelength >= 400, wavelength <= 600)
 
 # Mean values
-Rrs_both |> 
-  summarise(cv_median = median(cv_perc),
-            cv_mean = mean(cv_perc), .by = "system")
+sd_Rrs_all |> 
+  summarise(sd_median = median(sd, na.rm = TRUE),
+            sd_mean = mean(sd, na.rm = TRUE),
+            cv_median = median(cv_perc, na.rm = TRUE),
+            cv_mean = mean(cv_perc, na.rm = TRUE), .by = "system")
 
-# Plot
-ggplot(data = Rrs_both, aes(x = system, y = cv_perc, fill = system)) +
+# Boxplot of variances
+var_box <- ggplot(data = sd_Rrs_all, aes(x = system, y = cv_perc, fill = system)) +
   # geom_violin(show.legend = FALSE) +
   geom_boxplot(show.legend = FALSE, outliers = FALSE) +
   # facet_wrap(~var_name, scales = "free") +
-  labs(title = "Comparison of uncertainty between So-Rad and HyperPRO for Rrs",
-       subtitle = "Values within boxplots show the spread across all wavelengths and samples",
-       x = "System", y = "Coefficient of variation (%)")
-ggsave("figures/test_sensors_var_Rrs.png", width = 10, height = 6)
+  labs(title = "Comparison of Rrs variance between the three systems at CTD cast locations",
+       subtitle = "Boxplots show the spread of values across wavelengths 400-600 nm from all stations",
+       x = "System", y = "Coefficient of variation [sd / mean ; %]")
+var_box
+# Bar plot of variance by wavelength
+var_bar <- sd_Rrs_all |> 
+  summarise(cv_perc = median(cv_perc, na.rm = TRUE), .by = c("system", "wavelength")) |> 
+  # mutate(wavelength = round(wavelength/10)*10) |>
+  ggplot(aes(x = wavelength, y = cv_perc, fill = system)) +
+  geom_col(position = "dodge") +
+  # facet_wrap(~var_name, scales = "free") +
+  coord_cartesian(ylim = c(0, 100),
+                  expand = FALSE) +
+  labs(title = "Comparison of Rrs variance between the three systems at CTD cast locations",
+       subtitle = "Bars show the median CV value per wavelength from all stations",
+       x = "Wavelength [nm]", y = "Coefficient of variation [sd / mean ; %]")
+var_bar
+# Combine and save
+var_combi <- ggpubr::ggarrange(var_box, var_bar, ncol = 1, nrow = 2)
+ggsave("figures/test_sensors_var_Rrs.png", var_combi, width = 10, height = 12)
+
+
+## Uncertainty for So-Rad and HyperPRO ------------------------------------
 
 # Load HyperPRO seaBird files directly
+base_HyperPRO_files <- dir("~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/hyperpro_processed_data/V2_2025", 
+  pattern = "_R2.sb", full.names = TRUE)
+unc_HyperPRO <- plyr::ldply(base_HyperPRO_files, proc_seaBass_HyperPRO, .parallel = TRUE)
 
 # Load So-Rad seaBird files directly
+base_SoRad_files <- dir("~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/Trios_processed_data", full.names = TRUE)
+unc_SoRad <- plyr::ldply(base_SoRad_files, proc_seaBass_SoRad, .parallel = TRUE)
 
-# Load HYPERNETS NetCDF files directly
-L1C_HYPERNETS_files <- dir("~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/Hypernets_processed_data",
-                          full.names = TRUE, recursive = TRUE, pattern = "_L1C_")
-L1C_HYPERNETS_files <- L1C_HYPERNETS_files[grepl("v2.0.nc", L1C_HYPERNETS_files)]
-nc_info <- ncdump::NetCDF(L1C_HYPERNETS_files[1])
-L2_HYPERNETS_files <- dir("~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/Hypernets_processed_data",
-                          full.names = TRUE, recursive = TRUE, pattern = "_L2A_")
-L2_HYPERNETS_files <- L2_HYPERNETS_files[grepl("v2.0.nc", L2_HYPERNETS_files)]
-nc_info <- ncdump::NetCDF(L2_HYPERNETS_files[1])
-nc_info$variable
+# Combine for plotting
+unc_deux <- rbind(unc_HyperPRO, unc_SoRad)
+
+# Plot uncertainty ranges for each variable
+ggplot(data = unc_deux, aes(x = system, y = unc, fill = system)) +
+  # geom_violin(show.legend = FALSE) +
+  geom_boxplot(show.legend = FALSE, outliers = FALSE) +
+  facet_wrap(~name, scales = "free") +
+  labs(title = "Comparison of uncertainty between systems and variables",
+       subtitle = "Values within boxplots show the spread across all wavelengths and samples",
+       x = "System", y = "Uncertainty [units for variable]")
+ggsave("figures/test_sensors_unc.png", width = 10, height = 9)
 
 
-
-nc_hyp <- tidync(L1C_HYPERNETS_files[1]) |> 
-  hyper_tibble()
+## Variance from Hypernets_matchups output --------------------------------
 
 # Calculate variance stats from Hypernets_matchups .csv output files
 sensor_uncertainty("ED", "HYPERPRO")
