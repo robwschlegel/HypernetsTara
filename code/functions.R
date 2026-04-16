@@ -37,9 +37,6 @@ file_path_build <- function(var_name, sensor_X, sensor_Y){
 }
 
 # Load a single matchup file and create mean values from all replicates
-# file_name <- "~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_mwm_595/RHOW_HYPERNETS_vs_HYPERPRO/HYPERNETS_vs_HYPERPRO_vs_20240809T073700_RHOW.csv"
-# file_name <- "~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_mwm_595/ED_HYPERNETS_vs_TRIOS/HYPERNETS_vs_TRIOS_vs_20240808T065700_ED.csv"
-# file_name <- "~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_mwm_595/RHOW_HYPERNETS_vs_AQUA/HYPERNETS_vs_AQUA_vs_20240810T110400_RHOW.csv"
 # file_name <- "~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_20260203/RHOW_TRIOS_vs_VIIRS_N/TRIOS_vs_VIIRS_N_vs_20240812T121332_RHOW.csv"
 load_matchup_mean <- function(file_name){
   
@@ -651,7 +648,7 @@ sensor_uncertainty <- function(var_name, sensor_X){
 get_nearest_pixels <- function(df_data, target_lat, target_lon, n_pixels){
   
   # Extract latitude and longitude into a matrix
-  df_coords <- S3A_band_1[, c("latitude", "longitude")]
+  df_coords <- df_data[, c("latitude", "longitude")]
   
   # Target coordinate as a data.frame
   target_coord <- data.frame(latitude = target_lat, 
@@ -663,6 +660,19 @@ get_nearest_pixels <- function(df_data, target_lat, target_lon, n_pixels){
   # Extract the 5 nearest rows
   df_res <- df_data[as.vector(knn_indices$nn.index), ]
   return(df_res)
+}
+
+# Wrapper for OLCI v3 vs v4 analysis
+# file_name <- "~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_20260203/RHOW_HYPERNETS_vs_S3A/HYPERNETS_vs_S3A_vs_20240808T065700_RHOW.csv"
+process_OLCI_matchups <- function(file_name){
+ 
+  # Load a Hypernets_matchup file for reference
+  ref_in_situ <- read_delim(file_name, delim = ";")
+  ref_sat_time <- paste0(ref_in_situ$day[nrow(ref_in_situ)],"T",
+      str_pad(as.numeric(ref_in_situ$time[nrow(ref_in_situ)])+1, 
+          width = 6, side = "left", pad = "0"))
+  
+  
 }
 
 # Function that interrogates each matchup file to produce the needed output for all following comparisons

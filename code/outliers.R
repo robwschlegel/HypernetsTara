@@ -536,3 +536,71 @@ S3A_plot <- S3A_band_1 |>
                  # ylim = c(S3A_match[8,]$latitude-0.01, S3A_match[8,]$latitude+0.01))
 ggsave("figures/S3A_error.png", S3A_plot, height = 6, width = 9)
 
+
+# OLCI v3.0 vs v4.0 ------------------------------------------------------
+
+# Load a Hypernets_matchup file for reference below
+ref_in_situ_A <- read_delim("~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_20260203/RHOW_HYPERNETS_vs_S3A/HYPERNETS_vs_S3A_vs_20240808T065700_RHOW.csv", delim = ";")
+ref_in_situ_A_time <- paste0(ref_in_situ_A$day[nrow(ref_in_situ_A)],"T",
+    str_pad(as.numeric(ref_in_situ_A$time[nrow(ref_in_situ_A)])+1, 
+        width = 6, side = "left", pad = "0"))
+# Get corresponding granule
+files_OLCI_A3 <- dir(dir("/media/calanus/HDD2TB/home/calanus/data/Tara_Images_satelites/OLCI/S3A", 
+    pattern = ref_in_situ_A_time, full.names = TRUE)[1], full.names = TRUE)
+files_OLCI_A4 <- dir(dir("~/data/OLCI-A", pattern = ref_in_situ_A_time, full.names = TRUE), full.names = TRUE)
+
+# Load the NetCDF coords
+OLCI_A3_coords <- tidync::tidync(files_OLCI_A3[grepl("geo_coordinates", files_OLCI_A3)][1]) |> 
+  tidync::hyper_tibble()
+OLCI_A4_coords <- tidync::tidync(files_OLCI_A4[grepl("geo_coordinates", files_OLCI_A4)]) |> 
+  tidync::hyper_tibble()
+
+# Load the NetCDF files
+## A3
+# ncdump::NetCDF(files_OLCI_A3[grepl("Oa02_reflectance.nc", files_OLCI_A3)])
+Oa02_A3 <- tidync(files_OLCI_A3[grepl("Oa02_reflectance.nc", files_OLCI_A3)]) |> 
+    tidync::hyper_tibble() |> left_join(OLCI_A3_coords, by = join_by(columns, rows))
+Oa06_A3 <- tidync(files_OLCI_A3[grepl("Oa06_reflectance.nc", files_OLCI_A3)]) |> 
+    tidync::hyper_tibble() |> left_join(OLCI_A3_coords, by = join_by(columns, rows))
+Oa07_A3 <- tidync(files_OLCI_A3[grepl("Oa07_reflectance.nc", files_OLCI_A3)]) |> 
+    tidync::hyper_tibble() |> left_join(OLCI_A3_coords, by = join_by(columns, rows))
+## A4
+Oa02_A4 <- tidync(files_OLCI_A4[grepl("Oa02_reflectance.nc", files_OLCI_A4)]) |> 
+    tidync::hyper_tibble() |> left_join(OLCI_A4_coords, by = join_by(columns, rows))
+Oa06_A4 <- tidync(files_OLCI_A4[grepl("Oa06_reflectance.nc", files_OLCI_A4)]) |> 
+    tidync::hyper_tibble() |> left_join(OLCI_A4_coords, by = join_by(columns, rows))
+Oa07_A4 <- tidync(files_OLCI_A4[grepl("Oa07_reflectance.nc", files_OLCI_A4)]) |> 
+    tidync::hyper_tibble() |> left_join(OLCI_A4_coords, by = join_by(columns, rows))
+
+# Extract 3x3 grid around target pixel
+target_lat <- ref_in_situ_A[7,]$latitude; target_lon <- ref_in_situ_A[7,]$longitude
+## A3
+Oa02_A3_target <- get_nearest_pixels(Oa02_A3, target_lat, target_lon, 9)
+mean(Oa02_A3_target$Oa02_reflectance, na.rm = TRUE)
+Oa06_A3_target <- get_nearest_pixels(Oa06_A3, target_lat, target_lon, 9)
+mean(Oa06_A3_target$Oa06_reflectance, na.rm = TRUE)
+Oa07_A3_target <- get_nearest_pixels(Oa07_A3, target_lat, target_lon, 9)
+mean(Oa07_A3_target$Oa07_reflectance, na.rm = TRUE)
+## A4
+Oa02_A4_target <- get_nearest_pixels(Oa02_A4, target_lat, target_lon, 9)
+mean(Oa02_A4_target$Oa02_reflectance, na.rm = TRUE)
+Oa06_A4_target <- get_nearest_pixels(Oa06_A4, target_lat, target_lon, 9)
+mean(Oa06_A4_target$Oa06_reflectance, na.rm = TRUE)
+Oa07_A4_target <- get_nearest_pixels(Oa07_A4, target_lat, target_lon, 9)
+mean(Oa07_A4_target$Oa07_reflectance, na.rm = TRUE)
+
+# Compare against in situ data
+## 413
+round(ref_in_situ_A$`413`[1], 4) # In situ mean value
+round(ref_in_situ_A$`413`[5], 4) # In situ weighted value
+round(ref_in_situ_A$`413`[7], 4) # OLCI-A v3.0 weighted value
+round(mean(Oa02_A3_target$Oa02_reflectance), 4) # Mean 3x3 grid OLCI-A v3.0 value
+round(mean(Oa02_A4_target$Oa02_reflectance), 4) # Mean 3x3 grid OLCI-A v3.0 value
+## 560
+round(ref_in_situ_A$`560`[1], 4) # In situ mean value
+round(ref_in_situ_A$`560`[5], 4) # In situ weighted value
+round(ref_in_situ_A$`560`[7], 4) # OLCI-A v3.0 weighted value
+round(mean(Oa06_A3_target$Oa06_reflectance), 4) # Mean 3x3 grid OLCI-A v3.0 value
+round(mean(Oa06_A4_target$Oa06_reflectance), 4) # Mean 3x3 grid OLCI-A v3.0 value
+round(mean(Oa07_A3_target$Oa07_reflectance), 4) # Mean 3x3 grid OLCI-A v3.0 value
+round(mean(Oa07_A4_target$Oa07_reflectance), 4) # Mean 3x3 grid OLCI-A v3.0 value
