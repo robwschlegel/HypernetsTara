@@ -672,7 +672,56 @@ process_OLCI_matchups <- function(file_name){
       str_pad(as.numeric(ref_in_situ$time[nrow(ref_in_situ)])+1, 
           width = 6, side = "left", pad = "0"))
   
+  # Determine if S3A or S3B
+  if(grepl("S3A", file_name)){
+    OLCI_stub_v3 <- "S3A"
+    OLCI_stub_v4 <- "OLCI-A"
+  } else {
+    OLCI_stub_v3 <- "S3B"
+    OLCI_stub_v4 <- "OLCI-B"
+  }
   
+  # Get granule files
+  ## NB: Occasionally there are multiple granules for files_OLCI_A3 so this selects the first by default
+  files_v3 <- dir(dir(paste0("/media/calanus/HDD2TB/home/calanus/data/Tara_Images_satelites/OLCI/", OLCI_stub_v3), 
+      pattern = ref_sat_time, full.names = TRUE)[1], full.names = TRUE)
+  files_v4 <- dir(dir(paste0("~/data/", OLCI_stub_v4), pattern = ref_sat_time, full.names = TRUE), full.names = TRUE)
+  
+  # Reflectance files
+  files_Oa_v3 <- files_v3[(grepl("Oa01|Oa02|Oa03|Oa04|Oa05|Oa06", files_v3))]
+  files_Oa_v4 <- files_v4[(grepl("Oa01|Oa02|Oa03|Oa04|Oa05|Oa06", files_v4))]
+
+  # Load the NetCDF coords
+  coords_v3 <- tidync::tidync(files_v3[grepl("geo_coordinates", files_v3)][1]) |> tidync::hyper_tibble()
+  # coords_rast_v3 <- raster::raster(files_v3[grepl("geo_coordinates", files_v3)][1])
+  coords_v4 <- tidync::tidync(files_v4[grepl("geo_coordinates", files_v4)][1]) |> tidync::hyper_tibble()
+  
+  # Get target pixel
+  target_lat <- ref_in_situ[nrow(ref_in_situ),]$latitude
+  target_lon <- ref_in_situ[nrow(ref_in_situ),]$longitude
+  
+  # Extract 3x3 grid around target pixel
+  target_v3 <- get_nearest_pixels(coords_v3, target_lat, target_lon, 9)
+  target_v4 <- get_nearest_pixels(coords_v4, target_lat, target_lon, 9)
+
+  # Get the pixel index from raster versions
+  # NB: The coords nc files don't want to play nice with the raster package
+  # pixel_coords$cell_numbers <- as.integer(raster::cellFromXY(sat_rast, xy = pixel_coords))
+
+  # Load the subsetted pixel
+  reflectance_v3 <- tidync(files_Oa_v3[1]) |> 
+    # tidync::hyper_filter(columns = columns %in% target_v3$columns,
+    #                      rows = rows %in% target_v3$rows) |> # Creates undesired behaviour from hyper_tibble
+    tidync::hyper_tibble(columns = columns %in% target_v3$columns,
+                         rows = rows %in% target_v3$rows) |> 
+    left_join(coords_v3, by = join_by(columns, rows)) #|> 
+    filter(lon >= min(target_v3$longitude), lon <= max(target_v3$longitude))
+  reflectance_v3 <- tidync(files_Oa_v3[1]) |> 
+    tidync::hyper_tibble()
+
+  Oa02_A3 <- tidync(files_OLCI_A3[grepl("Oa02_reflectance.nc", files_OLCI_A3)]) |> 
+    tidync::hyper_tibble() |> left_join(coords_v3, by = join_by(columns, rows))
+
 }
 
 # Function that interrogates each matchup file to produce the needed output for all following comparisons
