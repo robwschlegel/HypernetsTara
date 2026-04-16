@@ -709,18 +709,27 @@ process_OLCI_matchups <- function(file_name){
   # pixel_coords$cell_numbers <- as.integer(raster::cellFromXY(sat_rast, xy = pixel_coords))
 
   # Load the subsetted pixel
-  reflectance_v3 <- tidync(files_Oa_v3[1]) |> 
-    # tidync::hyper_filter(columns = columns %in% target_v3$columns,
-    #                      rows = rows %in% target_v3$rows) |> # Creates undesired behaviour from hyper_tibble
-    tidync::hyper_tibble(columns = columns %in% target_v3$columns,
-                         rows = rows %in% target_v3$rows) |> 
-    left_join(coords_v3, by = join_by(columns, rows)) #|> 
-    filter(lon >= min(target_v3$longitude), lon <= max(target_v3$longitude))
-  reflectance_v3 <- tidync(files_Oa_v3[1]) |> 
-    tidync::hyper_tibble()
-
-  Oa02_A3 <- tidync(files_OLCI_A3[grepl("Oa02_reflectance.nc", files_OLCI_A3)]) |> 
-    tidync::hyper_tibble() |> left_join(coords_v3, by = join_by(columns, rows))
+  wave_bands <- c("Oa01", "Oa02", "Oa03", "Oa04", "Oa05", "Oa06")
+  wave_bands_sub <- wave_bands[1]
+  
+  reflectance_v3 <- map_dfr(1:length(wave_bands),
+                              function(i) tidync(files_Oa_v3[grepl(wave_bands[i], files_Oa_v3)]) |> 
+                                              tidync::hyper_tibble(columns = columns %in% target_v3$columns,
+                                                                  rows = rows %in% target_v3$rows,
+                                                                  select_var = paste0(wave_bands[i],"_reflectance")) |> 
+                                              bind_cols(target_v3) |> 
+                                              dplyr::rename(value = paste0(wave_bands[i],"_reflectance")) |> 
+                                              mutate(wave_band = paste0(wave_bands[i],"_reflectance"), .before = "value")
+                            )
+  reflectance_v4 <- map_dfr(1:length(wave_bands),
+                            function(i) tidync(files_Oa_v4[grepl(wave_bands[i], files_Oa_v4)]) |> 
+                                            tidync::hyper_tibble(columns = columns %in% target_v4$columns,
+                                                                rows = rows %in% target_v4$rows,
+                                                                select_var = paste0(wave_bands[i],"_reflectance")) |> 
+                                            bind_cols(target_v4) |> 
+                                            dplyr::rename(value = paste0(wave_bands[i],"_reflectance")) |> 
+                                            mutate(wave_band = paste0(wave_bands[i],"_reflectance"), .before = "value")
+                          )
 
 }
 
