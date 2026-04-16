@@ -85,7 +85,7 @@ var_HYPERNETS_L1C_raw <- plyr::ldply(L1C_HYPERNETS_files, proc_HYPERNETS_L1C, .p
 # var_HYPERNETS_L2A <- plyr::ldply(L1C_HYPERNETS_files, proc_HYPERNETS_L2A, .parallel = FALSE)
 
 # Filter out the HYPERNETS samples to within +-30 minutes of the CTD stations during the mission
-sd_Rrs_HYPERNETS <- var_HYPERNETS |> 
+sd_Rrs_HYPERNETS <- var_HYPERNETS_L1C |> 
   filter(name == "Rrs",
          cv > 0,
          cv < 3) |>

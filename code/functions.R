@@ -664,12 +664,14 @@ get_nearest_pixels <- function(df_data, target_lat, target_lon, n_pixels){
 
 # Wrapper for OLCI v3 vs v4 analysis
 # file_name <- "~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_20260203/RHOW_HYPERNETS_vs_S3A/HYPERNETS_vs_S3A_vs_20240808T065700_RHOW.csv"
+# file_name <- match_hyp_S3A[2]
 process_OLCI_matchups <- function(file_name){
  
   # Load a Hypernets_matchup file for reference
-  ref_in_situ <- read_delim(file_name, delim = ";")
+  ref_in_situ <- read_delim(file_name, delim = ";", col_types = "ccccnnic")
+  colnames(ref_in_situ)[1] <- "sensor"
   ref_sat_time <- paste0(ref_in_situ$day[nrow(ref_in_situ)],"T",
-      str_pad(as.numeric(ref_in_situ$time[nrow(ref_in_situ)])+1, 
+      str_pad(as.numeric(ref_in_situ$time[nrow(ref_in_situ)])+0, 
           width = 6, side = "left", pad = "0"))
   
   # Determine if S3A or S3B
@@ -684,16 +686,29 @@ process_OLCI_matchups <- function(file_name){
   # Get granule files
   ## NB: Occasionally there are multiple granules for files_OLCI_A3 so this selects the first by default
   files_v3 <- dir(dir(paste0("/media/calanus/HDD2TB/home/calanus/data/Tara_Images_satelites/OLCI/", OLCI_stub_v3), 
-      pattern = ref_sat_time, full.names = TRUE)[1], full.names = TRUE)
-  files_v4 <- dir(dir(paste0("~/data/", OLCI_stub_v4), pattern = ref_sat_time, full.names = TRUE), full.names = TRUE)
+      pattern = paste0("___",ref_sat_time), full.names = TRUE)[1], full.names = TRUE)
+  files_v4 <- dir(dir(paste0("~/data/", OLCI_stub_v4), 
+      pattern = paste0("___",ref_sat_time), full.names = TRUE), full.names = TRUE)
+  
+  # Correct if files not found due to slight time mismatches
+  sub_time_bump <- 1
+  while(length(files_v3) == 0){
+     ref_sat_time <- paste0(ref_in_situ$day[nrow(ref_in_situ)],"T",
+     str_pad(as.numeric(ref_in_situ$time[nrow(ref_in_situ)])+sub_time_bump, 
+          width = 6, side = "left", pad = "0"))
+    sub_time_bump <- sub_time_bump+1
+    files_v3 <- dir(dir(paste0("/media/calanus/HDD2TB/home/calanus/data/Tara_Images_satelites/OLCI/", OLCI_stub_v3), 
+        pattern = paste0("___",ref_sat_time), full.names = TRUE)[1], full.names = TRUE)
+    files_v4 <- dir(dir(paste0("~/data/", OLCI_stub_v4), 
+        pattern = paste0("___",ref_sat_time), full.names = TRUE), full.names = TRUE)
+  }
   
   # Reflectance files
-  files_Oa_v3 <- files_v3[(grepl("Oa01|Oa02|Oa03|Oa04|Oa05|Oa06", files_v3))]
-  files_Oa_v4 <- files_v4[(grepl("Oa01|Oa02|Oa03|Oa04|Oa05|Oa06", files_v4))]
+  files_Oa_v3 <- files_v3[(grepl("Oa01|Oa02|Oa03|Oa04|Oa05|Oa06|Oa07|Oa08|Oa09|Oa10", files_v3))]
+  files_Oa_v4 <- files_v4[(grepl("Oa01|Oa02|Oa03|Oa04|Oa05|Oa06|Oa07|Oa08|Oa09|Oa10", files_v4))]
 
   # Load the NetCDF coords
   coords_v3 <- tidync::tidync(files_v3[grepl("geo_coordinates", files_v3)][1]) |> tidync::hyper_tibble()
-  # coords_rast_v3 <- raster::raster(files_v3[grepl("geo_coordinates", files_v3)][1])
   coords_v4 <- tidync::tidync(files_v4[grepl("geo_coordinates", files_v4)][1]) |> tidync::hyper_tibble()
   
   # Get target pixel
@@ -701,36 +716,68 @@ process_OLCI_matchups <- function(file_name){
   target_lon <- ref_in_situ[nrow(ref_in_situ),]$longitude
   
   # Extract 3x3 grid around target pixel
-  target_v3 <- get_nearest_pixels(coords_v3, target_lat, target_lon, 9)
-  target_v4 <- get_nearest_pixels(coords_v4, target_lat, target_lon, 9)
-
-  # Get the pixel index from raster versions
-  # NB: The coords nc files don't want to play nice with the raster package
-  # pixel_coords$cell_numbers <- as.integer(raster::cellFromXY(sat_rast, xy = pixel_coords))
+  target_v3 <- get_nearest_pixels(coords_v3, target_lat, target_lon, 9) |> 
+    mutate(rows = as.numeric(rows), columns = as.numeric(columns))
+  target_v4 <- get_nearest_pixels(coords_v4, target_lat, target_lon, 9) |> 
+    mutate(rows = as.numeric(rows), columns = as.numeric(columns))
 
   # Load the subsetted pixel
-  wave_bands <- c("Oa01", "Oa02", "Oa03", "Oa04", "Oa05", "Oa06")
-  wave_bands_sub <- wave_bands[1]
+  wave_bands <- c("Oa01", "Oa02", "Oa03", "Oa04", "Oa05", "Oa06", "Oa07", "Oa08", "Oa09", "Oa10")
   
-  reflectance_v3 <- map_dfr(1:length(wave_bands),
-                              function(i) tidync(files_Oa_v3[grepl(wave_bands[i], files_Oa_v3)]) |> 
-                                              tidync::hyper_tibble(columns = columns %in% target_v3$columns,
-                                                                  rows = rows %in% target_v3$rows,
-                                                                  select_var = paste0(wave_bands[i],"_reflectance")) |> 
-                                              bind_cols(target_v3) |> 
-                                              dplyr::rename(value = paste0(wave_bands[i],"_reflectance")) |> 
-                                              mutate(wave_band = paste0(wave_bands[i],"_reflectance"), .before = "value")
-                            )
-  reflectance_v4 <- map_dfr(1:length(wave_bands),
-                            function(i) tidync(files_Oa_v4[grepl(wave_bands[i], files_Oa_v4)]) |> 
-                                            tidync::hyper_tibble(columns = columns %in% target_v4$columns,
-                                                                rows = rows %in% target_v4$rows,
-                                                                select_var = paste0(wave_bands[i],"_reflectance")) |> 
-                                            bind_cols(target_v4) |> 
-                                            dplyr::rename(value = paste0(wave_bands[i],"_reflectance")) |> 
-                                            mutate(wave_band = paste0(wave_bands[i],"_reflectance"), .before = "value")
-                          )
+  # Quick wrapper for loading files
+  load_OLCI_sub <- function(wave_band, file_list, target_vals){
+    col_idx <- seq(min(target_vals$columns)-1, max(target_vals$columns)+1, by = 1)
+    row_idx <- seq(min(target_vals$rows)-1, max(target_vals$rows)+1, by = 1)
+    df_res <- tidync(file_list[grepl(wave_band, file_list)]) |> 
+      tidync::hyper_tibble(columns = columns %in% col_idx,
+                           rows = rows %in% row_idx, 
+                           select_var = c(paste0(wave_band,"_reflectance"))) |>
+      mutate(columns = as.numeric(columns), rows = as.numeric(rows)) |> 
+      right_join(target_vals, by = c("columns", "rows")) |> 
+      dplyr::rename(value = paste0(wave_band,"_reflectance")) |> 
+      mutate(wave_band = paste0(wave_band,"_reflectance"), .before = "value")
+    return(df_res)
+    # rm(wave_band, file_list, target_vals, col_idx, row_idx, df_res)
+  } 
+  reflectance_v3 <- map_dfr(wave_bands, load_OLCI_sub, file_list = files_Oa_v3, target_vals = target_v3) |> 
+    mutate(version = paste0(OLCI_stub_v3," v3.0")) |> 
+    dplyr::select(version, wave_band, longitude, latitude, value)
+  reflectance_v4 <- map_dfr(wave_bands, load_OLCI_sub, file_list = files_Oa_v4, target_vals = target_v4) |> 
+    mutate(version = paste0(OLCI_stub_v3," v4.0")) |> # NB: OLCI_stub_v3 is intentional here
+    dplyr::select(version, wave_band, longitude, latitude, value) |> 
+    mutate(value = value*pi)
+  
+  # Combine and calculate means and sd
+  reflectance_v3_v4 <- bind_rows(reflectance_v3, reflectance_v4) |> 
+    mutate(wavelength = case_when(wave_band == "Oa01_reflectance" ~ "400",
+                                  wave_band == "Oa02_reflectance" ~ "413",
+                                  wave_band == "Oa03_reflectance" ~ "443",
+                                  wave_band == "Oa04_reflectance" ~ "490",
+                                  wave_band == "Oa05_reflectance" ~ "510",
+                                  wave_band == "Oa06_reflectance" ~ "560",
+                                  wave_band == "Oa07_reflectance" ~ "620",
+                                  wave_band == "Oa08_reflectance" ~ "665",
+                                  wave_band == "Oa09_reflectance" ~ "674",
+                                  wave_band == "Oa10_reflectance" ~ "681")) |> 
+    summarise(mean = mean(value), 
+              # sd = sd(value), # To be incorporated at a later date to also test the sd output of Hypernets_matchups
+              .by = c("version", "wavelength")) |> 
+    pivot_wider(names_from = version, values_from = mean)
 
+  # Filter wavelengths from Hypernets_matchups file
+  df_res_hm <- ref_in_situ |> 
+    mutate(sensor = gsub(" 1$| 2$| 3$| 4$| 5$| 6$| 7$| 8$| 9$", "", sensor)) |>
+    filter(sensor != "Hyp_nosc") |> 
+    filter(data_type %in% c("weighted")) |> 
+    pivot_longer(cols = matches("1|2|3|4|5|6|7|8|9"), names_to = "wavelength", values_to = "value") |> 
+    dplyr::select(sensor, wavelength, value) |>
+    pivot_wider(names_from = sensor, values_from = value) |>
+    na.omit()
+
+  # Combine and exit
+  df_res <- left_join(reflectance_v3_v4, df_res_hm, by = "wavelength") |> 
+    mutate(granule_time = ref_sat_time, .before = "wavelength")
+  return(df_res)
 }
 
 # Function that interrogates each matchup file to produce the needed output for all following comparisons
