@@ -93,12 +93,9 @@ sd_Rrs_HYPERNETS <- var_HYPERNETS_L1C |>
   mutate(diff_time = abs(difftime(date, CTD_time, units = "mins"))) |> 
   filter(diff_time <= 30) |> 
   distinct() |> 
-  dplyr::rename(value = mean) |> 
-  summarise(mean = mean(value),
-            sd = sd(value),
-            cv = sd / mean,
-            cv_perc = cv * 100,
-            N = n(), .by = c("system", "StationNumber", "wavelength"))
+  dplyr::rename(N = n) |> 
+  dplyr::select(system, StationNumber, N, wavelength, mean, sd, cv) |> 
+  mutate(cv_perc = cv * 100)
 
 # Load the sd values directly from the base data report
 sd_Rrs_SoRad <- read_csv("data/HyperBoost_dataset_AOPs_2023_2024_10042026_Rrs_SoRad.csv",
@@ -130,24 +127,22 @@ sd_Rrs_HyperPRO <- read_csv("data/HyperBoost_dataset_AOPs_2023_2024_10042026_Rrs
 
 # Combine for comparisons
 sd_Rrs_all <- bind_rows(sd_Rrs_SoRad, sd_Rrs_HyperPRO, sd_Rrs_HYPERNETS) |> 
-  filter(wavelength >= 400, wavelength <= 600)
+  filter(wavelength >= 400, wavelength <= 600) |> 
+  filter(cv_perc > 0) #|> # These are from single samples with 0 for SD
+  # filter(wavelength %in% sd_Rrs_SoRad$wavelength,
+        #  wavelength %in% sd_Rrs_HyperPRO$wavelength) # There aren't data per nm for these two
+write_csv(sd_Rrs_all, file = "output/sd_Rrs_all.csv")
 
 # Mean values
-sd_Rrs_all |> 
+sd_Rrs_all_labels <- sd_Rrs_all |> 
   summarise(sd_median = median(sd, na.rm = TRUE),
             sd_mean = mean(sd, na.rm = TRUE),
             cv_median = median(cv_perc, na.rm = TRUE),
-            cv_mean = mean(cv_perc, na.rm = TRUE), .by = "system")
+            cv_mean = mean(cv_perc, na.rm = TRUE),
+            n = n(), .by = "system") |> 
+  mutate(cv_perc_label = paste0("median CV = ",round(cv_median, 1)),
+         n_label = paste0("n = ",n))
 
-# Boxplot of variances
-var_box <- ggplot(data = sd_Rrs_all, aes(x = system, y = cv_perc, fill = system)) +
-  # geom_violin(show.legend = FALSE) +
-  geom_boxplot(show.legend = FALSE, outliers = FALSE) +
-  # facet_wrap(~var_name, scales = "free") +
-  labs(title = "Comparison of Rrs variance between the three systems at CTD cast locations",
-       subtitle = "Boxplots show the spread of values across wavelengths 400-600 nm from all stations",
-       x = "System", y = "Coefficient of variation [sd / mean ; %]")
-var_box
 # Bar plot of variance by wavelength
 var_bar <- sd_Rrs_all |> 
   summarise(cv_perc = median(cv_perc, na.rm = TRUE), .by = c("system", "wavelength")) |> 
@@ -155,15 +150,32 @@ var_bar <- sd_Rrs_all |>
   ggplot(aes(x = wavelength, y = cv_perc, fill = system)) +
   geom_col(position = "dodge") +
   # facet_wrap(~var_name, scales = "free") +
-  coord_cartesian(ylim = c(0, 100),
-                  expand = FALSE) +
-  labs(title = "Comparison of Rrs variance between the three systems at CTD cast locations",
-       subtitle = "Bars show the median CV value per wavelength from all stations",
-       x = "Wavelength [nm]", y = "Coefficient of variation [sd / mean ; %]")
-var_bar
+  coord_cartesian(ylim = c(0, 25), expand = FALSE) +
+  labs(x = "Wavelength [nm]", y = "Coefficient of variation [CV ; sd / mean ; %]", fill = "System",
+       title = "Comparison of Rrs variance between the three systems at CTD cast locations",
+       subtitle = "Bars show the median CV value per wavelength from all stations; note that only HYPERNETS has values for each wavelength") +
+  theme_minimal() +
+  theme(panel.border = element_rect(fill = NA, colour = "black"),
+        legend.position = "bottom")
+# var_bar
+
+# Boxplot of variances
+var_box <- ggplot(data = sd_Rrs_all, aes(x = system, y = cv_perc, fill = system)) +
+  geom_boxplot(show.legend = FALSE, outliers = FALSE) +
+  # geom_violin(show.legend = FALSE) +
+  geom_text(data = sd_Rrs_all_labels, y = 17, aes(x = system, label = n_label)) +
+  geom_text(data = sd_Rrs_all_labels, y = 15, aes(x = system, label = cv_perc_label)) +
+   coord_cartesian(ylim = c(-1, 30), expand = FALSE) +
+  labs(x = "System", y = "Coefficient of variation [CV ; sd / mean ; %]",
+      #  title = "Comparison of Rrs variance between the three systems at CTD cast locations",
+       subtitle = "Boxplots show the spread of values across wavelengths 400-600 nm from all stations; note larger sample size for HYPERNETS") +
+  theme_minimal() +
+  theme(panel.border = element_rect(fill = NA, colour = "black"))
+# var_box
+
 # Combine and save
-var_combi <- ggpubr::ggarrange(var_box, var_bar, ncol = 1, nrow = 2)
-ggsave("figures/test_sensors_var_Rrs.png", var_combi, width = 10, height = 12)
+var_combi <- ggpubr::ggarrange(var_bar, var_box, ncol = 1, nrow = 2)
+ggsave("figures/test_sensors_var_Rrs.png", var_combi, width = 12, height = 10)
 
 
 ## Uncertainty for So-Rad and HyperPRO ------------------------------------
