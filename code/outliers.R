@@ -481,6 +481,7 @@ write_csv(satellite_outliers, "meta/satellite_outliers.csv")
 
 # Load outlier list
 satellite_outliers <- read_csv("meta/satellite_outliers.csv")
+# NB: No Sentinel-3 outliers
 
 # Get list of OLCI Hypernets_matchups
 match_hyp_S3A <- dir("~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_20260203/RHOW_HYPERNETS_vs_S3A", 
@@ -538,30 +539,58 @@ all_S3_stats <- bind_rows(hyp_S3A_stats, hyp_S3B_stats,
                             system == "TRIOS" ~ "So-Rad", TRUE ~ system))
 write_csv(all_S3_stats, "output/stats_S3_all.csv")
 
-# Plot Bias and Error as barplots
+# Add info for plotting
+all_S3_stats <- all_S3_stats |> 
+  mutate(version = gsub("S3A |S3B ", "", sat_version)) |> 
+  mutate(version = factor(version, levels = c("hm", "v3.0", "v4.0")))
+
+# Reduce stats for plotting
+all_S3_stats_slim <- all_S3_stats |> dplyr::rename(count_match = n) |> 
+  dplyr::select(system, sat, count_match) |> distinct() |> 
+  mutate(label = paste0("n = ", count_match))
+
+# Plot Error as barplots
 S3_error_col <- all_S3_stats |> 
   filter(wavelength < 600) |> 
   mutate(wavelength = as.character(wavelength)) |> 
   ggplot(aes(x = wavelength, y = Error)) +
-  geom_col(aes(fill = sat_version), position = "dodge") +
+  geom_col(aes(fill = version), position = "dodge") +
+  geom_text(data = all_S3_stats_slim, x = "400", y = 150, hjust = 0, vjust = 1, size = 4,
+            aes(label = label)) +
   facet_grid(sat~system) +
   theme_minimal() +
-  labs(x = "Wave band [nm]", y = "Error [%]", fill = "Platform / Version",
-       title = "Comparisons of matchups per wavelength",
-       subtitle = "Bars show the final Error (%) for all matchups") +
-  theme(panel.border = element_rect(fill = NA, colour = "black"))
+  labs(x = "Waveband [nm]", y = "Error [%]", fill = "Version",
+       title = "Comparison of the Error (%) for all matchups per waveband",
+       subtitle = "Each column of panels shows one in situ system; each row shows S3A (top) or S3B (bottom); count of matchups shown as 'n'",
+       caption = "Version: hm = original Hypernets_matchups output, v3.0/v4.0 data extracted directly from corresponding NetCDF files in granules.
+Note that the very large error values at 560 nm for 'hm' were caused by a bug that coded the in situ values at 510 nm for comparison against satellite data at 560 nm. 
+This is why there are no in situ values available to calculate the error values for 510 nm. Note that for v3.0 and v4.0 the correct 560 nm vs 560 nm comparisons are made.
+For almost all wavebands for all in situ systems the error values improve from v3.0 to v4.0 for S3A. The opposite is true for S3B. Particularly for HyperPRO 560 nm mathcups.") +
+  theme(panel.border = element_rect(fill = NA, colour = "black"),
+        plot.caption = element_text(hjust = 0),
+        plot.caption.position = "plot")
 ggsave("figures/test_OLCI_error_col.png", S3_error_col, width = 12, height = 8)
+
+# Plot Bias as barplots
 S3_bias_col <- all_S3_stats |> 
   filter(wavelength < 600) |> 
   mutate(wavelength = as.character(wavelength)) |> 
   ggplot(aes(x = wavelength, y = Bias)) +
-  geom_col(aes(fill = sat_version), position = "dodge") +
+  geom_col(aes(fill = version), position = "dodge") +
+  geom_text(data = all_S3_stats_slim, x = "400", y = 150, hjust = 0, vjust = 1, size = 4,
+          aes(label = label)) +
   facet_grid(sat~system) +
   theme_minimal() +
-  labs(x = "Wave band [nm]", y = "Bias [%]", fill = "Platform / Version",
-       title = "Comparisons of matchups per wavelength",
-       subtitle = "Bars show the final Bias (%) for all matchups") +
-  theme(panel.border = element_rect(fill = NA, colour = "black"))
+  labs(x = "Wave band [nm]", y = "Bias [%]", fill = "Version",
+       title = "Comparison of the Bias (%) for all matchups per waveband",
+       subtitle = "Each column of panels shows one in situ system; each row shows S3A (top) or S3B (bottom); count of matchups shown as 'n'",
+       caption = "Version: hm = original Hypernets_matchups output, v3.0/v4.0 data extracted directly from corresponding NetCDF files in granules.
+Note that the very large bias values at 560 nm for 'hm' were caused by a bug that coded the in situ values at 510 nm for comparison against satellite data at 560 nm. 
+This is why there are no in situ values available to calculate the bias values for 510 nm. Note that for v3.0 and v4.0 the correct 560 nm vs 560 nm comparisons are made.
+For almost all wavebands for all in situ systems the bias values improve from v3.0 to v4.0 for S3A and S3B. The exception being for HyperPRO vs S3B v4.0.") +
+  theme(panel.border = element_rect(fill = NA, colour = "black"),
+        plot.caption = element_text(hjust = 0),
+        plot.caption.position = "plot")
 ggsave("figures/test_OLCI_bias_col.png", S3_bias_col, width = 12, height = 8)
 
 # Create long versions and stack for boxplots
@@ -607,39 +636,44 @@ ggsave("figures/test_OLCI_box.png", S3_box_plot, width = 12, height = 8)
 
 # Create semi-long versions and stack for scatterplot
 hyp_S3A_semi <- pivot_longer(hyp_S3A, cols = `S3A v3.0`:`S3A hm`) |> 
-  mutate(sat = "S3A", is = "HYPERNETS") |> dplyr::rename(is_val = Hyp)
+  mutate(sat = "S3A", system = "HYPERNETS") |> dplyr::rename(is_val = Hyp)
 hyp_S3B_semi <- pivot_longer(hyp_S3B, cols = `S3B v3.0`:`S3B hm`) |> 
-  mutate(sat = "S3B", is = "HYPERNETS") |> dplyr::rename(is_val = Hyp)
+  mutate(sat = "S3B", system = "HYPERNETS") |> dplyr::rename(is_val = Hyp)
 pro_S3A_semi <- pivot_longer(pro_S3A, cols = `S3A v3.0`:`S3A hm`) |> 
-  mutate(sat = "S3A", is = "HyperPRO") |> dplyr::rename(is_val = HYPERPRO)
+  mutate(sat = "S3A", system = "HyperPRO") |> dplyr::rename(is_val = HYPERPRO)
 pro_S3B_semi <- pivot_longer(pro_S3B, cols = `S3B v3.0`:`S3B hm`) |> 
-  mutate(sat = "S3B", is = "HyperPRO") |> dplyr::rename(is_val = HYPERPRO)
+  mutate(sat = "S3B", system = "HyperPRO") |> dplyr::rename(is_val = HYPERPRO)
 tri_S3A_semi <- pivot_longer(tri_S3A, cols = `S3A v3.0`:`S3A hm`) |> 
-  mutate(sat = "S3A", is = "So-Rad") |> dplyr::rename(is_val = TRIOS)
+  mutate(sat = "S3A", system = "So-Rad") |> dplyr::rename(is_val = TRIOS)
 tri_S3B_semi <- pivot_longer(tri_S3B, cols = `S3B v3.0`:`S3B hm`) |> 
-  mutate(sat = "S3B", is = "So-Rad") |> dplyr::rename(is_val = TRIOS)
+  mutate(sat = "S3B", system = "So-Rad") |> dplyr::rename(is_val = TRIOS)
 all_S3_semi <- bind_rows(hyp_S3A_semi, hyp_S3B_semi,
                          pro_S3A_semi, pro_S3B_semi,
                          tri_S3A_semi, tri_S3B_semi) |> 
-  mutate(name = case_when(name == "Hyp" ~ "HYPERNETS",
-                          name == "HYPERPRO" ~ "HyperPRO",
-                          name == "TRIOS" ~ "So-Rad", TRUE ~ name)) |> 
-  mutate(name = factor(name, 
-                       levels = c("HYPERNETS", "HyperPRO", "So-Rad", 
-                                  "S3A hm", "S3A v3.0", "S3A v4.0",
-                                  "S3B hm", "S3B v3.0", "S3B v4.0")))
+  mutate(version = gsub("S3A |S3B ", "", name)) |> 
+  mutate(version = factor(version, levels = c("hm", "v3.0", "v4.0"))) |> 
+  filter(wavelength < 600)
 
 # Plot scatterplots
 S3_scatter_plot <- all_S3_semi |> 
   ggplot(aes(x = is_val, y = value)) +
   geom_abline(slope = 1, intercept = 0, color = "black", linetype = "solid") +
-  geom_smooth(method = "lm", formula = y ~ x, linewidth = 1.5, linetype = "solid", se = FALSE, aes(colour = name)) +
-  geom_point(aes(colour = name), size = 3) +
-  facet_grid(sat~is) +
-  labs(x = "Rhow [in-situ]", y = "Rhow [satellite]", colour = "Platform /\n Version",
-      title = "Comparisons of matchups per wavelength",
-      subtitle = "Coloured lines show slope per satellite version") +
+  geom_smooth(method = "lm", formula = y ~ x, linewidth = 1.5, linetype = "solid", se = FALSE, aes(colour = version)) +
+  geom_point(aes(colour = version, shape = wavelength), size = 3) +
+  geom_text(data = all_S3_stats_slim, x = 0.005, y = 0.05, hjust = 0, vjust = 1, size = 4,
+        aes(label = label)) +
+  facet_grid(sat~system) +
+  coord_fixed(xlim = c(0, 0.052), ylim = c(0, 0.052)) +
+  labs(x = "Rhow [in-situ]", y = "Rhow [satellite]", colour = "Version",
+       title = "Scatterplots of satellite vs. in situ values per waveband for all matchups",
+       subtitle = "Each column of panels shows one in situ system; each row shows S3A (top) or S3B (bottom); count of matchups shown as 'n'",
+       caption = "Version: hm = original Hypernets_matchups output, v3.0/v4.0 data extracted directly from corresponding NetCDF files in granules.
+Note that the large difference at 560 nm for 'hm' were caused by a bug that coded the in situ values at 510 nm for comparison against satellite data at 560 nm. 
+This is why there are no in situ values available to plot points for values for 510 nm. Note that for v3.0 and v4.0 the correct 560 nm vs 560 nm comparisons are made.
+Note that S3A v4.0 is closer to the ideal 1:1 line for all in situ systems. For S3B v4.0 the values appear to be either greater or less than v3.0.") +
   theme_minimal() +
-  theme(panel.border = element_rect(fill = NA, colour = "black"))
+  theme(panel.border = element_rect(fill = NA, colour = "black"),
+        plot.caption = element_text(hjust = 0),
+        plot.caption.position = "plot")
 ggsave("figures/test_OLCI_scatter.png", S3_scatter_plot, width = 12, height = 8)
 

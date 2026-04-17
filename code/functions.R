@@ -677,7 +677,7 @@ process_OLCI_matchups <- function(file_name){
   # Get dates, times, and spatio-temporal distances
   ref_in_situ_meta <- slice(ref_in_situ, c(1, nrow(ref_in_situ))) |> 
     dplyr::select(sensor:longitude) |> 
-    mutate(dateTime = as.POSIXct(paste(day, time), format = "%Y%m%d %H%M%S"), .after = "longitude", .keep = "unused")
+    mutate(dateTime = as.POSIXct(paste(day, time), format = "%Y%m%d %H%M%S", tz = "UTC"), .after = "longitude", .keep = "unused")
 
   # get distances
   hav_dist <- round(distHaversine(ref_in_situ_meta[c("longitude", "latitude")])/1000, 2) # distance in km
