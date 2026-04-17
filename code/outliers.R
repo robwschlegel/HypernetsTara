@@ -558,7 +558,7 @@ hyp_S3A <- plyr::ldply(match_hyp_S3A, process_OLCI_matchups, .parallel = TRUE)
 write_csv(hyp_S3A, "output/test_hyp_S3A.csv")
 pro_S3A <- plyr::ldply(match_pro_S3A, process_OLCI_matchups, .parallel = TRUE)
 write_csv(pro_S3A, "output/test_pro_S3A.csv")
-tri_S3A <- plyr::ldply(match_tri_S3A[c(1,2,3,5)], process_OLCI_matchups, .parallel = TRUE) # To fix file 4
+tri_S3A <- plyr::ldply(match_tri_S3A, process_OLCI_matchups, .parallel = TRUE)
 write_csv(tri_S3A, "output/test_tri_S3A.csv")
 
 # S3B
@@ -569,10 +569,134 @@ write_csv(pro_S3B, "output/test_pro_S3B.csv")
 tri_S3B <- plyr::ldply(match_tri_S3B, process_OLCI_matchups, .parallel = TRUE)
 write_csv(tri_S3B, "output/test_tri_S3B.csv")
 
-# Plot
-hyp_S3A |> 
-  pivot_longer(cols = `S3A v3.0`:S3A) |> 
+# Load calculated results
+hyp_S3A <- read_csv("output/test_hyp_S3A.csv")
+hyp_S3B <- read_csv("output/test_hyp_S3B.csv")
+pro_S3A <- read_csv("output/test_pro_S3A.csv")
+pro_S3B <- read_csv("output/test_pro_S3B.csv")
+tri_S3A <- read_csv("output/test_tri_S3A.csv")
+tri_S3B <- read_csv("output/test_tri_S3B.csv")
+
+# Run stats on all matchups
+hyp_S3A_stats <- process_OLCI_stats(hyp_S3A)
+hyp_S3B_stats <- process_OLCI_stats(hyp_S3B)
+pro_S3A_stats <- process_OLCI_stats(pro_S3A)
+pro_S3B_stats <- process_OLCI_stats(pro_S3B)
+tri_S3A_stats <- process_OLCI_stats(tri_S3A)
+tri_S3B_stats <- process_OLCI_stats(tri_S3B)
+
+# Combine stats and save
+all_S3_stats <- bind_rows(hyp_S3A_stats, hyp_S3B_stats,
+                          pro_S3A_stats, pro_S3B_stats,
+                          tri_S3A_stats, tri_S3B_stats) |> 
+  dplyr::select(system, sat, wavelength, everything()) |> 
+  mutate(system = case_when(system == "Hyp" ~ "HYPERNETS",
+                            system == "HYPERPRO" ~ "HyperPRO",
+                            system == "TRIOS" ~ "So-Rad", TRUE ~ system))
+write_csv(all_S3_stats, "output/stats_S3_all.csv")
+
+# Plot Bias and Error as barplots
+S3_error_col <- all_S3_stats |> 
+  filter(wavelength < 600) |> 
+  mutate(wavelength = as.character(wavelength)) |> 
+  ggplot(aes(x = wavelength, y = Error)) +
+  geom_col(aes(fill = sat_version), position = "dodge") +
+  facet_grid(sat~system) +
+  theme_minimal() +
+  labs(x = "Wave band [nm]", y = "Error [%]", fill = "Platform / Version",
+       title = "Comparisons of matchups per wavelength",
+       subtitle = "Bars show the final Error (%) for all matchups") +
+  theme(panel.border = element_rect(fill = NA, colour = "black"))
+ggsave("figures/test_OLCI_error_col.png", S3_error_col, width = 12, height = 8)
+S3_bias_col <- all_S3_stats |> 
+  filter(wavelength < 600) |> 
+  mutate(wavelength = as.character(wavelength)) |> 
+  ggplot(aes(x = wavelength, y = Bias)) +
+  geom_col(aes(fill = sat_version), position = "dodge") +
+  facet_grid(sat~system) +
+  theme_minimal() +
+  labs(x = "Wave band [nm]", y = "Bias [%]", fill = "Platform / Version",
+       title = "Comparisons of matchups per wavelength",
+       subtitle = "Bars show the final Bias (%) for all matchups") +
+  theme(panel.border = element_rect(fill = NA, colour = "black"))
+ggsave("figures/test_OLCI_bias_col.png", S3_bias_col, width = 12, height = 8)
+
+# Create long versions and stack for boxplots
+hyp_S3A_long <- pivot_longer(hyp_S3A, cols = `S3A v3.0`:Hyp) |> 
+  mutate(sat = "S3A", is = "HYPERNETS")
+hyp_S3B_long <- pivot_longer(hyp_S3B, cols = `S3B v3.0`:Hyp) |> 
+  mutate(sat = "S3B", is = "HYPERNETS")
+pro_S3A_long <- pivot_longer(pro_S3A, cols = `S3A v3.0`:HYPERPRO) |> 
+  mutate(sat = "S3A", is = "HyperPRO")
+pro_S3B_long <- pivot_longer(pro_S3B, cols = `S3B v3.0`:HYPERPRO) |> 
+  mutate(sat = "S3B", is = "HyperPRO")
+tri_S3A_long <- pivot_longer(tri_S3A, cols = `S3A v3.0`:TRIOS) |> 
+  mutate(sat = "S3A", is = "So-Rad")
+tri_S3B_long <- pivot_longer(tri_S3B, cols = `S3B v3.0`:TRIOS) |> 
+  mutate(sat = "S3B", is = "So-Rad")
+all_S3_long <- bind_rows(hyp_S3A_long, hyp_S3B_long,
+                         pro_S3A_long, pro_S3B_long,
+                         tri_S3A_long, tri_S3B_long) |> 
+  mutate(name = case_when(name == "Hyp" ~ "HYPERNETS",
+                          name == "HYPERPRO" ~ "HyperPRO",
+                          name == "TRIOS" ~ "So-Rad", TRUE ~ name)) |> 
+  mutate(name = factor(name, 
+                       levels = c("HYPERNETS", "HyperPRO", "So-Rad", 
+                                  "S3A hm", "S3A v3.0", "S3A v4.0",
+                                  "S3B hm", "S3B v3.0", "S3B v4.0")))
+
+# Plot boxplots
+S3_box_plot <- all_S3_long |> 
+  filter(wavelength < 600) |> 
+  mutate(wavelength = as.character(wavelength)) |> 
   ggplot(aes(x = wavelength, y = value)) +
-  geom_col(aes(fill = name), position = "dodge") +
-  facet_wrap(~granule_time)
-ggsave("figures/test_hyp_S3A.png", width = 10, height = 8)
+  geom_boxplot(aes(fill = name)) +
+  scale_fill_manual(values = c("springgreen1", "springgreen2", "springgreen3",
+                               "steelblue1", "steelblue2", "steelblue3",
+                               "royalblue1", "royalblue2", "royalblue3")) +
+  facet_grid(sat~is) +
+  labs(x = "Wave band [nm]", y = "Rhow", fill = "System / Version",
+      title = "Comparisons of matchups per wavelength",
+      subtitle = "Values within boxplots show spread across all matchups") +
+    theme_minimal() +
+    theme(panel.border = element_rect(fill = NA, colour = "black"))
+ggsave("figures/test_OLCI_box.png", S3_box_plot, width = 12, height = 8)
+
+# Create semi-long versions and stack for scatterplot
+hyp_S3A_semi <- pivot_longer(hyp_S3A, cols = `S3A v3.0`:`S3A hm`) |> 
+  mutate(sat = "S3A", is = "HYPERNETS") |> dplyr::rename(is_val = Hyp)
+hyp_S3B_semi <- pivot_longer(hyp_S3B, cols = `S3B v3.0`:`S3B hm`) |> 
+  mutate(sat = "S3B", is = "HYPERNETS") |> dplyr::rename(is_val = Hyp)
+pro_S3A_semi <- pivot_longer(pro_S3A, cols = `S3A v3.0`:`S3A hm`) |> 
+  mutate(sat = "S3A", is = "HyperPRO") |> dplyr::rename(is_val = HYPERPRO)
+pro_S3B_semi <- pivot_longer(pro_S3B, cols = `S3B v3.0`:`S3B hm`) |> 
+  mutate(sat = "S3B", is = "HyperPRO") |> dplyr::rename(is_val = HYPERPRO)
+tri_S3A_semi <- pivot_longer(tri_S3A, cols = `S3A v3.0`:`S3A hm`) |> 
+  mutate(sat = "S3A", is = "So-Rad") |> dplyr::rename(is_val = TRIOS)
+tri_S3B_semi <- pivot_longer(tri_S3B, cols = `S3B v3.0`:`S3B hm`) |> 
+  mutate(sat = "S3B", is = "So-Rad") |> dplyr::rename(is_val = TRIOS)
+all_S3_semi <- bind_rows(hyp_S3A_semi, hyp_S3B_semi,
+                         pro_S3A_semi, pro_S3B_semi,
+                         tri_S3A_semi, tri_S3B_semi) |> 
+  mutate(name = case_when(name == "Hyp" ~ "HYPERNETS",
+                          name == "HYPERPRO" ~ "HyperPRO",
+                          name == "TRIOS" ~ "So-Rad", TRUE ~ name)) |> 
+  mutate(name = factor(name, 
+                       levels = c("HYPERNETS", "HyperPRO", "So-Rad", 
+                                  "S3A hm", "S3A v3.0", "S3A v4.0",
+                                  "S3B hm", "S3B v3.0", "S3B v4.0")))
+
+# Plot scatterplots
+S3_scatter_plot <- all_S3_semi |> 
+  ggplot(aes(x = is_val, y = value)) +
+  geom_abline(slope = 1, intercept = 0, color = "black", linetype = "solid") +
+  geom_smooth(method = "lm", formula = y ~ x, linewidth = 1.5, linetype = "solid", se = FALSE, aes(colour = name)) +
+  geom_point(aes(colour = name), size = 3) +
+  facet_grid(sat~is) +
+  labs(x = "Rhow [in-situ]", y = "Rhow [satellite]", colour = "Platform /\n Version",
+      title = "Comparisons of matchups per wavelength",
+      subtitle = "Coloured lines show slope per satellite version") +
+  theme_minimal() +
+  theme(panel.border = element_rect(fill = NA, colour = "black"))
+ggsave("figures/test_OLCI_scatter.png", S3_scatter_plot, width = 12, height = 8)
+

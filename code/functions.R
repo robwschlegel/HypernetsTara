@@ -493,12 +493,15 @@ MODIS_proc <- function(file_names, bbox, water_mask = FALSE){
 
 # Basic statistic calculations
 # Expects data as two vectors of equal length sampled at the same time/space
+# TODO: Add n to this output and correct for the other functions that use it
 base_stats <- function(x_vec, y_vec){
   
   if(!is.numeric(x_vec)) stop("x_vec is not numeric")
   if(!is.numeric(y_vec)) stop("y_vec is not numeric")
-  
-  if(length(x_vec) < 2){
+
+  n_valid <- sum(!is.na(x_vec) & !is.na(y_vec))
+
+  if(n_valid < 2){
     return(data.frame(row.names = NULL,
                       Slope = NA,
                       Slope_log = NA,
@@ -508,7 +511,7 @@ base_stats <- function(x_vec, y_vec){
                       Bias = NA,
                       Error = NA))
   }
-  
+
   # Calculate RMSE (Root Mean Square Error)
   rmse <- sqrt(mean((y_vec - x_vec)^2, na.rm = TRUE))
   
@@ -664,12 +667,26 @@ get_nearest_pixels <- function(df_data, target_lat, target_lon, n_pixels){
 
 # Wrapper for OLCI v3 vs v4 analysis
 # file_name <- "~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_20260203/RHOW_HYPERNETS_vs_S3A/HYPERNETS_vs_S3A_vs_20240808T065700_RHOW.csv"
-# file_name <- match_hyp_S3A[2]
+# file_name <- match_tri_S3A[5]
 process_OLCI_matchups <- function(file_name){
  
   # Load a Hypernets_matchup file for reference
-  ref_in_situ <- read_delim(file_name, delim = ";", col_types = "ccccnnic")
+  suppressMessages(ref_in_situ <- read_delim(file_name, delim = ";", col_types = "ccccnnic"))
   colnames(ref_in_situ)[1] <- "sensor"
+
+  # Get dates, times, and spatio-temporal distances
+  ref_in_situ_meta <- slice(ref_in_situ, c(1, nrow(ref_in_situ))) |> 
+    dplyr::select(sensor:longitude) |> 
+    mutate(dateTime = as.POSIXct(paste(day, time), format = "%Y%m%d %H%M%S"), .after = "longitude", .keep = "unused")
+
+  # get distances
+  hav_dist <- round(distHaversine(ref_in_situ_meta[c("longitude", "latitude")])/1000, 2) # distance in km
+
+  # Time differences
+  time_diff <- round(as.numeric(abs(difftime(ref_in_situ_meta$dateTime[[1]],
+                                             ref_in_situ_meta$dateTime[[2]], units = "mins"))))
+
+  # Get stub for granule extraction
   ref_sat_time <- paste0(ref_in_situ$day[nrow(ref_in_situ)],"T",
       str_pad(as.numeric(ref_in_situ$time[nrow(ref_in_situ)])+0, 
           width = 6, side = "left", pad = "0"))
@@ -703,9 +720,12 @@ process_OLCI_matchups <- function(file_name){
         pattern = paste0("___",ref_sat_time), full.names = TRUE), full.names = TRUE)
   }
   
+  # The desired wavebands
+  wave_bands <- c("Oa01", "Oa02", "Oa03", "Oa04", "Oa05", "Oa06", "Oa07", "Oa08", "Oa09", "Oa10")
+
   # Reflectance files
-  files_Oa_v3 <- files_v3[(grepl("Oa01|Oa02|Oa03|Oa04|Oa05|Oa06|Oa07|Oa08|Oa09|Oa10", files_v3))]
-  files_Oa_v4 <- files_v4[(grepl("Oa01|Oa02|Oa03|Oa04|Oa05|Oa06|Oa07|Oa08|Oa09|Oa10", files_v4))]
+  files_Oa_v3 <- files_v3[(grepl(paste(wave_bands, collapse = "|"), files_v3))]
+  files_Oa_v4 <- files_v4[(grepl(paste(wave_bands, collapse = "|"), files_v4))]
 
   # Load the NetCDF coords
   coords_v3 <- tidync::tidync(files_v3[grepl("geo_coordinates", files_v3)][1]) |> tidync::hyper_tibble()
@@ -720,9 +740,6 @@ process_OLCI_matchups <- function(file_name){
     mutate(rows = as.numeric(rows), columns = as.numeric(columns))
   target_v4 <- get_nearest_pixels(coords_v4, target_lat, target_lon, 9) |> 
     mutate(rows = as.numeric(rows), columns = as.numeric(columns))
-
-  # Load the subsetted pixel
-  wave_bands <- c("Oa01", "Oa02", "Oa03", "Oa04", "Oa05", "Oa06", "Oa07", "Oa08", "Oa09", "Oa10")
   
   # Quick wrapper for loading files
   load_OLCI_sub <- function(wave_band, file_list, target_vals){
@@ -759,10 +776,10 @@ process_OLCI_matchups <- function(file_name){
                                   wave_band == "Oa08_reflectance" ~ "665",
                                   wave_band == "Oa09_reflectance" ~ "674",
                                   wave_band == "Oa10_reflectance" ~ "681")) |> 
-    summarise(mean = mean(value), 
+    summarise(value = mean(value), 
               # sd = sd(value), # To be incorporated at a later date to also test the sd output of Hypernets_matchups
               .by = c("version", "wavelength")) |> 
-    pivot_wider(names_from = version, values_from = mean)
+    pivot_wider(names_from = version, values_from = value)
 
   # Filter wavelengths from Hypernets_matchups file
   df_res_hm <- ref_in_situ |> 
@@ -772,11 +789,55 @@ process_OLCI_matchups <- function(file_name){
     pivot_longer(cols = matches("1|2|3|4|5|6|7|8|9"), names_to = "wavelength", values_to = "value") |> 
     dplyr::select(sensor, wavelength, value) |>
     pivot_wider(names_from = sensor, values_from = value) |>
-    na.omit()
+    filter(!is.na(!!sym(OLCI_stub_v3))) |> 
+    dplyr::select(wavelength, !!sym(OLCI_stub_v3), everything())
+  colnames(df_res_hm)[2] <- paste0(colnames(df_res_hm)[2]," hm")
 
   # Combine and exit
   df_res <- left_join(reflectance_v3_v4, df_res_hm, by = "wavelength") |> 
-    mutate(granule_time = ref_sat_time, .before = "wavelength")
+    mutate(time_is = ref_in_situ_meta$dateTime[[1]], 
+      time_sat = ref_in_situ_meta$dateTime[[2]],
+      time_diff = time_diff,
+      lon_is = ref_in_situ_meta$longitude[[1]],
+      lat_is = ref_in_situ_meta$latitude[[1]],
+      lon_sat = ref_in_situ_meta$longitude[[2]],
+      lat_sat = ref_in_situ_meta$latitude[[2]],
+      pixel_dist = hav_dist,
+      .before = "wavelength")
+  return(df_res)
+}
+
+# Process the stats from the files output from the previous function
+# df <- pro_S3A
+process_OLCI_stats <- function(df){
+
+  # Rename in situ column for consistency below
+  sensor_name <- colnames(df)[length(df)]
+  colnames(df)[length(df)] <- "is_sensor"
+
+  # Get number of matchups
+  # NB: This could be incorrect if some satellite data are missing
+  # This will be corrected in a later update
+  n_match <- df |> 
+    filter(!is.na(is_sensor)) |> 
+    dplyr::select(time_is) |> 
+    distinct() |> 
+    summarise(n = n())
+
+  # base_stats(df$is_sensor[df$wavelength == 413], df$`S3A v3.0`[df$wavelength == 413])
+
+  # Get all of the stats by wavelength
+  # For some reason this will not run multiple base_stats calls within summarise()
+   # TODO: Remove the direct subsetting calls
+  df_res_1 <- summarise(df, sat_version = colnames(df)[10],
+                       base_stats(is_sensor, !!sym(colnames(df)[10])), .by = wavelength)
+  df_res_2 <- summarise(df, sat_version = colnames(df)[11],
+                       base_stats(is_sensor, !!sym(colnames(df)[11])), .by = wavelength)
+  df_res_3 <- summarise(df, sat_version = colnames(df)[12],
+                       base_stats(is_sensor, !!sym(colnames(df)[12])), .by = wavelength)
+  df_res <- bind_rows(df_res_1, df_res_2, df_res_3) |> 
+    mutate(system = sensor_name, sat = str_sub(colnames(df)[10], start = 1, end = 3), .before = "sat_version") |> 
+    mutate(n = n_match$n, .after = "sat_version")
   return(df_res)
 }
 
