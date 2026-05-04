@@ -25,11 +25,6 @@ process_sensor("RHOW", "OCI")
 # Re-load all single matchups
 matchup_single_all <- map_dfr(dir("output", pattern = "matchup_stats_", full.names = TRUE), read_csv)
 
-# Extract only Sentinel-3
-matchup_single_S3 <- matchup_single_all |> 
-  filter(sensor_Y %in% c("S3A", "S3B"))
-write.csv(matchup_single_S3, "meta/matchup_single_S3.csv")
-
 # Date and time range of samples per sensor
 matchup_date_time_range <- matchup_single_all |> 
   dplyr::select(sensor_X, dateTime_X) |> 
@@ -261,36 +256,39 @@ process_sensor("RHOW", "OCI", "global")
 outliers_sat <- read_csv("meta/satellite_outliers.csv") |> distinct()
 outliers_insitu <- read_csv("meta/in_situ_outliers.csv") |> distinct()
 
-# Load PACE separately to filter specific wavebands
-global_stats_PACE <- read_csv("output/global_stats_RHOW_OCI.csv") |> 
-  filter(Wavelength_nm %in% c(412, 443, 490, 510, 560))
-# write_csv(global_stats_PACE, file = "output/global_stats_PACE.csv")
+# Decide which wavelengths to compare with wavebands
+wave_length_bands <- c(380, 400, 412, 443, 490, 510, 560, 620, 673, 700)
+
+# Load in situ and PACE data separately to filter specific wavebands
+# NB: Careful with the exact indexing of files here
+global_stats_wavelengths <- map_dfr(dir("output", pattern = "global", full.names = TRUE)[c(1:5, 7)], read_csv) |> 
+  filter(Wavelength_nm %in% wave_length_bands)
 
 # Load all global stats
-global_stats_all <- map_dfr(dir("output", pattern = "global", full.names = TRUE), read_csv) |> 
-  filter(!sensor_X %in% c("PACE_V2", "PACE_V30", "PACE_V31"),
-         !sensor_Y %in% c("PACE_V2", "PACE_V30", "PACE_V31")) |> 
-  bind_rows(global_stats_PACE)
+# NB: Careful with the exact indexing of files here
+global_stats_all <- map_dfr(dir("output", pattern = "global", full.names = TRUE)[c(6, 8, 9)], read_csv) |> 
+  bind_rows(global_stats_wavelengths)
 
 # Visualise difference between linear-space and log-space slopes
-global_stats_all |> 
-  filter(sensor_X %in% c("HYPERNETS", "TRIOS", "HYPERPRO")) |> 
-  ggplot() +
-  geom_histogram(aes(x = Slope), colour = "green", alpha = 0.3, binwidth = 1) +
-  geom_histogram(aes(x = Slope_log), colour = "red", alpha = 0.3, binwidth = 1) +
-  facet_grid(sensor_X ~ sensor_Y)
+# global_stats_all |> 
+#   filter(sensor_X %in% c("HYPERNETS", "TRIOS", "HYPERPRO")) |> 
+#   ggplot() +
+#   geom_histogram(aes(x = Slope), colour = "green", alpha = 0.3, binwidth = 1) +
+#   geom_histogram(aes(x = Slope_log), colour = "red", alpha = 0.3, binwidth = 1) +
+#   facet_grid(sensor_X ~ sensor_Y)
 
 # Get matchups counts, outliers, etc.
 global_count_var_name <- global_stats_all |> 
   filter(sensor_X %in% c("HYPERNETS", "TRIOS", "HYPERPRO")) |> 
   filter(var_name == "RHOW") |>
-  dplyr::select(var_name:sensor_Y) |> 
+  dplyr::select(sensor_X, sensor_Y, var_name, n_clean, n_no_out) |> 
   group_by(var_name, sensor_X, sensor_Y) |> 
-  filter(n_w_nm == max(n_w_nm)) |> 
+  filter(n_clean == max(n_clean, na.rm = TRUE)) |> 
   ungroup() |> 
   distinct()
 
 # Quantify which sensors matched most closely to which satellites
+# TODO : Filter from 400:600 before getting stats
 global_match_mean <- global_stats_all |> 
   filter(sensor_X %in% c("HYPERNETS", "TRIOS", "HYPERPRO")) |> 
   filter(var_name == "RHOW") |>

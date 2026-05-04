@@ -286,12 +286,13 @@ sat_var_MODIS <- plyr::ldply(file_list_MODIS, sat_var_check, .parallel = TRUE) #
 # Filter all by Error or Bias to get an initial idea of the issues
 # No need to filter by satellite variance, there is one bad AQUA matchup across all sensors and dateTimes
 # 2024-08-15 10:45:01
-filter_MODIS <- filter(matchup_MODIS, Error >= 50) |> mutate(val_filter = "Error >= 50%")
+filter_MODIS <- filter(matchup_MODIS, Error >= 50) |> mutate(val_filter = "Error >= 50%") |> 
+  filter((dateTime_Y == "2024-08-15 10:45:01" & sensor_Y == "AQUA")) # Manually checked, not an outlier, just a poor matchup
 filter_join_MODIS <- right_join(join_MODIS, filter_MODIS)
 clean_join_MODIS <- anti_join(join_MODIS, filter_MODIS)
 
 # Plot matchups by date
-plot_matchup_date(filter_join_MODIS, "Rhow", "Hyp", "AQUA")
+plot_matchup_date(filter_join_MODIS, "Rhow", "Hyp", "AQUA") # OK
 plot_matchup_date(filter_join_MODIS, "Rhow", "TRIOS", "AQUA") # OK
 plot_matchup_date(filter_join_MODIS, "Rhow", "HYPERPRO", "AQUA") # OK
 
@@ -338,10 +339,11 @@ filter_var_VIIRS <- filter(matchup_VIIRS, file_name %in% sat_var_VIIRS$file_name
 filter_VIIRS <- matchup_VIIRS |> 
   filter(!file_name %in% filter_var_VIIRS$file_name) |> 
   filter(Error >= 50) |> mutate(val_filter = "Error >= 50%") |> 
-  bind_rows(filter_var_VIIRS) |> 
-  filter(!file_name %in% c("TRIOS_vs_VIIRS_N_vs_20240813T100254_RHOW.csv",
-                           "TRIOS_vs_VIIRS_N_vs_20240813T101805_RHOW.csv",
-                           "TRIOS_vs_VIIRS_N_vs_20240813T102853_RHOW.csv")) # Manually checked, not an outlier
+    filter(!file_name %in% c("HYPERNETS_vs_VIIRS_N_vs_20240813T102100_RHOW.csv", 
+                             "TRIOS_vs_VIIRS_N_vs_20240813T100254_RHOW.csv",
+                             "TRIOS_vs_VIIRS_N_vs_20240813T101805_RHOW.csv",
+                             "TRIOS_vs_VIIRS_N_vs_20240813T102853_RHOW.csv")) |> # Manually checked, not an outlier
+  bind_rows(filter_var_VIIRS)
 filter_join_VIIRS <- right_join(join_VIIRS, filter_VIIRS)
 clean_join_VIIRS <- anti_join(join_VIIRS, filter_VIIRS)
 
@@ -392,7 +394,8 @@ plot_matchup_Error_Bias(join_OLCI, "Rhow", "HYPERPRO", "S3B") # OK
 # Filter all by Error or Bias to get an initial idea of the issues
 filter_OLCI <- filter(matchup_OLCI, Error >= 50) |> mutate(val_filter = "Error >= 50%") |> 
   filter(!file_name %in% c("TRIOS_vs_S3B_V4_vs_20240813T101805_RHOW.csv",
-                           "TRIOS_vs_S3A_V4_vs_20240818T092817_RHOW.csv")) # Manually checked, not an outlier, just a poor matchup
+                           "TRIOS_vs_S3A_V4_vs_20240818T092817_RHOW.csv"),
+         as.character(dateTime_Y) != "2024-08-13 07:22:25") # Manually checked, not an outlier, just a poor matchup
 filter_join_OLCI <- right_join(join_OLCI, filter_OLCI)
 clean_join_OLCI <- anti_join(join_OLCI, filter_OLCI)
 
@@ -442,22 +445,13 @@ plot_matchup_Error_Bias(join_OCI, "Rhow", "HYPERPRO", "PACE_V31") # Bias < -50
 sat_var_OCI <- plyr::ldply(file_list_OCI, sat_var_check, .parallel = TRUE)
 filter_var_OCI <- filter(matchup_OCI, file_name %in% sat_var_OCI$file_name) |> mutate(val_filter = "CV >= 20%")
 
-# Filter all PACE data on dates 2024-08-14 and 2024-08-15
-# This is because only the v3.0 data are filtered, thereby making their matchups better
-# To createbalanced results it is therefore necessary to remove all of the same days of data
-filter_date_OCI <- matchup_OCI |> 
-  filter(!file_name %in% filter_var_OCI$file_name) |> 
-  filter(grepl("20240814T|20240815T", file_name)) |> 
-  mutate(val_filter = "Date 2024-08-14 or 2024-08-15")
-
 # Filter all by Error or Bias to get an initial idea of the issues
 filter_OCI <- matchup_OCI |> 
   filter(!file_name %in% filter_var_OCI$file_name) |> 
-  filter(!file_name %in% filter_date_OCI$file_name) |>
   filter(Error >= 50) |> mutate(val_filter = "Error >= 50%") |> 
-  bind_rows(filter_var_OCI) |> 
-  bind_rows(filter_date_OCI) |>
-  filter(!file_name %in% c("HYPERNETS_vs_PACE_V31_vs_20240814T123100_RHOW.csv")) # Manually checked, not an outlier
+  filter(!file_name %in% c("HYPERNETS_vs_PACE_V31_vs_20240814T123100_RHOW.csv"),
+         !as.character(dateTime_Y) %in% c("2024-08-14 10:05:12", "2024-08-15 09:06:24")) |> # Manually checked, not an outlier
+  bind_rows(filter_var_OCI)
 filter_join_OCI <- right_join(base_OCI, filter_OCI, by = join_by(file_name))
 clean_join_OCI <- anti_join(base_OCI, filter_OCI, by = join_by(file_name))
 

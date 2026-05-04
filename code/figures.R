@@ -44,16 +44,12 @@ global_triptych <- function(var_name, sensor_Y, panel_labels = "", cut_legend = 
   }
   
   # Load individual matchup results to filter file list and for further use
-  match_base_details <- read_csv(paste0("output/matchup_stats_",var_name,filestub)) |> 
+  match_base_details <- read_csv(paste0("output/matchup_stats_",var_name,filestub), show_col_types = FALSE) |> 
     dplyr::select(file_name) |> distinct()
   
   # Load outliers to screen them from being plotted
-  suppressMessages(
-    outliers_sat <- read_csv("meta/satellite_outliers.csv")
-  )
-  suppressMessages(
-    outliers_insitu <- read_csv("meta/in_situ_outliers.csv")
-  )
+  outliers_sat <- read_csv("meta/satellite_outliers.csv", show_col_types = FALSE)
+  outliers_insitu <- read_csv("meta/in_situ_outliers.csv", show_col_types = FALSE)
   outliers_all <- bind_rows(outliers_sat, outliers_insitu) |> distinct()
   
   # Load data based on in situ comparisons or not
@@ -91,11 +87,12 @@ global_triptych <- function(var_name, sensor_Y, panel_labels = "", cut_legend = 
   }
   
   # Filter out wavelengths above 600 if plotting Rhow or LW data
-  if(var_name %in% c("RHOW", "LW")){
-    match_base_1 <- filter(match_base_1, wavelength >= 400, wavelength < 600) 
-    match_base_2 <- filter(match_base_2, wavelength >= 400, wavelength < 600) 
-    match_base_3 <- filter(match_base_3, wavelength >= 400, wavelength < 600)
-  }
+  # NB: It was decided to rather include everything available
+  # if(var_name %in% c("RHOW", "LW")){
+  #   match_base_1 <- filter(match_base_1, wavelength >= 400, wavelength < 600) 
+  #   match_base_2 <- filter(match_base_2, wavelength >= 400, wavelength < 600) 
+  #   match_base_3 <- filter(match_base_3, wavelength >= 400, wavelength < 600)
+  # }
   
   # Create the three figures
   print("Creating figures")
@@ -232,12 +229,12 @@ global_triptych_stack("RHOW", "OCI")
 # Plus the photos from HYPERNETS
 
 # Using the HYPERPRO 2024-08-12 10:53:00 measurement as a reference as this has a PACE and VIIRS_N matchup
-pro_pace2 <- read_delim("~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_20260203/RHOW_HYPERPRO_vs_PACE_V2/HYPERPRO_vs_PACE_V2_vs_20240812T105300_RHOW.csv", delim = ";", col_types = "ccccnnic")
-pro_pace3 <- read_delim("~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_20260203/RHOW_HYPERPRO_vs_PACE_V30/HYPERPRO_vs_PACE_V30_vs_20240812T105300_RHOW.csv", delim = ";", col_types = "ccccnnic")
-pro_pace31 <- read_delim("~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_20260203/RHOW_HYPERPRO_vs_PACE_V31/HYPERPRO_vs_PACE_V31_vs_20240812T105300_RHOW.csv", delim = ";", col_types = "ccccnnic")
-pro_viirsn <- read_delim("~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_20260203/RHOW_HYPERPRO_vs_VIIRS_N/HYPERPRO_vs_VIIRS_N_vs_20240812T105300_RHOW.csv", delim = ";", col_types = "ccccnnic")
-pro_hyp <- read_delim("~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_20260203/RHOW_HYPERNETS_vs_HYPERPRO/HYPERNETS_vs_HYPERPRO_vs_20240812T104500_RHOW.csv", delim = ";", col_types = "ccccnnic")
-pro_tri <- read_delim("~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_20260203/RHOW_TRIOS_vs_HYPERPRO/TRIOS_vs_HYPERPRO_vs_20240812T104536_RHOW.csv", delim = ";", col_types = "ccccnnic")
+pro_pace2 <- read_delim("~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_20260504/RHOW_HYPERPRO_vs_PACE_V2/HYPERPRO_vs_PACE_V2_vs_20240812T105300_RHOW.csv", delim = ";", col_types = "ccccnnic")
+pro_pace3 <- read_delim("~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_20260504/RHOW_HYPERPRO_vs_PACE_V30/HYPERPRO_vs_PACE_V30_vs_20240812T105300_RHOW.csv", delim = ";", col_types = "ccccnnic")
+pro_pace31 <- read_delim("~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_20260504/RHOW_HYPERPRO_vs_PACE_V31/HYPERPRO_vs_PACE_V31_vs_20240812T105300_RHOW.csv", delim = ";", col_types = "ccccnnic")
+pro_viirsn <- read_delim("~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_20260504/RHOW_HYPERPRO_vs_VIIRS_N/HYPERPRO_vs_VIIRS_N_vs_20240812T105300_RHOW.csv", delim = ";", col_types = "ccccnnic")
+pro_hyp <- read_delim("~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_20260504/RHOW_HYPERNETS_vs_HYPERPRO/HYPERNETS_vs_HYPERPRO_vs_20240812T104500_RHOW.csv", delim = ";", col_types = "ccccnnic")
+pro_tri <- read_delim("~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_20260504/RHOW_TRIOS_vs_HYPERPRO/TRIOS_vs_HYPERPRO_vs_20240812T104536_RHOW.csv", delim = ";", col_types = "ccccnnic")
 
 # Load the RGB images taken by HYPERNETS at the closest available timing
 hyp_LD <- "~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/Hypernets_processed_data/12/SEQ20240812T104553/image/HYPERNETS_W_MAFR_IMG_20240812T1045_20240912T1030_006_140_90_v2.0.jpg"
@@ -267,7 +264,7 @@ pro_all_long <- pro_all |>
                             sensor == "Hyp_nosc" ~ "HYPERNETS (nosc)",
                             sensor == "TRIOS" ~ "So-Rad")) |> 
   pivot_wider(names_from = data_type, values_from = value) |> 
-  filter(wavelength >= 400, wavelength <= 600) |> 
+  filter(wavelength >= 380, wavelength <= 700) |> 
   filter(sensor != "HYPERNETS (nosc)") |>  # Not interesting for this match-up
   mutate(sensor = factor(sensor, levels = c("HyperPRO", "So-Rad", "HYPERNETS", "PACE v2.0", "PACE v3.0", "PACE v3.1", "VIIRS SNPP")))
 
@@ -281,6 +278,7 @@ pl_spect <- ggplot(data = pro_all_long, aes(x = wavelength, y = rhow, colour = s
                 aes(ymin = std_min, ymax = std_max), width = 5) +
   # scale_colour_brewer(palette = "Dark2") +
   scale_colour_manual(values = c("darkred", "darkorange", "goldenrod", "skyblue", "dodgerblue", "royalblue", "limegreen")) +
+  # scale_x_continuous(expand = FALSE) +
   guides(colour = guide_legend(override.aes = list(alpha = 1.0, linewidth = 3))) +
   labs(x = "Wavelength (nm)",
        y = "<i>ρ<sub>w</sub></i>",

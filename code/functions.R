@@ -19,7 +19,7 @@ library(doParallel); registerDoParallel(cores = detectCores() - 2)
 # Setup -------------------------------------------------------------------
 
 # Define the wavelength (nm) band colour palette
-labels_nm <- c("350-400", "400-450", "450-500", "500-550", "550-600", "600-650", "650-700", "700-750", "750-800")
+labels_nm <- c("351-400", "401-450", "451-500", "501-550", "551-600", "601-650", "651-700", "701-750", "751-800")
 colour_nm <- c("darkviolet", "violet", "blue", "darkgreen", "yellow", "orange", "red", "firebrick", "sienna")
 names(colour_nm) <- labels_nm
 
@@ -37,7 +37,7 @@ file_path_build <- function(var_name, sensor_X, sensor_Y){
 }
 
 # Load a single matchup file and create mean values from all replicates
-# file_name <- "~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_20260203/RHOW_TRIOS_vs_VIIRS_N/TRIOS_vs_VIIRS_N_vs_20240812T121332_RHOW.csv"
+# file_name <- "~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_20260504/RHOW_HYPERNETS_vs_S3A/HYPERNETS_vs_S3A_V4_vs_20240808T065700_RHOW.csv"
 load_matchup_mean <- function(file_name){
   
   # message(paste0("Started loading : ", file_name))
@@ -54,14 +54,8 @@ load_matchup_mean <- function(file_name){
     df_mean <- df_match |>
       mutate(sensor = gsub(" 1$| 2$| 3$| 4$| 5$| 6$| 7$| 8$| 9$", "", sensor)) |>
       filter(sensor != "Hyp_nosc") |> 
-      filter(data_type %in% c("mean", "weighted")) |>
-      # NB: Simple mean for in situ data is taken instead of the weighted mean
-      # This is an important point for discussion
-      mutate(data_check = case_when(sensor %in% c("Hyp", "TRIOS", "HYPERPRO") & data_type == "mean" ~ "keep",
-                                    !(sensor %in% c("Hyp", "TRIOS", "HYPERPRO")) & data_type == "weighted" ~ "keep"), 
-             .after = "data_type") |>
-      filter(data_check == "keep") |>
-      dplyr::select(-radiometer_id, -data_type, -data_check, -type)
+      filter(data_type == "weighted") |>
+      dplyr::select(-radiometer_id, -data_type, -type)
   } else {
     df_mean <- df_match |> 
       filter(grepl(" 1", sensor)) |> 
@@ -73,6 +67,12 @@ load_matchup_mean <- function(file_name){
   # Double check that only two rows of data have been selected
   if(nrow(df_mean) != 2) warning(paste0("More than two rows in : ", file_path))
   
+  # Correct S3A and S3B names if necessary
+  df_mean <- df_mean |> 
+    mutate(sensor = case_when(sensor == "S3A_V4" ~ "S3A",
+                              sensor == "S3B_V4" ~ "S3B",
+                              TRUE ~ sensor))
+
   # Exit
   # message(paste0("Finished loading : ", file_name))
   return(df_mean)
@@ -80,6 +80,7 @@ load_matchup_mean <- function(file_name){
 
 # Load a single matchup file directly into long format
 # file_name <- file.path(folder_path, file_uniq_list$file_name)[1]
+# file_name <- "/home/calanus/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_20260504/RHOW_HYPERNETS_vs_PACE_V30/HYPERNETS_vs_PACE_V30_vs_20240809T090000_RHOW.csv"
 load_matchup_long <- function(file_name){
   
   df_mean <- load_matchup_mean(file_name)
@@ -90,13 +91,13 @@ load_matchup_long <- function(file_name){
     dplyr::select(-day, -time, -longitude, -latitude) |>
     pivot_wider(names_from = sensor, values_from = value) |>
     na.omit() |> 
-    filter(wavelength < 700) |> # Prevent one data point for 700-750 from appearing on figures
+    filter(wavelength <= 700) |> # Prevent one data point for 700-750 from appearing on figures
     mutate(wavelength = as.numeric(wavelength),
            file_name = basename(file_name), .before = "wavelength") |> 
     mutate(wavelength_group = cut(wavelength,
-                                  breaks = c(350, 400, 450, 500, 550, 600, 650, 700, 750, 800),
-                                  labels = labels_nm,
-                                  include.lowest = TRUE, right = FALSE), .after = "wavelength")
+                                  breaks = c(350, 400, 450, 500, 550, 600, 650, 700),#, 750, 800),
+                                  labels = labels_nm[1:7],
+                                  include.lowest = TRUE, right = TRUE), .after = "wavelength")
 }
 
 # Load the variance data for a matchup file
@@ -416,11 +417,13 @@ sensor_grid <- function(var_name, sensor_Z){
 W_nm_out <- function(sensor_Y, var_name){
   if(sensor_Y %in% c("HYPERNETS", "TRIOS", "HYPERPRO")){
     # NB: This allows for comparisons of higher wavelengths to be made for ED etc.
-    if(!(var_name %in% c("RHOW", "LW"))){
-      W_nm <- c(400, 412, 443, 490, 510, 560, 620, 673)
-    } else {
-      W_nm <- c(400, 412, 443, 490, 510, 560)
-    }
+    # if(!(var_name %in% c("RHOW", "LW"))){
+    #   W_nm <- c(400, 412, 443, 490, 510, 560, 620, 673)
+    # } else {
+    #   W_nm <- c(400, 412, 443, 490, 510, 560, 620, 673)
+    # }
+    # Rather collect everything and focus on certain wavelengths later
+    W_nm <- 380:700 
   } else if(sensor_Y %in% c("PACE_V2", "PACE_V30", "PACE_V31")){
     # The available data in the project structure go from 380:700
     W_nm <- 380:700 
@@ -495,13 +498,22 @@ MODIS_proc <- function(file_names, bbox, water_mask = FALSE){
 # TODO: Add n to this output and correct for the other functions that use it
 base_stats <- function(x_vec, y_vec){
   
+  # Ensure values are numeric
   if(!is.numeric(x_vec)) stop("x_vec is not numeric")
   if(!is.numeric(y_vec)) stop("y_vec is not numeric")
 
+  # Ensure values aren't NA before calculating stats
   n_valid <- sum(!is.na(x_vec) & !is.na(y_vec))
 
-  if(n_valid < 2){
+   # Check for too many negative values before calculating stats
+  valid_idx <- (x_vec > 0) & (y_vec > 0)
+  x_clean <- x_vec[valid_idx]
+  y_clean <- y_vec[valid_idx]
+
+  # Return empty data.frame if too many issues
+  if(n_valid < 2 | length(x_clean) < 3){
     return(data.frame(row.names = NULL,
+                      n = NA,
                       Slope = NA,
                       Slope_log = NA,
                       RMSE = NA,
@@ -512,24 +524,24 @@ base_stats <- function(x_vec, y_vec){
   }
 
   # Calculate RMSE (Root Mean Square Error)
-  rmse <- sqrt(mean((y_vec - x_vec)^2, na.rm = TRUE))
+  rmse <- sqrt(mean((y_clean - x_clean)^2, na.rm = TRUE))
   
   # Calculate MAPE (Mean Absolute Percentage Error)
-  mape <- mean(abs((y_vec - x_vec) / x_vec), na.rm = TRUE) * 100
+  mape <- mean(abs((y_clean - x_clean) / x_clean), na.rm = TRUE) * 100
   
   # Calculate MSA (Mean Squared Adjustment)
-  msa <- mean(abs(y_vec - x_vec), na.rm = TRUE)
+  msa <- mean(abs(y_clean - x_clean), na.rm = TRUE)
   
   # Calculate linear slope
-  lin_fit <- lm(y_vec ~ x_vec)
+  lin_fit <- lm(y_clean ~ x_clean)
   slope <- coef(lin_fit)[2]
   
   # Calculate log-log linear slope
-  log_lin_fit <- lm(log10(y_vec) ~ log10(x_vec))
+  log_lin_fit <- lm(log10(y_clean) ~ log10(x_clean))
   log_slope <- coef(log_lin_fit)[2]
   
   # Calculate Bias
-  log_ratio <- log10(y_vec / x_vec)
+  log_ratio <- log10(y_clean / x_clean)
   log_ratio_median <- median(log_ratio, na.rm = TRUE)
   bias_perc <- 100 * (sign(log_ratio_median) * (10^abs(log_ratio_median) - 1))
   
@@ -539,6 +551,7 @@ base_stats <- function(x_vec, y_vec){
   
   # Combine int data.frame and exit
   df_stats <- data.frame(row.names = NULL,
+                         n = length(x_clean),
                          Slope = round(slope, 2),
                          Slope_log = round(log_slope, 2),
                          RMSE = round(rmse, 6),
@@ -1060,10 +1073,8 @@ global_stats <- function(var_name, sensor_X, sensor_Y){
   file_list <- list.files(folder_path, pattern = "*.csv", full.names = TRUE)
   
   # Load individual matchup results to filter file list and for further use
-  suppressMessages(
-    match_base_details <- read_csv(paste0("output/matchup_stats_",var_name,filestub))
-  )
-  match_base_details <- dplyr::select(match_base_details, file_name) |> distinct()
+  match_base_details <- read_csv(paste0("output/matchup_stats_",var_name,filestub), show_col_types = FALSE) |> 
+    dplyr::select(file_name) |> distinct()
   if(nrow(match_base_details) == 0) stop("Individual matchup file not loaded correctly.")
   
   # Filter accordingly
@@ -1071,12 +1082,8 @@ global_stats <- function(var_name, sensor_X, sensor_Y){
   file_list_clean <- file_list[basename(file_list) %in% match_base_details$file_name]
   
   # Get outlier lists
-  suppressMessages(
-    outliers_sat <- read_csv("meta/satellite_outliers.csv")
-  )
-  suppressMessages(
-    outliers_insitu <- read_csv("meta/in_situ_outliers.csv")
-  )
+  outliers_sat <- read_csv("meta/satellite_outliers.csv", show_col_types = FALSE)
+  outliers_insitu <- read_csv("meta/in_situ_outliers.csv", show_col_types = FALSE)
   outliers_all <- bind_rows(outliers_sat, outliers_insitu)
 
   # Remove outlier files
@@ -1131,6 +1138,7 @@ global_stats <- function(var_name, sensor_X, sensor_Y){
       # Create data.frame of results and add them to df_results
       df_XY <- data.frame(row.names = NULL,
                           n_w_nm = n_match,
+                          n_w_nm_clean = df_stats_XY$n,
                           sensor_X = sensor_X,
                           sensor_Y = sensor_Y,
                           Wavelength_nm = W_nm[i],
@@ -1143,6 +1151,7 @@ global_stats <- function(var_name, sensor_X, sensor_Y){
                           MAPE = df_stats_XY$MAPE)
       df_YX <- data.frame(row.names = NULL,
                           n_w_nm = n_match,
+                          n_w_nm_clean = df_stats_YX$n,
                           sensor_X = sensor_Y,
                           sensor_Y = sensor_X,
                           Wavelength_nm = W_nm[i],
@@ -1363,11 +1372,11 @@ plot_matchup_single_nm <- function(df, sensor_X, sensor_Y){
   # Prep data
   df_prep <- df |> 
     filter(sensor %in% c(sensor_X, sensor_Y)) |> 
-    filter(wavelength >= 400, wavelength < 600) |> 
+    filter(wavelength >= 380, wavelength <= 700) |> 
     mutate(wavelength_group = cut(wavelength,
-                                  breaks = c(350, 400, 450, 500, 550, 600, 650, 700, 750, 800),
-                                  labels = labels_nm,
-                                  include.lowest = TRUE, right = FALSE), .after = "wavelength") |> 
+                                  breaks = c(350, 400, 450, 500, 550, 600, 650, 700),#, 750, 800),
+                                  labels = labels_nm[1:7],
+                                  include.lowest = TRUE, right = TRUE), .after = "wavelength") |> 
     pivot_wider(names_from = sensor, values_from = rhow:std_min)
   
   # Get max values
@@ -1413,7 +1422,8 @@ plot_matchup_single_nm <- function(df, sensor_X, sensor_Y){
     geom_smooth(method = "lm", formula = y ~ x, colour = "black", linewidth = 1, linetype = "dashed", se = FALSE) +
     # Add global stats text
     annotate(geom = "text", x = 0, y = max_axis, hjust = 0, vjust = 1, size = 4,
-             label = paste0("S: ", sprintf("%.2f", df_stats$Slope), 
+             label = paste0("n: ", df_stats$n,
+                            "\nS: ", sprintf("%.2f", df_stats$Slope), 
                             "\nβ: ", sprintf("%.1f", df_stats$Bias),
                             "% \nϵ: ", sprintf("%.1f", df_stats$Error),"%")) +
     # Make it pretty
@@ -1463,6 +1473,10 @@ plot_global_nm <- function(df, var_name, sensor_X, sensor_Y){
   # Calculate statistics
   df_stats <- base_stats(x_vec, y_vec)
   
+  # Get number of files used in matchup
+  n_files <- length(unique(df_prep$file_name))
+
+  # Set alpha
   if(sensor_Y %in% c("PACE_V2", "PACE_V30", "PACE_V31", "HYPERPRO", "TRIOS", "HYPERNETS")){
     point_alpha <- 0.3
   } else {
@@ -1471,7 +1485,7 @@ plot_global_nm <- function(df, var_name, sensor_X, sensor_Y){
   
   # Get pre-determined wavelengths
   if(sensor_Y %in% c("PACE_V2", "PACE_V30", "PACE_V31")){
-    W_nm <- c(412, 443, 490, 510, 560)
+    W_nm <- c(380, 400, 412, 443, 490, 510, 560, 620, 673, 700)
   } else {
     W_nm <- W_nm_out(sensor_Y, var_name)
   }
@@ -1498,13 +1512,14 @@ plot_global_nm <- function(df, var_name, sensor_X, sensor_Y){
     # Add dashed linear model lines for each waveband
     # geom_smooth(data = df_sub, method = "lm", formula = y ~ x, linewidth = 1, linetype = "dashed", se = FALSE,
     #             aes(group = as.factor(wavelength)), colour = "black", show.legend = FALSE) +
-    geom_smooth(data = df_sub, method = "lm", formula = y ~ x, linewidth = 1.5, linetype = "solid", se = FALSE,
-                aes(group = as.factor(wavelength)), colour = "white", alpha = 0.7, show.legend = FALSE) +
-    geom_smooth(data = df_sub, method = "lm", formula = y ~ x, linewidth = 1, linetype = "dashed", se = FALSE,
-                aes(colour = wavelength_group, group = as.factor(wavelength)), alpha = 0.7, show.legend = FALSE) +
+    # geom_smooth(data = df_sub, method = "lm", formula = y ~ x, linewidth = 1.5, linetype = "solid", se = FALSE,
+    #             aes(group = as.factor(wavelength)), colour = "white", alpha = 0.7, show.legend = FALSE) +
+    # geom_smooth(data = df_sub, method = "lm", formula = y ~ x, linewidth = 1, linetype = "dashed", se = FALSE,
+    #             aes(colour = wavelength_group, group = as.factor(wavelength)), alpha = 0.7, show.legend = FALSE) +
     # Add global stats text
     annotate(geom = "text", x = 0, y = max_axis, hjust = 0, vjust = 1, size = 4,
-             label = paste0("S: ", sprintf("%.2f", df_stats$Slope), 
+             label = paste0("n: ", n_files,
+                            "\nS: ", sprintf("%.2f", df_stats$Slope), 
                             "\nβ: ", sprintf("%.1f", df_stats$Bias),
                             "% \nϵ: ", sprintf("%.1f", df_stats$Error),"%")) +
     # Make it pretty
