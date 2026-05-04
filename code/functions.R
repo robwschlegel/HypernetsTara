@@ -20,7 +20,7 @@ library(doParallel); registerDoParallel(cores = detectCores() - 2)
 
 # Define the wavelength (nm) band colour palette
 labels_nm <- c("350-400", "400-450", "450-500", "500-550", "550-600", "600-650", "650-700", "700-750", "750-800")
-colour_nm <- c('darkviolet', 'violet', 'blue', 'darkgreen', 'yellow', 'orange', 'red', "firebrick", 'sienna')
+colour_nm <- c("darkviolet", "violet", "blue", "darkgreen", "yellow", "orange", "red", "firebrick", "sienna")
 names(colour_nm) <- labels_nm
 
 # Disable scientific notation
@@ -32,7 +32,7 @@ options(scipen = 9999)
 
 # Function that assembles file directory based on desired variable and sensors
 file_path_build <- function(var_name, sensor_X, sensor_Y){
-  file_path <- paste0("~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_20260203/",
+  file_path <- paste0("~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_20260504/",
                       toupper(var_name),"_",toupper(sensor_X),"_vs_", toupper(sensor_Y))
 }
 
@@ -421,19 +421,18 @@ W_nm_out <- function(sensor_Y, var_name){
     } else {
       W_nm <- c(400, 412, 443, 490, 510, 560)
     }
-    # TODO: Change this to be all available wavelengths
   } else if(sensor_Y %in% c("PACE_V2", "PACE_V30", "PACE_V31")){
-    # The available data in the project structure go from 380:699
-    W_nm <- 400:600 
-    # W_nm <- c(412, 443, 490, 510, 560)#, 673)
+    # The available data in the project structure go from 380:700
+    W_nm <- 380:700 
+    # W_nm <- c(412, 443, 490, 510, 560, 673)
   } else if(sensor_Y == "AQUA"){
-    W_nm <- c(412, 443, 488, 531, 555)#, 667)
+    W_nm <- c(412, 443, 469, 488, 531, 547, 555, 645, 667, 678)
   } else if(sensor_Y == "VIIRS_N"){
-    W_nm = c(410, 443, 486, 551)#, 671)
+    W_nm = c(410, 443, 486, 551, 671)
   } else if(sensor_Y %in% c("VIIRS_J1", "VIIRS_J2")){
-    W_nm <- c(411, 445, 489, 556)#, 667)
+    W_nm <- c(411, 445, 489, 556, 667)
   } else if(sensor_Y %in% c("S3A", "S3B", "S3", "S3_all")){
-    W_nm <- c(413, 443, 490, 560)#, 665, 681)
+    W_nm <- c(400, 412, 442, 490, 510, 560, 620, 665, 673, 681)
   } else {
     stop(paste0("Incorrect value for 'sensor_Y' : ",sensor_Y))
   }
