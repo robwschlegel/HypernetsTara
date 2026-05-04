@@ -292,7 +292,7 @@ clean_join_MODIS <- anti_join(join_MODIS, filter_MODIS)
 
 # Plot matchups by date
 plot_matchup_date(filter_join_MODIS, "Rhow", "Hyp", "AQUA")
-plot_matchup_date(filter_join_MODIS, "Rhow", "TRIOS", "AQUA")
+plot_matchup_date(filter_join_MODIS, "Rhow", "TRIOS", "AQUA") # OK
 plot_matchup_date(filter_join_MODIS, "Rhow", "HYPERPRO", "AQUA") # OK
 
 # Plot all wavelength matchups
@@ -327,7 +327,7 @@ join_VIIRS <- right_join(base_VIIRS, matchup_VIIRS, by = join_by(file_name))
 # Plot matchup by Error + Bias
 # NB: VIIRS_N is visually the least similar, so using this for base reference
 plot_matchup_Error_Bias(join_VIIRS, "Rhow", "Hyp", "VIIRS_N") # Error > 50
-plot_matchup_Error_Bias(join_VIIRS, "Rhow", "TRIOS", "VIIRS_N") # Error > 50
+plot_matchup_Error_Bias(join_VIIRS, "Rhow", "TRIOS", "VIIRS_N") # OK
 plot_matchup_Error_Bias(join_VIIRS, "Rhow", "HYPERPRO", "VIIRS_N") # OK
 
 # Check satellite variance in files
@@ -348,7 +348,7 @@ clean_join_VIIRS <- anti_join(join_VIIRS, filter_VIIRS)
 # Plot matchups by date
 plot_matchup_date(filter_join_VIIRS, "Rhow", "Hyp", "VIIRS_N")
 plot_matchup_date(filter_join_VIIRS, "Rhow", "TRIOS", "VIIRS_N")
-plot_matchup_date(filter_join_VIIRS, "Rhow", "HYPERPRO", "VIIRS_N")
+plot_matchup_date(filter_join_VIIRS, "Rhow", "HYPERPRO", "VIIRS_N") # OK
 
 # Plot all wavelength matchups
 plot_matchup_nm(join_VIIRS, "Rhow", "Hyp", "VIIRS_N")
@@ -358,7 +358,7 @@ plot_matchup_nm(join_VIIRS, "Rhow", "TRIOS", "VIIRS_N")
 plot_matchup_nm(filter_join_VIIRS, "Rhow", "TRIOS", "VIIRS_N")
 plot_matchup_nm(clean_join_VIIRS, "Rhow", "TRIOS", "VIIRS_N")
 plot_matchup_nm(join_VIIRS, "Rhow", "HYPERPRO", "VIIRS_N")
-plot_matchup_nm(filter_join_VIIRS, "Rhow", "HYPERPRO", "VIIRS_N")
+plot_matchup_nm(filter_join_VIIRS, "Rhow", "HYPERPRO", "VIIRS_N") # OK
 plot_matchup_nm(clean_join_VIIRS, "Rhow", "HYPERPRO", "VIIRS_N")
 
 
@@ -367,7 +367,8 @@ plot_matchup_nm(clean_join_VIIRS, "Rhow", "HYPERPRO", "VIIRS_N")
 # Load processed in situ matchups
 matchup_OLCI <- read_csv("output/matchup_stats_RHOW_OLCI.csv") |> 
   filter(sensor_X %in% c("Hyp", "HYPERPRO", "TRIOS")) |> 
-  mutate(comp_sensors = paste0(sensor_X," vs ",sensor_Y))
+  mutate(comp_sensors = paste0(sensor_X," vs ",sensor_Y),
+         file_name = gsub("_V4", "", file_name)) # Rename for easier joining with base data
 
 # OLCI files
 file_list_OLCI <- list.files(dir("~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_20260203", 
@@ -380,36 +381,36 @@ base_OLCI <- plyr::ldply(file_list_OLCI, load_matchup_long, .parallel = TRUE)
 join_OLCI <- right_join(base_OLCI, matchup_OLCI, by = join_by(file_name))
 
 # Check satellite variance in files
-sat_var_OLCI <- plyr::ldply(file_list_OLCI, sat_var_check, .parallel = TRUE)
+sat_var_OLCI <- plyr::ldply(file_list_OLCI, sat_var_check, .parallel = TRUE) # OK
 
 # Plot matchup by Error + Bias
 # NB: There are more S3A matchups, so using that sensor for analysis
-plot_matchup_Error_Bias(join_OLCI, "Rhow", "Hyp", "S3A") # OK
-plot_matchup_Error_Bias(join_OLCI, "Rhow", "TRIOS", "S3A") # Error > 50
-plot_matchup_Error_Bias(join_OLCI, "Rhow", "HYPERPRO", "S3A") # OK
+plot_matchup_Error_Bias(join_OLCI, "Rhow", "Hyp", "S3B") # Error > 50
+plot_matchup_Error_Bias(join_OLCI, "Rhow", "TRIOS", "S3B") # Error > 50
+plot_matchup_Error_Bias(join_OLCI, "Rhow", "HYPERPRO", "S3B") # OK
 
 # Filter all by Error or Bias to get an initial idea of the issues
 filter_OLCI <- filter(matchup_OLCI, Error >= 50) |> mutate(val_filter = "Error >= 50%") |> 
-  filter(!file_name %in% c("TRIOS_vs_S3B_vs_20240813T101805_RHOW.csv",
-                           "TRIOS_vs_S3A_vs_20240818T092817_RHOW.csv")) # Manually checked, not an outlier, just a poor matchup
+  filter(!file_name %in% c("TRIOS_vs_S3B_V4_vs_20240813T101805_RHOW.csv",
+                           "TRIOS_vs_S3A_V4_vs_20240818T092817_RHOW.csv")) # Manually checked, not an outlier, just a poor matchup
 filter_join_OLCI <- right_join(join_OLCI, filter_OLCI)
 clean_join_OLCI <- anti_join(join_OLCI, filter_OLCI)
 
 # Plot matchups by date
-plot_matchup_date(filter_join_OLCI, "Rhow", "Hyp", "S3A") # OK
-plot_matchup_date(filter_join_OLCI, "Rhow", "TRIOS", "S3A")
-plot_matchup_date(filter_join_OLCI, "Rhow", "HYPERPRO", "S3A") # OK
+plot_matchup_date(filter_join_OLCI, "Rhow", "Hyp", "S3B") # OK
+plot_matchup_date(filter_join_OLCI, "Rhow", "TRIOS", "S3B") # OK
+plot_matchup_date(filter_join_OLCI, "Rhow", "HYPERPRO", "S3B") # OK
 
 # Plot all wavelength matchups
-plot_matchup_nm(join_OLCI, "Rhow", "Hyp", "S3A")
-plot_matchup_nm(filter_join_OLCI, "Rhow", "Hyp", "S3A") # OK
-plot_matchup_nm(clean_join_OLCI, "Rhow", "Hyp", "S3A")
-plot_matchup_nm(join_OLCI, "Rhow", "TRIOS", "S3A")
-plot_matchup_nm(filter_join_OLCI, "Rhow", "TRIOS", "S3A")
-plot_matchup_nm(clean_join_OLCI, "Rhow", "TRIOS", "S3A")
-plot_matchup_nm(join_OLCI, "Rhow", "HYPERPRO", "S3A")
-plot_matchup_nm(filter_join_OLCI, "Rhow", "HYPERPRO", "S3A") # OK
-plot_matchup_nm(clean_join_OLCI, "Rhow", "HYPERPRO", "S3A")
+plot_matchup_nm(join_OLCI, "Rhow", "Hyp", "S3B")
+plot_matchup_nm(filter_join_OLCI, "Rhow", "Hyp", "S3B")
+plot_matchup_nm(clean_join_OLCI, "Rhow", "Hyp", "S3B")
+plot_matchup_nm(join_OLCI, "Rhow", "TRIOS", "S3B")
+plot_matchup_nm(filter_join_OLCI, "Rhow", "TRIOS", "S3B")
+plot_matchup_nm(clean_join_OLCI, "Rhow", "TRIOS", "S3B")
+plot_matchup_nm(join_OLCI, "Rhow", "HYPERPRO", "S3B")
+plot_matchup_nm(filter_join_OLCI, "Rhow", "HYPERPRO", "S3B") # OK
+plot_matchup_nm(clean_join_OLCI, "Rhow", "HYPERPRO", "S3B")
 
 
 ## OCI ---------------------------------------------------------------------
@@ -433,27 +434,37 @@ join_OCI <- right_join(base_OCI, matchup_OCI, by = join_by(file_name))
 # Plot matchup by Error + Bias
 # NB: PACE_v30 is visually the least similar, so using this for base reference
 # NB: There are many PACE files with negative values
-plot_matchup_Error_Bias(join_OCI, "Rhow", "Hyp", "PACE_V30") # Bias < -50
-plot_matchup_Error_Bias(join_OCI, "Rhow", "TRIOS", "PACE_V30") # Bias < -50
-plot_matchup_Error_Bias(join_OCI, "Rhow", "HYPERPRO", "PACE_V30") # Bias < -50
+plot_matchup_Error_Bias(join_OCI, "Rhow", "Hyp", "PACE_V31") # Bias < -50
+plot_matchup_Error_Bias(join_OCI, "Rhow", "TRIOS", "PACE_V31") # Bias < -50
+plot_matchup_Error_Bias(join_OCI, "Rhow", "HYPERPRO", "PACE_V31") # Bias < -50
 
 # Check satellite variance in files
 sat_var_OCI <- plyr::ldply(file_list_OCI, sat_var_check, .parallel = TRUE)
 filter_var_OCI <- filter(matchup_OCI, file_name %in% sat_var_OCI$file_name) |> mutate(val_filter = "CV >= 20%")
 
+# Filter all PACE data on dates 2024-08-14 and 2024-08-15
+# This is because only the v3.0 data are filtered, thereby making their matchups better
+# To createbalanced results it is therefore necessary to remove all of the same days of data
+filter_date_OCI <- matchup_OCI |> 
+  filter(!file_name %in% filter_var_OCI$file_name) |> 
+  filter(grepl("20240814T|20240815T", file_name)) |> 
+  mutate(val_filter = "Date 2024-08-14 or 2024-08-15")
+
 # Filter all by Error or Bias to get an initial idea of the issues
 filter_OCI <- matchup_OCI |> 
   filter(!file_name %in% filter_var_OCI$file_name) |> 
+  filter(!file_name %in% filter_date_OCI$file_name) |>
   filter(Error >= 50) |> mutate(val_filter = "Error >= 50%") |> 
   bind_rows(filter_var_OCI) |> 
+  bind_rows(filter_date_OCI) |>
   filter(!file_name %in% c("HYPERNETS_vs_PACE_V31_vs_20240814T123100_RHOW.csv")) # Manually checked, not an outlier
 filter_join_OCI <- right_join(base_OCI, filter_OCI, by = join_by(file_name))
 clean_join_OCI <- anti_join(base_OCI, filter_OCI, by = join_by(file_name))
 
 # Plot matchups by date
-plot_matchup_date(filter_join_OCI, "Rhow", "Hyp", "PACE_V30")
-plot_matchup_date(filter_join_OCI, "Rhow", "TRIOS", "PACE_V30")
-plot_matchup_date(filter_join_OCI, "Rhow", "HYPERPRO", "PACE_V30")
+plot_matchup_date(filter_join_OCI, "Rhow", "Hyp", "PACE_V2")
+plot_matchup_date(filter_join_OCI, "Rhow", "TRIOS", "PACE_V2")
+plot_matchup_date(filter_join_OCI, "Rhow", "HYPERPRO", "PACE_V2")
 
 # Plot all wavelength matchups
 plot_matchup_nm(join_OCI, "Rhow", "Hyp", "PACE_V30")
@@ -463,7 +474,7 @@ plot_matchup_nm(join_OCI, "Rhow", "TRIOS", "PACE_V30")
 plot_matchup_nm(filter_join_OCI, "Rhow", "TRIOS", "PACE_V30")
 plot_matchup_nm(clean_join_OCI, "Rhow", "TRIOS", "PACE_V30")
 plot_matchup_nm(join_OCI, "Rhow", "HYPERPRO", "PACE_V30")
-plot_matchup_nm(filter_join_OCI, "Rhow", "HYPERPRO", "PACE_V30") # OK
+plot_matchup_nm(filter_join_OCI, "Rhow", "HYPERPRO", "PACE_V30")
 plot_matchup_nm(clean_join_OCI, "Rhow", "HYPERPRO", "PACE_V30")
 
 
