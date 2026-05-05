@@ -261,13 +261,14 @@ wave_length_bands <- c(380, 400, 412, 443, 490, 510, 560, 620, 673, 700)
 
 # Load in situ and PACE data separately to filter specific wavebands
 # NB: Careful with the exact indexing of files here
-global_stats_wavelengths <- map_dfr(dir("output", pattern = "global", full.names = TRUE)[c(1:5, 7)], read_csv) |> 
+global_stats_wavelengths <- map_dfr(dir("output", pattern = "global", full.names = TRUE)[c(2:6, 8)], read_csv) |> 
   filter(Wavelength_nm %in% wave_length_bands)
 
 # Load all global stats
 # NB: Careful with the exact indexing of files here
-global_stats_all <- map_dfr(dir("output", pattern = "global", full.names = TRUE)[c(6, 8, 9)], read_csv) |> 
+global_stats_all <- map_dfr(dir("output", pattern = "global", full.names = TRUE)[c(7, 9, 10)], read_csv) |> 
   bind_rows(global_stats_wavelengths)
+write_csv(global_stats_all, file = "output/global_stats_all.csv")
 
 # Visualise difference between linear-space and log-space slopes
 # global_stats_all |> 
@@ -288,31 +289,36 @@ global_count_var_name <- global_stats_all |>
   distinct()
 
 # Quantify which sensors matched most closely to which satellites
-# TODO : Filter from 400:600 before getting stats
 global_match_mean <- global_stats_all |> 
   filter(sensor_X %in% c("HYPERNETS", "TRIOS", "HYPERPRO")) |> 
   filter(var_name == "RHOW") |>
-  summarise(n = n(),
-            Slope = mean(Slope, na.rm = TRUE),
-            Bias_mean = mean(Bias),
-            Bias_abs = mean(abs(Bias)),
-            Error = mean(Error), .by = c("var_name", "sensor_X", "sensor_Y"))
+  filter(Wavelength_nm >= 380, Wavelength_nm <= 600) |>
+  summarise(Slope = mean(Slope, na.rm = TRUE),
+            Bias_mean = mean(Bias, na.rm = TRUE),
+            Bias_abs = mean(abs(Bias), na.rm = TRUE),
+            Error = mean(Error, na.rm = TRUE), .by = c("var_name", "sensor_X", "sensor_Y"))
 
 # Mean again
-global_match_mean_mean <- global_match_mean |> 
+global_match_mean_mean <- global_stats_all |> 
+  filter(sensor_X %in% c("HYPERNETS", "TRIOS", "HYPERPRO")) |> 
+  filter(var_name == "RHOW") |>
+  filter(Wavelength_nm >= 380, Wavelength_nm <= 600) |>
   filter(!(sensor_Y %in% c("HYPERNETS", "TRIOS", "HYPERPRO"))) |> 
-  summarise(Slope = mean(Slope),
-            Bias_mean = mean(Bias_mean),
-            Bias_abs = mean(Bias_abs),
-            Error = mean(Error), .by = c("var_name", "sensor_X"))
+  summarise(Slope = mean(Slope, na.rm = TRUE),
+            Bias_mean = mean(Bias, na.rm = TRUE),
+            Bias_abs = mean(abs(Bias), na.rm = TRUE),
+            Error = mean(Error, na.rm = TRUE), .by = c("var_name", "sensor_X"))
 
 # Global mean matchups from the perspective of the satellites
 global_match_sat_mean <- global_stats_all |> 
+  filter(sensor_X %in% c("HYPERNETS", "TRIOS", "HYPERPRO")) |> 
+  filter(var_name == "RHOW") |>
+  filter(Wavelength_nm >= 380, Wavelength_nm <= 600) |>
   filter(!(sensor_Y %in% c("HYPERNETS", "TRIOS", "HYPERPRO"))) |> 
-  summarise(Slope = mean(Slope),
-            Bias_mean = mean(Bias),
-            Bias_abs = mean(abs(Bias)),
-            Error = mean(Error), .by = c("sensor_Y"))
+  summarise(Slope = mean(Slope, na.rm = TRUE),
+            Bias_mean = mean(Bias, na.rm = TRUE),
+            Bias_abs = mean(abs(Bias), na.rm = TRUE),
+            Error = mean(Error, na.rm = TRUE), .by = c("sensor_Y"))
 
 # Count of number of wavebands with negative or positive biases
 global_match_bias_sign <- global_stats_all |> 
@@ -383,25 +389,29 @@ match_base |>
 
 # Check individual global values ------------------------------------------
 
-# Rhow - HyperPRO vs OLCI S3A - w_nm 665
-folder_path <- file_path_build("RHOW", "HYPERPRO", "S3B")
+# Choose acordingly
+folder_path <- file_path_build("RHOW", "HYPERNETS", "HYPERPRO")
 
 # List all files in directory
 file_list <- list.files(folder_path, pattern = "*.csv", full.names = TRUE)
+match_base_details <- read_csv("~/HypernetsTara/output/matchup_stats_RHOW_in_situ.csv") |>
+  dplyr::select(file_name) |> distinct()
+file_list_clean <- file_list[basename(file_list) %in% match_base_details$file_name]
 
 # Load data
-match_base <- map_dfr(file_list, load_matchup_long)
+match_base <- map_dfr(file_list_clean, load_matchup_long)
 # print(unique(match_base$wavelength))
 
 # Auto-generate chosen wavelengths
-(W_nm <- W_nm_out("S3B"))
+(W_nm <- W_nm_out("HYPERNETS"))
+# W_nm <- c(380, 400, 412, 443, 490, 510, 560, 620, 673, 700)
 
 # Get data.frame for matchup based on the wavelength of choice
-(matchup_filt <- filter(match_base, wavelength == W_nm[5]))
+(matchup_filt <- filter(match_base, wavelength == W_nm[10]))
 
 # Create vectors from filtered columns
 (x_vec <- matchup_filt[["HYPERPRO"]])
-(y_vec <- matchup_filt[["S3B"]])
+(y_vec <- matchup_filt[["Hyp"]])
 
 # Calculate stats one-by-one
 message("Slope : ", round(coef(lm(y_vec ~ x_vec))[2], 4))
@@ -420,7 +430,7 @@ error_pahlevan_final <- 10^error_pahlevan - 1
 message("Error (%) : ", round(error_pahlevan_final * 100, 2))
 
 # Plot data
-match_base |> filter(wavelength == W_nm[5]) |> 
-  ggplot(aes(x = HYPERPRO, y = S3A)) +
+match_base |> filter(wavelength == W_nm[8]) |> 
+  ggplot(aes(x = HYPERPRO, y = Hyp)) +
   geom_point(aes(colour = wavelength))
 

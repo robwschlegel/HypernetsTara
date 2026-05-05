@@ -495,25 +495,21 @@ MODIS_proc <- function(file_names, bbox, water_mask = FALSE){
 
 # Basic statistic calculations
 # Expects data as two vectors of equal length sampled at the same time/space
-# TODO: Add n to this output and correct for the other functions that use it
 base_stats <- function(x_vec, y_vec){
   
   # Ensure values are numeric
   if(!is.numeric(x_vec)) stop("x_vec is not numeric")
   if(!is.numeric(y_vec)) stop("y_vec is not numeric")
 
-  # Ensure values aren't NA before calculating stats
-  n_valid <- sum(!is.na(x_vec) & !is.na(y_vec))
-
-   # Check for too many negative values before calculating stats
+  # Check for too many negative or NA values before calculating stats
   valid_idx <- (x_vec > 0) & (y_vec > 0)
   x_clean <- x_vec[valid_idx]
   y_clean <- y_vec[valid_idx]
 
   # Return empty data.frame if too many issues
-  if(n_valid < 2 | length(x_clean) < 3){
+  if(length(x_clean) < 2){
     return(data.frame(row.names = NULL,
-                      n = NA,
+                      n = length(x_clean),
                       Slope = NA,
                       Slope_log = NA,
                       RMSE = NA,
@@ -594,10 +590,8 @@ sensor_uncertainty <- function(var_name, sensor_X){
       match_base_files <- match_base_files[grepl("in_situ", match_base_files)]
     }
   }
-  suppressMessages(
-    match_base_details <- read_csv(match_base_files)
-  )
-  match_base_details <- dplyr::select(match_base_details, file_name) |> distinct()
+  match_base_details <- read_csv(match_base_files) |> 
+    dplyr::select(file_name) |> distinct()
   if(nrow(match_base_details) == 0) stop("Individual matchup file not loaded correctly.")
   
   # Filter accordingly
