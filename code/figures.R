@@ -417,94 +417,76 @@ df_sat_all <- bind_rows(df_sat_hyperpro, df_sat_trios, df_sat_hypernets) |>
 
 # NB: This doesn't work well for everything in one whack
 # Rather need to subset the data further
-TaylorDiagram(
-  mydata       = df_sat_all[df_sat_all$sensor_is == "HyperPRO",],
-  obs          = "value_is",
-  mod          = "value_sat",
-  group        = "sensor_group",
-  main         = "Taylor Diagram — All Wavebands",
-  normalise    = TRUE,        # normalise so bands are comparable
-  cols         = colour_nm[1:7],
-  pch          = 19,
-  cex          = 1.1,
-  key.title    = "Wavelength",
-  annotate     = "RMSE"
-)
+# TaylorDiagram(
+#   mydata       = df_sat_all[df_sat_all$sensor_is == "HyperPRO",],
+#   obs          = "value_is",
+#   mod          = "value_sat",
+#   group        = "sensor_group",
+#   main         = "Taylor Diagram — All Wavebands",
+#   normalise    = TRUE,        # normalise so bands are comparable
+#   cols         = colour_nm[1:7],
+#   pch          = 19,
+#   cex          = 1.1,
+#   key.title    = "Wavelength",
+#   annotate     = "RMSE"
+# )
 
 # Another option is to create correlation matrices
 # Or potentially heatmaps of statistics for matchups
-# But at the moment I am leaning towards barplots for bias and error as this is what I have been doing throughout the project
 
-# Prep data for barplots
+# Prep data for matrix plots
 df_matchups_global_pretty <- df_matchups_global |> 
-  filter(Wavelength_nm <= 600)
-
-# Create the barplot
-## Error
-pl_Error_sat <- ggplot(data = df_matchups_global_pretty, aes(x = as.character(Wavelength_nm), y = Error)) +
-  geom_col(aes(fill = sensor_Y), position = "dodge") +#, show.legend = FALSE) +
-  labs(y = "Error  (%)") +
-  facet_wrap(~sensor_X) +
-  # theme_minimal() +
-  theme(panel.border = element_rect(fill = NA, color = "black"),
-        legend.title = element_text(size = 14),
-        legend.text = element_text(size = 12),
-        legend.position = "bottom",
-        axis.title.x = element_markdown(size = 12),
-        axis.title.y = element_markdown(size = 12),
-        axis.text = element_text(size = 10))
-pl_Error_sat
-
-## Bias
-pl_Bias_sat <- ggplot(data = df_matchups_global_pretty, aes(x = as.character(Wavelength_nm), y = Bias)) +
-  geom_col(aes(fill = sensor_Y), position = "dodge", show.legend = FALSE) +
-  labs(y = "Bias  (%)") +
-  facet_wrap(~sensor_X) +
-  # theme_minimal() +
-  theme(panel.border = element_rect(fill = NA, color = "black"),
-        legend.title = element_text(size = 14),
-        legend.text = element_text(size = 12),
-        legend.position = "bottom",
-        axis.title.x = element_markdown(size = 12),
-        axis.title.y = element_markdown(size = 12),
-        axis.text = element_text(size = 10))
-pl_Bias_sat
-
-# Steek'em
-fig_11 <- pl_Error_sat / pl_Bias_sat + plot_annotation(tag_levels = "a", tag_suffix = ")")
-ggsave("figures/fig_11.png", fig_11, width = 9, height = 12)
-
-# Barplots are affected by the uneven spacing of wavebands
-# Perhaps rather a matrix plot or scatterplot
-pl_scatter_sat <- ggplot(data = df_matchups_global_pretty, aes(x = Error, y = Bias)) +
-  geom_point(aes(colour = Wavelength_nm)) +
-  labs(x = "Error (%)", y = "Bias  (%)") +
-  facet_grid(sensor_Y~sensor_X) +
-  # theme_minimal() +
-  theme(panel.border = element_rect(fill = NA, color = "black"),
-        legend.title = element_text(size = 14),
-        legend.text = element_text(size = 12),
-        legend.position = "bottom",
-        axis.title.x = element_markdown(size = 12),
-        axis.title.y = element_markdown(size = 12),
-        axis.text = element_text(size = 10))
-pl_scatter_sat
+  filter(Wavelength_nm <= 600) |> 
+  mutate(sensor_sat = case_when(sensor_Y %in% c("Aqua") ~ "MODIS",
+                                sensor_Y %in% c("S3A", "S3B", "S3 all") ~ "OLCI",
+                                sensor_Y %in% c("PACE v2.0", "PACE v3.0", "PACE v3.1") ~ "OCI",
+                                sensor_Y %in% c("SNPP", "JPSS1", "JPSS2") ~ "VIIRS"),
+         wavelength_clean = case_when(sensor_sat == "VIIRS" & Wavelength_nm %in% c(410, 411) ~ "410/411", 
+                                      sensor_sat == "VIIRS" & Wavelength_nm %in% c(443, 445) ~ "443/445",
+                                      sensor_sat == "VIIRS" & Wavelength_nm %in% c(486, 489) ~ "486/489",
+                                      sensor_sat == "VIIRS" & Wavelength_nm %in% c(551, 556) ~ "551/556",  
+                                      TRUE ~ as.character(Wavelength_nm))) |> 
+  mutate(sensor_Y = factor(sensor_Y, levels = c("Aqua", "S3 all", "S3B", "S3A", 
+                                                "PACE v3.1", "PACE v3.0", "PACE v2.0", 
+                                                "JPSS2", "JPSS1", "SNPP")),
+         sensor_sat = factor(sensor_sat, levels = c("MODIS", "OLCI", "OCI", "VIIRS")),
+         sensor_X = factor(sensor_X, levels = c("HyperPRO", "So-Rad", "HYPERNETS")))
 
 # Matrix plot
-pl_matrix_sat <- ggplot(data = df_matchups_global_pretty, aes(x = as.character(Wavelength_nm), y = sensor_Y)) +
-  geom_tile(aes(fill = Error)) +
-  # labs(x = "Error (%)", y = "Bias  (%)") +
-  facet_wrap(~sensor_X) +
-  scale_fill_viridis_c() +
-  # theme_minimal() +
-  theme(panel.border = element_rect(fill = NA, color = "black"),
-        legend.title = element_text(size = 14),
-        legend.text = element_text(size = 12),
-        legend.position = "bottom",
-        axis.title.x = element_markdown(size = 12),
-        axis.title.y = element_markdown(size = 12),
-        axis.text = element_text(size = 10))
-pl_matrix_sat
+plot_matrix_error <- function(df, val_range){
+  ggplot(data = df, aes(x = wavelength_clean, y = sensor_Y)) +
+    geom_tile(aes(fill = Error), colour = "black") +
+    labs(x = "Waveband (nm)", y = NULL) +
+    facet_grid(sensor_sat~sensor_X, scales = "free") +
+    # scale_y_reverse() +
+    scale_fill_viridis_c(limits = val_range) +
+    # theme_minimal() +
+    coord_cartesian(expand = FALSE) +
+    theme(panel.border = element_rect(fill = NA, color = "black"),
+          legend.title = element_text(size = 14),
+          legend.text = element_text(size = 12),
+          # legend.position = "bottom",
+          axis.title.x = element_markdown(size = 12),
+          axis.title.y = element_markdown(size = 12),
+          axis.text = element_text(size = 10))
+}
+
+# Select the sensors to plot and create a list of plots by sensor
+sensors <- unique(df_matchups_global_pretty$sensor_sat)
+plots_by_sensor <- purrr::set_names(
+  purrr::map(sensors, function(s) {
+    val_range <- range(df_matchups_global_pretty$Error, na.rm = TRUE)
+    df_sub <- df_matchups_global_pretty |> dplyr::filter(sensor_sat == s)
+    plot_matrix_error(df_sub, val_range)
+  }),
+  sensors
+)
+# plots_by_sensor
+
+fig_11 <- plots_by_sensor$MODIS / plots_by_sensor$VIIRS / plots_by_sensor$OLCI / plots_by_sensor$OCI + 
+  plot_annotation(tag_levels = "a", tag_suffix = ")") +
+  patchwork::plot_layout(guides = "collect", axis_titles = "collect", heights = c(0.35, 1, 1, 1))
+ggsave("figures/fig_11.png", fig_11, width = 12, height = 9)
 
 
 # Fig S1 ------------------------------------------------------------------
