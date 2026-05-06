@@ -91,7 +91,7 @@ load_matchup_long <- function(file_name){
     dplyr::select(-day, -time, -longitude, -latitude) |>
     pivot_wider(names_from = sensor, values_from = value) |>
     na.omit() |> 
-    filter(wavelength <= 700) |> # Prevent one data point for 700-750 from appearing on figures
+    filter(wavelength <= 700) |> 
     mutate(wavelength = as.numeric(wavelength),
            file_name = basename(file_name), .before = "wavelength") |> 
     mutate(wavelength_group = cut(wavelength,

@@ -6,6 +6,9 @@
 
 source("code/functions.R")
 
+# For tailor diagrams
+library(openair)
+
 
 # Processing functions ----------------------------------------------------
 
@@ -335,6 +338,76 @@ fig_4 <- ggpubr::ggarrange(fig_4_a, fig_4_b, fig_4_c, fig_4_d, fig_4_e, fig_4_f,
                            ncol = 3, nrow = 2, common.legend = TRUE, legend = "bottom") +
   ggpubr::bgcolor("white") + ggpubr::border("white", size = 2)
 ggsave("figures/fig_4.png", fig_4, width = 12, height = 9)
+
+
+# Figure 11 ---------------------------------------------------------------
+
+# Tailor diagram showing comparison of all satellites per waveband
+
+# Load all matchup data at once into one dataframe and filter for wavebands of interests
+## List all files used in matchups
+### NB: Careful with exact indexing
+match_base_details <- map_dfr(dir(path = "output", pattern = "matchup_stats_RHOW", full.names = TRUE)[2:5], 
+                              read_csv, show_col_types = FALSE) |> 
+   dplyr::select(file_name) |> distinct()
+## List all RHOW matchup satellite files and filter to those that passed QC
+file_list_sat <- dir(path = "~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_20260504", 
+                     pattern = "RHOW", full.names = TRUE, recursive = TRUE)
+file_list_sat <- file_list_sat[grepl("AQUA|PACE|S3A|S3B|VIIRS", file_list_sat)]
+file_list_sat <- file_list_sat[basename(file_list_sat) %in% match_base_details$file_name]
+## Split into the three sensors for ease of management below
+file_list_sat_hyperpro <- file_list_sat[grepl("RHOW_HYPERPRO", file_list_sat)]
+file_list_sat_trios <- file_list_sat[grepl("RHOW_TRIOS", file_list_sat)]
+file_list_sat_hypernets <- file_list_sat[grepl("RHOW_HYPERNETS", file_list_sat)]
+## Load all needed files
+df_sat_hyperpro <- map_dfr(file_list_sat_hyperpro, load_matchup_long) |> 
+  pivot_longer(AQUA:VIIRS_N, values_to = "value_sat", names_to = "sensor_sat") |> 
+  mutate(sensor_is = "HYPERPRO") |> dplyr::rename(value_is = HYPERPRO)
+df_sat_trios <- map_dfr(file_list_sat_trios, load_matchup_long) |> 
+  pivot_longer(AQUA:VIIRS_N, values_to = "value_sat", names_to = "sensor_sat") |> 
+  mutate(sensor_is = "TRIOS") |> dplyr::rename(value_is = TRIOS)
+df_sat_hypernets <- map_dfr(file_list_sat_hypernets, load_matchup_long) |> 
+  pivot_longer(AQUA:VIIRS_N, values_to = "value_sat", names_to = "sensor_sat") |> 
+  mutate(sensor_is = "Hyp") |> dplyr::rename(value_is = Hyp)
+## Combine into one dataframe
+df_sat_all <- bind_rows(df_sat_hyperpro, df_sat_trios, df_sat_hypernets) |>
+  mutate(value_sat = case_when(sensor_sat %in% c("PACE_V2", "PACE_V30", "PACE_V31") & 
+                                  !(wavelength %in% c(380, 400, 412, 443, 490, 510, 560, 620, 673, 700)) ~ NA , TRUE ~ value_sat)) |>
+  filter(!is.na(value_sat)) |>
+  mutate(sensor_sat = case_when(sensor_sat == "AQUA" ~ "Aqua MODIS",
+                                sensor_sat == "S3A" ~ "Sentinel-3A OLCI",
+                                sensor_sat == "S3B" ~ "Sentinel-3B OLCI",
+                                sensor_sat == "PACE_V2" ~ "PACE v2.0",
+                                sensor_sat == "PACE_V30" ~ "PACE v3.0",
+                                sensor_sat == "PACE_V31" ~ "PACE v3.1",
+                                sensor_sat == "VIIRS_N" ~ "VIIRS SNPP",
+                                sensor_sat == "VIIRS_J1" ~ "VIIRS J1",
+                                sensor_sat == "VIIRS_J2" ~ "VIIRS J2"),
+         sensor_is = case_when(sensor_is == "HYPERPRO" ~ "HyperPRO",
+                               sensor_is == "TRIOS" ~ "So-Rad",
+                               sensor_is == "Hyp" ~ "HYPERNETS"),
+         sensor_group = paste0(sensor_is , " vs ", sensor_sat, " at ", wavelength))
+
+# NB: This doesn't work well for everything in one whack
+# Rather need to subset the data further
+TaylorDiagram(
+  mydata       = df_sat_all[df_sat_all$sensor_is == "HyperPRO",],
+  obs          = "value_is",
+  mod          = "value_sat",
+  group        = "sensor_group",
+  main         = "Taylor Diagram — All Wavebands",
+  normalise    = TRUE,        # normalise so bands are comparable
+  cols         = colour_nm[1:7],
+  pch          = 19,
+  cex          = 1.1,
+  key.title    = "Wavelength",
+  annotate     = "RMSE"
+)
+
+# Another option is to create correlation matrices
+# Or potentially heatmaps of statistics for matchups
+# But at the moment I am leaning towards barplots for bias and error as this is what I have been doing throughout the project
+
 
 
 # Fig S1 ------------------------------------------------------------------

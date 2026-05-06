@@ -46,6 +46,8 @@ matchup_sat_uniq <- matchup_single_all |>
 
 ## Rrs for CTD stations ---------------------------------------------------
 
+# NB: Rather load the results directly below instead of running this code as it takes a while
+
 # Load mission metadata for reference
 Hyperboost_meta <- read_csv("data/HyperBoost_dataset_AOPs_2023_2024_10042026_Metadata.csv", 
     show_col_types = FALSE) |> 
@@ -125,6 +127,17 @@ sd_Rrs_all <- bind_rows(sd_Rrs_SoRad, sd_Rrs_HyperPRO, sd_Rrs_HYPERNETS) |>
   # filter(wavelength %in% sd_Rrs_SoRad$wavelength,
         #  wavelength %in% sd_Rrs_HyperPRO$wavelength) # There aren't data per nm for these two
 write_csv(sd_Rrs_all, file = "output/sd_Rrs_all.csv")
+
+### Load results here for ease ###
+read_csv("output/sd_Rrs_all.csv")
+
+# Quick stats output
+sd_Rrs_all |>
+  summarise(cv_25 = quantile(cv_perc, 0.25, na.rm = TRUE),
+            cv_median = median(cv_perc, na.rm = TRUE),
+            cv_75 = quantile(cv_perc, 0.75, na.rm = TRUE),
+            # cv_mean = mean(cv_perc, na.rm = TRUE),
+            n = n(), .by = "system") 
 
 # Mean values
 sd_Rrs_all_labels <- sd_Rrs_all |> 
@@ -341,10 +354,10 @@ global_waveband_mean <- global_stats_all |>
   filter(sensor_X %in% c("HYPERNETS", "TRIOS", "HYPERPRO")) |> 
   filter(!(sensor_Y %in% c("HYPERNETS", "TRIOS", "HYPERPRO"))) |> 
   filter(var_name == "RHOW") |>
-  summarise(Slope = mean(Slope),
-            Bias_mean = mean(Bias),
-            Bias_abs = mean(abs(Bias)),
-            Error = mean(Error), .by = c("Wavelength_nm"))
+  summarise(Slope = mean(Slope, na.rm = TRUE),
+            Bias_mean = mean(Bias, na.rm = TRUE),
+            Bias_abs = mean(abs(Bias), na.rm = TRUE),
+            Error = mean(Error, na.rm = TRUE), .by = c("Wavelength_nm"))
 
 # Plot the global mean matchups per in situ sensor
 global_match_mean |> 
