@@ -345,20 +345,46 @@ ggsave("figures/fig_4.png", fig_4, width = 12, height = 9)
 # Tailor diagram showing comparison of all satellites per waveband
 
 # Load all matchup data at once into one dataframe and filter for wavebands of interests
+
+## Load single matchup results
+df_matchups_single <- map_dfr(dir(path = "output", pattern = "matchup_stats_RHOW", full.names = TRUE), 
+                              read_csv, show_col_types = FALSE) |> 
+  filter(sensor_X %in% c("Hyp", "TRIOS", "HYPERPRO"),
+        !(sensor_Y %in% c("Hyp", "TRIOS", "HYPERPRO")))
+
+## Load global matchuups
+df_matchups_global <- read_csv("output/global_stats_all.csv", show_col_types = FALSE) |> 
+  filter(sensor_X %in% c("HYPERNETS", "TRIOS", "HYPERPRO"),
+        !(sensor_Y %in% c("HYPERNETS", "TRIOS", "HYPERPRO"))) |> 
+  mutate(sensor_Y = case_when(sensor_Y == "AQUA" ~ "Aqua",
+                              sensor_Y == "S3A" ~ "S3A",
+                              sensor_Y == "S3B" ~ "S3B",
+                              sensor_Y == "S3_all" ~ "S3 all",
+                              sensor_Y == "PACE_V2" ~ "PACE v2.0",
+                              sensor_Y == "PACE_V30" ~ "PACE v3.0",
+                              sensor_Y == "PACE_V31" ~ "PACE v3.1",
+                              sensor_Y == "VIIRS_N" ~ "SNPP",
+                              sensor_Y == "VIIRS_J1" ~ "JPSS1",
+                              sensor_Y == "VIIRS_J2" ~ "JPSS2"),
+        sensor_X = case_when(sensor_X == "HYPERPRO" ~ "HyperPRO",
+                             sensor_X == "TRIOS" ~ "So-Rad",
+                             sensor_X == "HYPERNETS" ~ "HYPERNETS"))
+
 ## List all files used in matchups
 ### NB: Careful with exact indexing
-match_base_details <- map_dfr(dir(path = "output", pattern = "matchup_stats_RHOW", full.names = TRUE)[2:5], 
-                              read_csv, show_col_types = FALSE) |> 
-   dplyr::select(file_name) |> distinct()
+match_base_details <- df_matchups_single |> dplyr::select(file_name) |> distinct()
+
 ## List all RHOW matchup satellite files and filter to those that passed QC
 file_list_sat <- dir(path = "~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_20260504", 
                      pattern = "RHOW", full.names = TRUE, recursive = TRUE)
 file_list_sat <- file_list_sat[grepl("AQUA|PACE|S3A|S3B|VIIRS", file_list_sat)]
 file_list_sat <- file_list_sat[basename(file_list_sat) %in% match_base_details$file_name]
+
 ## Split into the three sensors for ease of management below
 file_list_sat_hyperpro <- file_list_sat[grepl("RHOW_HYPERPRO", file_list_sat)]
 file_list_sat_trios <- file_list_sat[grepl("RHOW_TRIOS", file_list_sat)]
 file_list_sat_hypernets <- file_list_sat[grepl("RHOW_HYPERNETS", file_list_sat)]
+
 ## Load all needed files
 df_sat_hyperpro <- map_dfr(file_list_sat_hyperpro, load_matchup_long) |> 
   pivot_longer(AQUA:VIIRS_N, values_to = "value_sat", names_to = "sensor_sat") |> 
@@ -369,6 +395,7 @@ df_sat_trios <- map_dfr(file_list_sat_trios, load_matchup_long) |>
 df_sat_hypernets <- map_dfr(file_list_sat_hypernets, load_matchup_long) |> 
   pivot_longer(AQUA:VIIRS_N, values_to = "value_sat", names_to = "sensor_sat") |> 
   mutate(sensor_is = "Hyp") |> dplyr::rename(value_is = Hyp)
+
 ## Combine into one dataframe
 df_sat_all <- bind_rows(df_sat_hyperpro, df_sat_trios, df_sat_hypernets) |>
   mutate(value_sat = case_when(sensor_sat %in% c("PACE_V2", "PACE_V30", "PACE_V31") & 
@@ -408,6 +435,76 @@ TaylorDiagram(
 # Or potentially heatmaps of statistics for matchups
 # But at the moment I am leaning towards barplots for bias and error as this is what I have been doing throughout the project
 
+# Prep data for barplots
+df_matchups_global_pretty <- df_matchups_global |> 
+  filter(Wavelength_nm <= 600)
+
+# Create the barplot
+## Error
+pl_Error_sat <- ggplot(data = df_matchups_global_pretty, aes(x = as.character(Wavelength_nm), y = Error)) +
+  geom_col(aes(fill = sensor_Y), position = "dodge") +#, show.legend = FALSE) +
+  labs(y = "Error  (%)") +
+  facet_wrap(~sensor_X) +
+  # theme_minimal() +
+  theme(panel.border = element_rect(fill = NA, color = "black"),
+        legend.title = element_text(size = 14),
+        legend.text = element_text(size = 12),
+        legend.position = "bottom",
+        axis.title.x = element_markdown(size = 12),
+        axis.title.y = element_markdown(size = 12),
+        axis.text = element_text(size = 10))
+pl_Error_sat
+
+## Bias
+pl_Bias_sat <- ggplot(data = df_matchups_global_pretty, aes(x = as.character(Wavelength_nm), y = Bias)) +
+  geom_col(aes(fill = sensor_Y), position = "dodge", show.legend = FALSE) +
+  labs(y = "Bias  (%)") +
+  facet_wrap(~sensor_X) +
+  # theme_minimal() +
+  theme(panel.border = element_rect(fill = NA, color = "black"),
+        legend.title = element_text(size = 14),
+        legend.text = element_text(size = 12),
+        legend.position = "bottom",
+        axis.title.x = element_markdown(size = 12),
+        axis.title.y = element_markdown(size = 12),
+        axis.text = element_text(size = 10))
+pl_Bias_sat
+
+# Steek'em
+fig_11 <- pl_Error_sat / pl_Bias_sat + plot_annotation(tag_levels = "a", tag_suffix = ")")
+ggsave("figures/fig_11.png", fig_11, width = 9, height = 12)
+
+# Barplots are affected by the uneven spacing of wavebands
+# Perhaps rather a matrix plot or scatterplot
+pl_scatter_sat <- ggplot(data = df_matchups_global_pretty, aes(x = Error, y = Bias)) +
+  geom_point(aes(colour = Wavelength_nm)) +
+  labs(x = "Error (%)", y = "Bias  (%)") +
+  facet_grid(sensor_Y~sensor_X) +
+  # theme_minimal() +
+  theme(panel.border = element_rect(fill = NA, color = "black"),
+        legend.title = element_text(size = 14),
+        legend.text = element_text(size = 12),
+        legend.position = "bottom",
+        axis.title.x = element_markdown(size = 12),
+        axis.title.y = element_markdown(size = 12),
+        axis.text = element_text(size = 10))
+pl_scatter_sat
+
+# Matrix plot
+pl_matrix_sat <- ggplot(data = df_matchups_global_pretty, aes(x = as.character(Wavelength_nm), y = sensor_Y)) +
+  geom_tile(aes(fill = Error)) +
+  # labs(x = "Error (%)", y = "Bias  (%)") +
+  facet_wrap(~sensor_X) +
+  scale_fill_viridis_c() +
+  # theme_minimal() +
+  theme(panel.border = element_rect(fill = NA, color = "black"),
+        legend.title = element_text(size = 14),
+        legend.text = element_text(size = 12),
+        legend.position = "bottom",
+        axis.title.x = element_markdown(size = 12),
+        axis.title.y = element_markdown(size = 12),
+        axis.text = element_text(size = 10))
+pl_matrix_sat
 
 
 # Fig S1 ------------------------------------------------------------------
@@ -569,7 +666,7 @@ global_stats_OCI_pretty <- global_stats_OCI |>
                            labels = c("PACE v2.0", "PACE v3.0", "PACE v3.1"))) |> 
   dplyr::rename(`Wavelength (nm)` = Wavelength_nm)
 
-# Create the histogram plot
+# Create the barplot
 ## Error
 pl_Error_OCI <- ggplot(data = global_stats_OCI_pretty, aes(x = `Wavelength (nm)`, y = Error)) +
   geom_col(aes(fill = sensor_Y), position = "dodge", show.legend = FALSE) +
