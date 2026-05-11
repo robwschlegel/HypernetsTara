@@ -436,7 +436,7 @@ df_sat_all <- bind_rows(df_sat_hyperpro, df_sat_trios, df_sat_hypernets) |>
 
 # Prep data for matrix plots
 df_matchups_global_pretty <- df_matchups_global |> 
-  filter(Wavelength_nm <= 600) |> 
+  filter(Wavelength_nm >= 400, Wavelength_nm <= 600) |> 
   mutate(sensor_sat = case_when(sensor_Y %in% c("Aqua") ~ "MODIS",
                                 sensor_Y %in% c("S3A", "S3B", "S3 all") ~ "OLCI",
                                 sensor_Y %in% c("PACE v2.0", "PACE v3.0", "PACE v3.1") ~ "OCI",
@@ -454,12 +454,25 @@ df_matchups_global_pretty <- df_matchups_global |>
 
 # Matrix plot
 plot_matrix_error <- function(df, val_range){
-  ggplot(data = df, aes(x = wavelength_clean, y = sensor_Y)) +
+  # Create column for all wavelengths
+  df_all <- df |> 
+    group_by(sensor_Y, sensor_X, sensor_sat) |> 
+    summarise(Error = mean(Error, na.rm = TRUE), .groups = "drop") |> 
+    mutate(wavelength_clean = "All")
+  df <- bind_rows(df, df_all) #|> 
+    # mutate(wavelength_clean = factor(wavelength_clean)#, 
+      # levels = c("410/411", "443/445", "486/489", "551/556", "400", "412", "443", "490", "510", "560", "All")))
+  # Round data to given range
+  df_round <- df |> 
+    mutate(Error = case_when(Error > val_range[2] ~ val_range[2],
+                             TRUE ~ Error))
+  ggplot(data = df_round, aes(x = wavelength_clean, y = sensor_Y)) +
     geom_tile(aes(fill = Error), colour = "black") +
-    labs(x = "Waveband (nm)", y = NULL) +
+    geom_label(data = df, aes(label = sprintf("%.1f", round(Error, 1))), size = 3) +
+    labs(x = "Waveband (nm)", y = NULL, fill = "Error (%)") +
     facet_grid(sensor_sat~sensor_X, scales = "free") +
     # scale_y_reverse() +
-    scale_fill_viridis_c(limits = val_range) +
+    scale_fill_viridis_c(limits = val_range, breaks = c(10, 20, 30), labels = c("10", "20", "30")) +
     # theme_minimal() +
     coord_cartesian(expand = FALSE) +
     theme(panel.border = element_rect(fill = NA, color = "black"),
@@ -475,7 +488,8 @@ plot_matrix_error <- function(df, val_range){
 sensors <- unique(df_matchups_global_pretty$sensor_sat)
 plots_by_sensor <- purrr::set_names(
   purrr::map(sensors, function(s) {
-    val_range <- range(df_matchups_global_pretty$Error, na.rm = TRUE)
+    # val_range <- range(df_matchups_global_pretty$Error, na.rm = TRUE)
+    val_range <- c(0, 40)
     df_sub <- df_matchups_global_pretty |> dplyr::filter(sensor_sat == s)
     plot_matrix_error(df_sub, val_range)
   }),
