@@ -7,6 +7,38 @@
 source("code/functions.R")
 
 
+# Wind for HYPERNETS -----------------------------------------------------
+
+# In order to perform the BRDF correction for HYPERNETS we need to retrieve them from the So-Rad SeaBass files
+
+# Load So-Rad Rrs file
+wind_SoRad <- proc_seaBass_SoRad("~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/Trios_processed_data/TARA_HyperBOOST_Rrs_20240323_20240821_Version_20250911.sb") |> 
+  dplyr::select(system:wind) |> 
+  distinct() |> 
+  filter(dateTime >= as.POSIXct("2024-08-08 00:00:00", tz = "UTC"),
+         dateTime <= as.POSIXct("2024-08-18 23:59:59", tz = "UTC"))
+
+# Load all So-Rad vs HYPERNETS matchup files for all variables
+HYPERNETS_ed <- load_matchups_folder("ED", "HYPERNETS", "TRIOS") |>
+  filter(sensor == "Hyp") |> mutate(var = "Ed", dateTime = as.POSIXct(paste0(day, time), format = "%Y%m%d%H%M%S", tz = "UTC+2"))
+HYPERNETS_lu <- load_matchups_folder("LU", "HYPERNETS", "TRIOS") |>
+  filter(sensor == "Hyp") |> mutate(var = "Lu", dateTime = as.POSIXct(paste0(day, time), format = "%Y%m%d%H%M%S", tz = "UTC+2"))
+HYPERNETS_ld <- load_matchups_folder("LD", "HYPERNETS", "TRIOS") |>
+  filter(sensor == "Hyp") |> mutate(var = "Ld", dateTime = as.POSIXct(paste0(day, time), format = "%Y%m%d%H%M%S", tz = "UTC+2"))
+HYPERNETS_lw <- load_matchups_folder("LW", "HYPERNETS", "TRIOS") |>
+  filter(sensor == "Hyp") |> mutate(var = "Lw", dateTime = as.POSIXct(paste0(day, time), format = "%Y%m%d%H%M%S", tz = "UTC+2"))
+HYPERNETS_rhow <- load_matchups_folder("RHOW", "HYPERNETS", "TRIOS") |>
+  filter(sensor == "Hyp") |> mutate(var = "RHOW", dateTime = as.POSIXct(paste0(day, time), format = "%Y%m%d%H%M%S", tz = "UTC+2"))
+HYPERNETS_all <- bind_rows(HYPERNETS_ed, HYPERNETS_lu, HYPERNETS_ld, HYPERNETS_lw, HYPERNETS_rhow) |> 
+  difference_left_join(wind_SoRad[,c("dateTime", "wind")], by = "dateTime", max_dist = 1200, distance_col = "timeDiff") |> 
+  dplyr::select(sensor, var, dateTime = dateTime.x, latitude, longitude, wind, timeDiff, `380`:`700`) |> 
+  filter(!is.na(wind)) |>
+  group_by(-wind, -timeDiff) |>
+  filter(timeDiff == min(timeDiff, na.rm = TRUE)) |>
+  ungroup()
+write_csv(HYPERNETS_all, file = "data/HYPERNETS_all_with_wind.csv")
+
+
 # Individual matchup stats ------------------------------------------------
 
 # Run for all variables and satellites

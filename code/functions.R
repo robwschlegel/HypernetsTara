@@ -8,6 +8,7 @@ library(tidyverse)
 library(ncdf4)
 library(tidync)
 library(FNN) # Needed for fastest nearest neighbor searching
+library(fuzzyjoin) # For joining data based on nearest neighbor searching
 library(geosphere) # For determining distance between points
 library(ggtext) # For rich text labels
 library(ggimage) # For adding .jpg files to figures
@@ -247,6 +248,7 @@ load_HyperPRO_coords <- function(file_name){
 
 # Load the base values from a seaBass So-Rad file
 # file_name <- base_SoRad_files[7]
+# file_name <- "~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/Trios_processed_data/TARA_HyperBOOST_Rrs_20240323_20240821_Version_20250911.sb"
 proc_seaBass_SoRad <- function(file_name){
   
   # Set header rows
@@ -274,10 +276,12 @@ proc_seaBass_SoRad <- function(file_name){
            val_name = str_extract(name, "^[A-Za-z]+"),
            wavelength   = as.numeric(str_extract(name, "[0-9.]+"))) |> 
     pivot_wider(names_from = var_name, values_from = value) |> 
-    mutate(cv_unc = unc / mean,
-           system = "So-Rad") |> # NB: Not technically CV because using uncertainty, not SD
-    dplyr::select(system, val_name, wavelength, bincount, mean, unc, cv_unc) |> 
+    mutate(cv_unc = unc / mean, # NB: Not technically CV because using uncertainty, not SD
+           system = "So-Rad", 
+           dateTime = as.POSIXct(paste0(date, time), format = "%Y%m%d%H:%M:%S", tz = "UTC+2"))|> 
+    dplyr::select(system, dateTime, lon, lat, RelAz, SZA, wind, val_name, wavelength, bincount, mean, unc, cv_unc) |> 
     dplyr::rename(n = bincount, name = val_name)
+  return(df_res)
 }
 
 
