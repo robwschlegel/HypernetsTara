@@ -859,12 +859,11 @@ process_OLCI_stats <- function(df){
 }
 
 # Function that interrogates each matchup file to produce the needed output for all following comparisons
-# file_path <- "~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_v2/RHOW_HYPERNETS_vs_HYPERPRO/HYPERNETS_vs_HYPERPRO_vs_20240809T073700_RHOW.csv"
-# file_path <- "~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_v2/ED_HYPERNETS_vs_TRIOS/HYPERNETS_vs_TRIOS_vs_20240808T065700_ED.csv"
-# file_path <- "/home/calanus/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_20260203/RHOW_HYPERPRO_vs_PACE_V31/HYPERPRO_vs_PACE_V31_vs_20240814T101100_RHOW.csv"
+# file_path <- "~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_20260504/RHOW_HYPERNETS_vs_HYPERPRO/HYPERNETS_vs_HYPERPRO_vs_20240809T073700_RHOW.csv"
+# file_path <- "/home/calanus/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_20260504/RHOW_HYPERPRO_vs_PACE_V31/HYPERPRO_vs_PACE_V31_vs_20240814T101100_RHOW.csv"
 # file_path <- file_list[1]
 process_matchup_file <- function(file_path){
-  
+
   # Load the mean data
   df_mean <- load_matchup_mean(file_path)
   
@@ -882,7 +881,7 @@ process_matchup_file <- function(file_path){
         # Get data.frame for matchup based on the two sensors being compared
         df_sensor_sub <- df_mean |> 
           filter(sensor %in% c(sensors[i], sensors[j])) |> 
-          mutate(dateTime = as.POSIXct(paste(day, time), format = "%Y%m%d %H%M%S"), .after = "latitude", .keep = "unused")
+          mutate(dateTime = as.POSIXct(paste(day, time), format = "%Y%m%d %H%M%S", tz = "UTC+2"), .after = "latitude", .keep = "unused")
         
         # get distances
         hav_dist <- round(distHaversine(df_sensor_sub[c("longitude", "latitude")])/1000, 2) # distance in km
@@ -894,19 +893,38 @@ process_matchup_file <- function(file_path){
         # Melt it for additional stats
         df_sensor_long <- df_sensor_sub |> 
           pivot_longer(cols = matches("1|2|3|4|5|6|7|8|9"), names_to = "wavelength", values_to = "value") |> 
-          dplyr::select(-dateTime, -longitude, -latitude) |> 
-          pivot_wider(names_from = sensor, values_from = value) |> 
+          mutate(wavelength = as.numeric(wavelength)) |> 
+          # dplyr::select(-dateTime, -longitude, -latitude) |> 
+          # pivot_wider(names_from = sensor, values_from = value) |> 
+          filter(wavelength >= 380, wavelength <= 700) |> 
           na.omit()
         
-        # Filter wavelengths according to variable being compared
-        if(grepl("RHOW|LW", file_path)){
-          df_sensor_long <- df_sensor_long |> 
-            filter(wavelength >= 400, wavelength <= 600)
+        # Substitute BRDF corrected values if matching RHOW values
+        if(grepl("RHOW", file_path)){
+          BRDF_corr <- read_csv("data/BRDF_corr/HYPERNETS_all_rhow_BRDF_corr.csv", show_col_types = FALSE) |> 
+            filter(sensor_Y == sensors[j] | sensor_Y == sensors[i]) |> 
+            pivot_longer(cols = matches("1|2|3|4|5|6|7|8|9"), names_to = "wavelength", values_to = "BRDF_corr") |> 
+            mutate(wavelength = as.numeric(wavelength))
+          df_sensor_long_corr <- df_sensor_long |> 
+            left_join(BRDF_corr, by = c("sensor", "dateTime" = "date",  "wavelength", "longitude", "latitude"))
+          
+          # Check that the merge worked
+          if(length(!is.na(df_sensor_long_corr$BRDF_corr)) == 0) stop("Merge with BRDF correction file did not work correctly.")
+          df_sensor_long_corr <- df_sensor_long_corr |> 
+            mutate(value = case_when(!is.na(BRDF_corr) ~ BRDF_corr, TRUE ~ value)) |> 
+            dplyr::select(sensor:longitude, latitude, dateTime, wavelength, value)
+        } else {
+          df_sensor_long_corr <- df_sensor_long
         }
         
+        # Widen for use with stats function
+        df_sensor_wide <- df_sensor_long_corr |> 
+          dplyr::select(-dateTime, -longitude, -latitude) |>
+          pivot_wider(names_from = sensor, values_from = value)
+
         # get vectors
-        x_vec <- df_sensor_long[[sensors[i]]]
-        y_vec <- df_sensor_long[[sensors[j]]]
+        x_vec <- df_sensor_wide[[sensors[i]]]
+        y_vec <- df_sensor_wide[[sensors[j]]]
         
         # Base stats
         df_stats <- base_stats(x_vec, y_vec)
@@ -923,7 +941,7 @@ process_matchup_file <- function(file_path){
                              dateTime_X = df_sensor_sub$dateTime[[i]],
                              dateTime_Y = df_sensor_sub$dateTime[[j]],
                              diff_time = time_diff,
-                             n = nrow(df_sensor_long),
+                             n = nrow(df_sensor_wide),
                              Slope = df_stats$Slope,
                              Slope_log = df_stats$Slope_log,
                              Bias = df_stats$Bias,
@@ -1033,7 +1051,7 @@ process_sensor <- function(var_name, sensor_Z, stat_choice = "matchup"){
 # var_name = "RHOW"; sensor_X = "HYPERNETS"; sensor_Y = "TRIOS"
 # var_name = "RHOW"; sensor_X = "TRIOS"; sensor_Y = "VIIRS_N"
 # var_name = "RHOW"; sensor_X = "HYPERNETS"; sensor_Y = "PACE_V30"
-# var_name = "RHOW"; sensor_X = "HYPERNETS"; sensor_Y = "S3_all"
+# var_name = "RHOW"; sensor_X = "HYPERNETS"; sensor_Y = "S3A"
 global_stats <- function(var_name, sensor_X, sensor_Y){
   
   # Create multiple folder paths if requested
@@ -1104,6 +1122,57 @@ global_stats <- function(var_name, sensor_X, sensor_Y){
       pivot_longer(S3A:S3B, names_to = "name", values_to = "S3_all") |> 
       dplyr::select(-name) |> 
       filter(!is.na(S3_all))
+  }
+  
+  # Change HYPERNETS RHOW values to BRDF corrected values if applicable
+  if(var_name == "RHOW" & sensor_X == "HYPERNETS"){
+
+    # Load and prep BRDF corrected HYPERNETS data
+    BRDF_corr <- read_csv("data/BRDF_corr/HYPERNETS_all_rhow_BRDF_corr.csv", show_col_types = FALSE) |> 
+      dplyr::rename(sensor_YY = sensor_Y)
+
+    # Correct S3_all edge case
+    if(sensor_Y == "S3_all") {
+      BRDF_corr <- BRDF_corr |> 
+        mutate(sensor_YY = case_when(sensor_YY %in% c("S3A", "S3B") ~ "S3_all", TRUE ~ sensor_YY))
+    }
+
+    # carry on
+    BRDF_corr <- BRDF_corr |> 
+      filter(sensor_YY == sensor_Y) |> 
+      pivot_longer(cols = matches("1|2|3|4|5|6|7|8|9"), names_to = "wavelength", values_to = "BRDF_corr") |> 
+      mutate(wavelength = as.numeric(wavelength),
+              date = as.POSIXct(date, tz = "UTC+2")) |> 
+      filter(sensor == "Hyp") |> 
+      dplyr::select(date, wavelength, BRDF_corr) |> 
+      filter(!is.na(BRDF_corr))
+
+    if(sensor_Y %in% c("HYPERPRO", "TRIOS", "AQUA")){
+      date_sub_int <- 5
+    } else {
+      date_sub_int <- 6
+    }
+
+    # Merge with main data
+    match_base <- match_base |> 
+      mutate(date = gsub("T", " ", sapply(str_split(file_name, "_"), "[[", date_sub_int))) |> 
+      mutate(date = as.POSIXct(date, format = "%Y%m%d %H%M%S", tz = "UTC+2")) |> 
+      left_join(BRDF_corr, by = c("date",  "wavelength"))
+
+    # Check that the merge worked
+    if(nrow(match_base[is.na(match_base$BRDF_corr),]) > 0) stop("Merge with BRDF correction file did not work correctly.")
+    
+    # Clean and exit
+    match_base <- match_base |> 
+      mutate(Hyp = case_when(!is.na(BRDF_corr) ~ BRDF_corr, TRUE ~ Hyp)) |> 
+      dplyr::select(-date, -BRDF_corr)
+
+    # SMooth out a duplicate bug
+    if(sensor_Y == "S3_all") {
+      match_base <- match_base |> 
+        summarise(Hyp = mean(Hyp, na.rm = TRUE), S3_all = mean(S3_all, na.rm = TRUE), 
+                  .by = c("file_name", "wavelength", "wavelength_group"))
+    }
   }
   
   # Get pre-determined wavelengths

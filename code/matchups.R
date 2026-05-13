@@ -55,6 +55,7 @@ hyp_wind <- hyp_RHOW |>
   filter(timeDiff == min(timeDiff, na.rm = TRUE)) |>
   ungroup() |> 
   distinct()
+write_csv(hyp_wind, "data/BRDF_corr/HYPERNETS_all_wind.csv")
 
 # Convert to Rrs and save
 hyp_wind_rrs <- hyp_wind |> 
@@ -74,14 +75,16 @@ for (sensor_filt in unique(hyp_wind_rrs$sensor_Y)) {
 hyp_brdf_corr <- data.frame()
 for (sensor_filt in unique(hyp_wind_rrs$sensor_Y)) {
   hyp_brdf_corr_sensor_base <- hyp_wind_rrs |> 
-      dplyr::select(sensor:longitude) |> 
-    filter(sensor_Y == sensor_filt)
+    dplyr::select(sensor:longitude) |> 
+    filter(sensor_Y == sensor_filt) |> 
+    mutate(var = "RHOW")
   hyp_brdf_corr_sensor_i <- tidync(paste0("data/BRDF_corr/HYPERNETS_",sensor_filt,"_rrs_wind_BRDF_corrected.nc")) |> 
     hyper_tibble() |> 
     mutate(Rrs_BRDF = Rrs_BRDF * pi) |> 
-    pivot_wider(names_from = bands, values_from = Rrs_BRDF)
+    pivot_wider(names_from = bands, values_from = Rrs_BRDF) |> 
+    dplyr::select(-n)
   hyp_brdf_corr <- bind_rows(hyp_brdf_corr, bind_cols(hyp_brdf_corr_sensor_base, hyp_brdf_corr_sensor_i))
-}
+}; rm(hyp_brdf_corr_sensor_base, hyp_brdf_corr_sensor_i)
 write_csv(hyp_brdf_corr, file = "data/BRDF_corr/HYPERNETS_all_rhow_BRDF_corr.csv")
 
 # Compare the BRDF-corrected values to the original matchup values
