@@ -18,17 +18,36 @@ wind_SoRad <- proc_seaBass_SoRad("~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/T
   filter(dateTime >= as.POSIXct("2024-08-08 00:00:00", tz = "UTC"),
          dateTime <= as.POSIXct("2024-08-18 23:59:59", tz = "UTC"))
 
-# Load all So-Rad vs HYPERNETS matchup files for all variables
-HYPERNETS_ed <- load_matchups_folder("ED", "HYPERNETS", "TRIOS") |>
-  filter(sensor == "Hyp") |> mutate(var = "Ed", dateTime = as.POSIXct(paste0(day, time), format = "%Y%m%d%H%M%S", tz = "UTC+2"))
-HYPERNETS_lu <- load_matchups_folder("LU", "HYPERNETS", "TRIOS") |>
-  filter(sensor == "Hyp") |> mutate(var = "Lu", dateTime = as.POSIXct(paste0(day, time), format = "%Y%m%d%H%M%S", tz = "UTC+2"))
-HYPERNETS_ld <- load_matchups_folder("LD", "HYPERNETS", "TRIOS") |>
-  filter(sensor == "Hyp") |> mutate(var = "Ld", dateTime = as.POSIXct(paste0(day, time), format = "%Y%m%d%H%M%S", tz = "UTC+2"))
-HYPERNETS_lw <- load_matchups_folder("LW", "HYPERNETS", "TRIOS") |>
-  filter(sensor == "Hyp") |> mutate(var = "Lw", dateTime = as.POSIXct(paste0(day, time), format = "%Y%m%d%H%M%S", tz = "UTC+2"))
-HYPERNETS_rhow <- load_matchups_folder("RHOW", "HYPERNETS", "TRIOS") |>
-  filter(sensor == "Hyp") |> mutate(var = "RHOW", dateTime = as.POSIXct(paste0(day, time), format = "%Y%m%d%H%M%S", tz = "UTC+2"))
+# Load all HYPERNETS L1C files to get the wind and azimuth values
+L1C_HYPERNETS_files <- dir("~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/Hypernets_processed_data",
+  full.names = TRUE, recursive = TRUE, pattern = "_L1C_")
+L1C_HYPERNETS_files <- L1C_HYPERNETS_files[grepl("v2.0.nc", L1C_HYPERNETS_files)]
+hyp_L1C <- purrr::map_dfr(L1C_HYPERNETS_files, proc_HYPERNETS_L1C)
+hyp_meta <- hyp_L1C |> 
+  dplyr::select(date, name, mean) |>
+  dplyr::filter(name %in% c("rhof_wind", "rhof_sza", "rhof_raa", "rhof_vza")) |>
+  distinct() |>
+  pivot_wider(names_from = name, values_from = mean) |> 
+  # Convert all seconds value to 00 to match Hypernets_matchups files
+  mutate(date = as.POSIXct(paste0(str_sub(as.character(date), 1, 17),"00"), format = "%Y-%m-%d %H:%M:%S", tz = "UTC+2"))
+
+# Load all Rhow matchups with HYPERNETS data for BRDF correction
+# All data must be loaded as these will then be used to replace the same files in the single and global matchups below
+# HYPERNETS_rhow <- load_matchups_folder("RHOW", "HYPERNETS", "TRIOS") |>
+#   filter(sensor == "Hyp") |> mutate(var = "RHOW", dateTime = as.POSIXct(paste0(day, time), format = "%Y%m%d%H%M%S", tz = "UTC+2"))
+hyp_trios <- load_matchups_folder("RHOW", "HYPERNETS", "TRIOS") |> 
+  filter(sensor == "Hyp") |> mutate(var = "RHOW", date = as.POSIXct(paste0(day, time), format = "%Y%m%d%H%M%S", tz = "UTC+2"))
+hyp_pro <- load_matchups_folder("RHOW", "HYPERNETS", "HYPERPRO") |> 
+  filter(sensor == "Hyp") |> mutate(var = "RHOW", date = as.POSIXct(paste0(day, time), format = "%Y%m%d%H%M%S", tz = "UTC+2"))
+hyp_AQUA <- load_matchups_folder("RHOW", "HYPERNETS", "AQUA") |> 
+  filter(sensor == "Hyp") |> mutate(var = "RHOW", date = as.POSIXct(paste0(day, time), format = "%Y%m%d%H%M%S", tz = "UTC+2"))
+hyp_VIIRS_N <- load_matchups_folder("RHOW", "HYPERNETS", "VIIRS_N") |> 
+  filter(sensor == "Hyp") |> mutate(var = "RHOW", date = as.POSIXct(paste0(day, time), format = "%Y%m%d%H%M%S", tz = "UTC+2"))
+hyp_OLCI <- load_matchups_folder("RHOW", "HYPERNETS", "OLCI") |> 
+  filter(sensor == "Hyp") |> mutate(var = "RHOW", date = as.POSIXct(paste0(day, time), format = "%Y%m%d%H%M%S", tz = "UTC+2"))
+hyp_OCI <- load_matchups_folder("RHOW", "HYPERNETS", "OCI") |> 
+  filter(sensor == "Hyp") |> mutate(var = "RHOW", date = as.POSIXct(paste0(day, time), format = "%Y%m%d%H%M%S", tz = "UTC+2"))
+
 HYPERNETS_all <- bind_rows(HYPERNETS_ed, HYPERNETS_lu, HYPERNETS_ld, HYPERNETS_lw, HYPERNETS_rhow) |> 
   difference_left_join(wind_SoRad[,c("dateTime", "wind")], by = "dateTime", max_dist = 1200, distance_col = "timeDiff") |> 
   dplyr::select(sensor, var, dateTime = dateTime.x, latitude, longitude, wind, timeDiff, `380`:`700`) |> 

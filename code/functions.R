@@ -167,24 +167,31 @@ load_HYPERNETS_coords <- function(file_name){
 }
 
 # Process HYPERNETS files to get mean and sd per wavelength per sequence
-# file_name <- L1C_HYPERNETS_files[10]
+# file_name <- L1C_HYPERNETS_files[2]
 proc_HYPERNETS_L1C <- function(file_name, stat_calc = TRUE){
 
   print(file_name)
 
   # Get file info for use later
-  suppressWarnings(nc_info <- ncdump::NetCDF(file_name))
+  suppressMessages(nc_info <- ncdump::NetCDF(file_name))
   
-  # Process data
+  # Load observation values
+  df_meta <- tidync(file_name) |> 
+    activate("D1") |> 
+    hyper_tibble()
+
+  # Loda measurement variables
   df_base <- tidync(file_name) |> 
     hyper_tibble() |> 
-    mutate(Rrs = reflectance / pi, .before = "downwelling_radiance")
+    mutate(Rrs = reflectance / pi, .before = "downwelling_radiance") |> 
+    left_join(df_meta, by = "scan") |> 
+    dplyr::select(wavelength, scan, rhof_wind:rhof_vza, Rrs:reflectance_nosc)
   
   # Calculate stats if desired
   if(stat_calc){
 
     df_res <- df_base |> 
-      pivot_longer(Rrs:reflectance_nosc) |> 
+      pivot_longer(rhof_wind:reflectance_nosc) |> 
       mutate(wavelength = round(as.numeric(wavelength))) |> 
       summarise(n = n(),
                 mean = mean(value, na.rm = TRUE),
@@ -208,12 +215,12 @@ proc_HYPERNETS_L1C <- function(file_name, stat_calc = TRUE){
   } else {
 
     df_res <- df_base |> 
-      pivot_longer(Rrs:reflectance_nosc) |> 
+      pivot_longer(rhof_wind:reflectance_nosc) |> 
       mutate(wavelength = round(as.numeric(wavelength)),
-            lon = nc_info$attribute$global$site_longitude,
-            lat = nc_info$attribute$global$site_latitude,
-            date = as.POSIXct(sub("SEQ", "", nc_info$attribute$global$source_file),
-              format = "%Y%m%dT%H%M%S", tz = "UTC"),
+             lon = nc_info$attribute$global$site_longitude,
+             lat = nc_info$attribute$global$site_latitude,
+             date = as.POSIXct(sub("SEQ", "", nc_info$attribute$global$source_file),
+               format = "%Y%m%dT%H%M%S", tz = "UTC"),
             system = "HYPERNETS") |> 
       mutate(name = case_when(name == "reflectance" ~ "Rhow",
                               name == "reflectance_nosc" ~ "Rhow_nosc",
