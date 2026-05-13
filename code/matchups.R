@@ -15,8 +15,9 @@ source("code/functions.R")
 wind_SoRad <- proc_seaBass_SoRad("~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/Trios_processed_data/TARA_HyperBOOST_Rrs_20240323_20240821_Version_20250911.sb") |> 
   dplyr::select(system:wind) |> 
   distinct() |> 
-  filter(dateTime >= as.POSIXct("2024-08-08 00:00:00", tz = "UTC"),
-         dateTime <= as.POSIXct("2024-08-18 23:59:59", tz = "UTC"))
+  dplyr::rename(date = dateTime) |> 
+  filter(date >= as.POSIXct("2024-08-08 00:00:00", tz = "UTC"),
+         date <= as.POSIXct("2024-08-18 23:59:59", tz = "UTC"))
 
 # Load all HYPERNETS L1C files to get the wind and azimuth values
 L1C_HYPERNETS_files <- dir("~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/Hypernets_processed_data",
@@ -31,31 +32,95 @@ hyp_meta <- hyp_L1C |>
   # Convert all seconds value to 00 to match Hypernets_matchups files
   mutate(date = as.POSIXct(paste0(str_sub(as.character(date), 1, 17),"00"), format = "%Y-%m-%d %H:%M:%S", tz = "UTC+2"))
 
+# Get all HYPERNETS matcups files
+hyp_files <- dir("~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_20260504", 
+                 full.names = TRUE, recursive = TRUE, pattern = ".csv")
+hyp_files <- hyp_files[grepl("RHOW_HYPERNETS_vs", hyp_files)]
+hyp_files <- hyp_files[!grepl("RHOW_HYPERNETS_vs_TRIOS_vs_HYPERPRO", hyp_files)]
+
 # Load all Rhow matchups with HYPERNETS data for BRDF correction
 # All data must be loaded as these will then be used to replace the same files in the single and global matchups below
-# HYPERNETS_rhow <- load_matchups_folder("RHOW", "HYPERNETS", "TRIOS") |>
-#   filter(sensor == "Hyp") |> mutate(var = "RHOW", dateTime = as.POSIXct(paste0(day, time), format = "%Y%m%d%H%M%S", tz = "UTC+2"))
-hyp_trios <- load_matchups_folder("RHOW", "HYPERNETS", "TRIOS") |> 
-  filter(sensor == "Hyp") |> mutate(var = "RHOW", date = as.POSIXct(paste0(day, time), format = "%Y%m%d%H%M%S", tz = "UTC+2"))
-hyp_pro <- load_matchups_folder("RHOW", "HYPERNETS", "HYPERPRO") |> 
-  filter(sensor == "Hyp") |> mutate(var = "RHOW", date = as.POSIXct(paste0(day, time), format = "%Y%m%d%H%M%S", tz = "UTC+2"))
-hyp_AQUA <- load_matchups_folder("RHOW", "HYPERNETS", "AQUA") |> 
-  filter(sensor == "Hyp") |> mutate(var = "RHOW", date = as.POSIXct(paste0(day, time), format = "%Y%m%d%H%M%S", tz = "UTC+2"))
-hyp_VIIRS_N <- load_matchups_folder("RHOW", "HYPERNETS", "VIIRS_N") |> 
-  filter(sensor == "Hyp") |> mutate(var = "RHOW", date = as.POSIXct(paste0(day, time), format = "%Y%m%d%H%M%S", tz = "UTC+2"))
-hyp_OLCI <- load_matchups_folder("RHOW", "HYPERNETS", "OLCI") |> 
-  filter(sensor == "Hyp") |> mutate(var = "RHOW", date = as.POSIXct(paste0(day, time), format = "%Y%m%d%H%M%S", tz = "UTC+2"))
-hyp_OCI <- load_matchups_folder("RHOW", "HYPERNETS", "OCI") |> 
-  filter(sensor == "Hyp") |> mutate(var = "RHOW", date = as.POSIXct(paste0(day, time), format = "%Y%m%d%H%M%S", tz = "UTC+2"))
+hyp_RHOW <- map_dfr(hyp_files, load_matchup_mean) |> 
+  mutate(sensor_Y = lead(sensor, 1), .after = "sensor")
 
-HYPERNETS_all <- bind_rows(HYPERNETS_ed, HYPERNETS_lu, HYPERNETS_ld, HYPERNETS_lw, HYPERNETS_rhow) |> 
-  difference_left_join(wind_SoRad[,c("dateTime", "wind")], by = "dateTime", max_dist = 1200, distance_col = "timeDiff") |> 
-  dplyr::select(sensor, var, dateTime = dateTime.x, latitude, longitude, wind, timeDiff, `380`:`700`) |> 
-  filter(!is.na(wind)) |>
-  group_by(-wind, -timeDiff) |>
+# Process dates and add wind from HYPERNETS and So-Rad
+hyp_wind <- hyp_RHOW |> 
+  filter(sensor == "Hyp") |> 
+  mutate(var = "RHOW", date = as.POSIXct(paste0(day, time), format = "%Y%m%d%H%M%S", tz = "UTC+2")) |> 
+  left_join(hyp_meta, by = "date") |> 
+  difference_left_join(wind_SoRad[,c("date", "wind")], by = "date", max_dist = 12000, distance_col = "timeDiff") |> 
+  dplyr::select(sensor, sensor_Y, var, date = date.x, latitude, longitude, rhof_wind:rhof_vza, wind, timeDiff, `380`:`700`) |> 
+  # filter(!is.na(wind)) |>
+  group_by(sensor, sensor_Y, date) |>
   filter(timeDiff == min(timeDiff, na.rm = TRUE)) |>
-  ungroup()
-write_csv(HYPERNETS_all, file = "data/HYPERNETS_all_with_wind.csv")
+  ungroup() |> 
+  distinct()
+
+# Convert to Rrs and save
+hyp_wind_rrs <- hyp_wind |> 
+  mutate(across(`380`:`700`, ~ .x / pi), var = "Rrs")
+
+# For loop that saves one file per sensor in sensor_Y
+for (sensor_filt in unique(hyp_wind_rrs$sensor_Y)) {
+  hyp_wind_rrs |> 
+    filter(sensor_Y == sensor_filt) |> 
+    pivot_longer(cols = `380`:`700`, names_to = "wavelength", values_to = "Rrs") |>
+    filter(!is.na(Rrs)) |> 
+    pivot_wider(names_from = wavelength, values_from = Rrs) |> 
+    write_csv(file = paste0("data/BRDF_corr/HYPERNETS_",sensor_filt,"_rrs_wind.csv"))
+}
+
+# For loop that loads and merges the BRDF-corrected values
+hyp_brdf_corr <- data.frame()
+for (sensor_filt in unique(hyp_wind_rrs$sensor_Y)) {
+  hyp_brdf_corr_sensor_base <- hyp_wind_rrs |> 
+      dplyr::select(sensor:longitude) |> 
+    filter(sensor_Y == sensor_filt)
+  hyp_brdf_corr_sensor_i <- tidync(paste0("data/BRDF_corr/HYPERNETS_",sensor_filt,"_rrs_wind_BRDF_corrected.nc")) |> 
+    hyper_tibble() |> 
+    mutate(Rrs_BRDF = Rrs_BRDF * pi) |> 
+    pivot_wider(names_from = bands, values_from = Rrs_BRDF)
+  hyp_brdf_corr <- bind_rows(hyp_brdf_corr, bind_cols(hyp_brdf_corr_sensor_base, hyp_brdf_corr_sensor_i))
+}
+write_csv(hyp_brdf_corr, file = "data/BRDF_corr/HYPERNETS_all_rhow_BRDF_corr.csv")
+
+# Compare the BRDF-corrected values to the original matchup values
+hyp_brdf_corr_long <- hyp_brdf_corr |> 
+  pivot_longer(cols = `400`:`700`, names_to = "wavelength", values_to = "Rhow_BRDF_corr") |> 
+  mutate(wavelength = as.numeric(wavelength)) |> 
+  filter(!is.na(Rhow_BRDF_corr)) |> 
+  distinct()
+hyp_wind_long <- hyp_wind |> 
+  pivot_longer(cols = `380`:`700`, names_to = "wavelength", values_to = "Rhow_original") |> 
+  mutate(wavelength = as.numeric(wavelength)) |> 
+  filter(!is.na(Rhow_original)) |> 
+  dplyr::select(sensor, sensor_Y, date, latitude, longitude, wavelength, Rhow_original)
+hyp_compare <- hyp_wind_long |> 
+  left_join(hyp_brdf_corr_long, by = c("sensor", "sensor_Y", "date", "latitude", "longitude", "wavelength")) |> 
+  mutate(diff = Rhow_original - Rhow_BRDF_corr,
+         diff_perc = diff / Rhow_original * 100)
+
+# Plot the differences per wavelength as boxplots
+brdf_comp_band <- ggplot(filter(hyp_compare, sensor_Y == "TRIOS"), aes(x = as.factor(wavelength), y = diff_perc)) +
+  geom_boxplot() +
+  labs(x = "Wavelength [nm]", y = "Difference between original and BRDF-corrected Rhow (%)",
+       title = "Comparison of original and BRDF-corrected Rhow values from HYPERNETS matchups",
+       subtitle = "Values within boxplots show the spread across all samples for each wavelength") +
+  theme_minimal() +
+  theme(panel.border = element_rect(fill = NA, colour = "black"))
+
+# Boxplots per sensor_Y column
+brdf_comp_sat <- ggplot(hyp_compare, aes(x = sensor_Y, y = diff_perc, fill = sensor_Y)) +
+  geom_boxplot(show.legend = FALSE) +
+  labs(x = "Satellite", y = "Difference between original and BRDF-corrected Rhow (%)",
+       title = "Comparison of original and BRDF-corrected Rhow values from HYPERNETS matchups",
+       subtitle = "Values within boxplots show the spread across all samples for each satellite") +
+  theme_minimal() +
+  theme(panel.border = element_rect(fill = NA, colour = "black"))
+
+# Combine and save
+brdf_comp <- ggpubr::ggarrange(brdf_comp_band, brdf_comp_sat, ncol = 1, nrow = 2)
+ggsave("figures/test_BRDF_comp.png", brdf_comp, width = 12, height = 10)
 
 
 # Individual matchup stats ------------------------------------------------
