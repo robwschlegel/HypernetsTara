@@ -7,7 +7,7 @@
 source("code/functions.R")
 
 
-# Wind for HYPERNETS -----------------------------------------------------
+# BRDF for HYPERNETS ------------------------------------------------------
 
 # In order to perform the BRDF correction for HYPERNETS we need to retrieve them from the So-Rad SeaBass files
 
@@ -56,6 +56,7 @@ hyp_wind <- hyp_RHOW |>
   ungroup() |> 
   distinct()
 write_csv(hyp_wind, "data/BRDF_corr/HYPERNETS_all_wind.csv")
+hyp_wind <- read_csv("data/BRDF_corr/HYPERNETS_all_wind.csv")
 
 # Convert to Rrs and save
 hyp_wind_rrs <- hyp_wind |> 
