@@ -13,8 +13,9 @@ library(geosphere) # For determining distance between points
 library(ggtext) # For rich text labels
 library(ggimage) # For adding .jpg files to figures
 library(patchwork) # For complex paneling of figures
-# library(furrr)
-library(doParallel); registerDoParallel(cores = detectCores() - 2)
+library(furrr)
+library(future)
+# library(doParallel); registerDoParallel(cores = detectCores() - 2)
 
 
 # Setup -------------------------------------------------------------------
@@ -33,7 +34,7 @@ options(scipen = 9999)
 
 # Function that assembles file directory based on desired variable and sensors
 file_path_build <- function(var_name, sensor_X, sensor_Y){
-  file_path <- paste0("~/pCloud Drive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_20260504/",
+  file_path <- paste0("~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_20260504/",
                       toupper(var_name),"_",toupper(sensor_X),"_vs_", toupper(sensor_Y))
 }
 
@@ -187,13 +188,17 @@ load_matchups_folder <- function(var_name, sensor_X, sensor_Y, long = FALSE){
   file_list_clean <- file_list[!grepl("all|global", file_list)]
   
   # Load data
+  plan(multicore, workers = 14)   # use 4 cores
   if(long){
-    match_base <- plyr::ldply(file_list_clean, load_matchup_long, .parallel = TRUE)
+    # match_base <- plyr::ldply(file_list_clean, load_matchup_long, .parallel = TRUE)
+    match_base <- future_map_dfr(file_list_clean, load_matchup_long)
     # print(unique(match_base$wavelength))
   } else {
-    match_base <- plyr::ldply(file_list_clean, load_matchup_mean, .parallel = TRUE)
+    # match_base <- plyr::ldply(file_list_clean, load_matchup_mean, .parallel = TRUE)
+    match_base <- future_map_dfr(file_list_clean, load_matchup_mean)
   }
-  
+  plan(sequential)
+
   # Exit
   return(match_base)
 }
@@ -983,7 +988,7 @@ process_matchup_file <- function(file_path){
 }
 
 # Function that runs this over all matchup files in a directory
-# var_name = "RHOW"; sensor_X = "HYPERNETS"; sensor_Y = "HYPERPRO"
+# var_name = "RHOW"; sensor_X = "HYPERNETS"; sensor_Y = "TRIOS"
 # var_name = "RHOW"; sensor_X = "HYPERPRO"; sensor_Y = "PACE_v31"
 # var_name = "RHOW"; sensor_X = "HYPERNETS"; sensor_Y = "AQUA"
 # var_name = "RHOW"; sensor_X = "HYPERNETS"; sensor_Y = "AQUA"
@@ -999,8 +1004,11 @@ process_matchup_folder <- function(var_name, sensor_X, sensor_Y){
   file_list <- file_list[!grepl("all|global", file_list)]
   
   # Initialise results data.frame
-  df_results <- plyr::ldply(file_list, process_matchup_file, .parallel = TRUE)
-  
+  plan(multicore, workers = 14)
+  # df_results <- plyr::ldply(file_list, process_matchup_file, .parallel = TRUE)
+  df_results <- future_map_dfr(file_list, process_matchup_file)
+  plan(sequential)
+
   # Exit
   return(df_results)
 }
@@ -1035,8 +1043,9 @@ process_sensor <- function(var_name, sensor_Z, stat_choice = "matchup"){
   }
   
   # Process matchups and save output
+  plan(multicore, workers = 14)
   if(stat_choice == "matchup"){
-    proc_res <- plyr::mdply(ply_grid, process_matchup_folder, .parallel = FALSE)
+    proc_res <- future_pmap_dfr(ply_grid, process_matchup_folder)
     # Set time limits
     proc_res <- proc_res |> 
       mutate(diff_time_limit = case_when(sensor_X %in% c("Hyp", "TRIOS", "HYPERPRO") & sensor_Y %in% c("Hyp", "TRIOS", "HYPERPRO") ~ 20,
@@ -1062,9 +1071,11 @@ process_sensor <- function(var_name, sensor_Z, stat_choice = "matchup"){
     proc_res_unclean <- proc_res[!proc_res$file_name %in% proc_res_clean$file_name,]
     write_csv(proc_res_unclean, paste0("output/matchup_noQC_stats_",var_name,"_",sensor_Z,".csv"))
   } else {
-    proc_res <- plyr::mdply(ply_grid, global_stats, .parallel = TRUE)
+    # proc_res <- plyr::mdply(ply_grid, global_stats, .parallel = TRUE)
+    proc_res <- future_pmap_dfr(ply_grid, global_stats)
     write_csv(proc_res, paste0("output/global_stats_",var_name,"_",sensor_Z,".csv"))
   }
+  plan(sequential)
 }
 
 # Global stats per matchup wavelength
@@ -1183,10 +1194,11 @@ global_stats <- function(var_name, sensor_X, sensor_Y){
       
       # Create data.frame of results and add them to df_results
       df_XY <- data.frame(row.names = NULL,
-                          n_w_nm = n_match,
-                          n_w_nm_clean = df_stats_XY$n,
+                          var_name = var_name,
                           sensor_X = sensor_X,
                           sensor_Y = sensor_Y,
+                          n_w_nm = n_match,
+                          n_w_nm_clean = df_stats_XY$n,
                           Wavelength_nm = W_nm[i],
                           Slope = df_stats_XY$Slope,
                           Slope_log = df_stats_XY$Slope_log,
@@ -1196,10 +1208,11 @@ global_stats <- function(var_name, sensor_X, sensor_Y){
                           MSA = df_stats_XY$MSA,
                           MAPE = df_stats_XY$MAPE)
       df_YX <- data.frame(row.names = NULL,
-                          n_w_nm = n_match,
-                          n_w_nm_clean = df_stats_YX$n,
+                          var_name = var_name,
                           sensor_X = sensor_Y,
                           sensor_Y = sensor_X,
+                          n_w_nm = n_match,
+                          n_w_nm_clean = df_stats_YX$n,
                           Wavelength_nm = W_nm[i],
                           Slope = df_stats_YX$Slope,
                           Slope_log = df_stats_YX$Slope_log,
