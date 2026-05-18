@@ -33,12 +33,12 @@ options(scipen = 9999)
 
 # Function that assembles file directory based on desired variable and sensors
 file_path_build <- function(var_name, sensor_X, sensor_Y){
-  file_path <- paste0("~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_20260504/",
+  file_path <- paste0("~/pCloud Drive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_20260504/",
                       toupper(var_name),"_",toupper(sensor_X),"_vs_", toupper(sensor_Y))
 }
 
 # Load a single matchup file and create mean values from all replicates
-# file_name <- "~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_20260504/RHOW_HYPERNETS_vs_S3A/HYPERNETS_vs_S3A_V4_vs_20240808T065700_RHOW.csv"
+# file_name <- "~/pCloud Drive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_20260504/RHOW_HYPERNETS_vs_S3A/HYPERNETS_vs_S3A_V4_vs_20240808T065700_RHOW.csv"
 load_matchup_mean <- function(file_name){
   
   # message(paste0("Started loading : ", file_name))
@@ -74,6 +74,52 @@ load_matchup_mean <- function(file_name){
                               sensor == "S3B_V4" ~ "S3B",
                               TRUE ~ sensor))
 
+  # Replace BRDF corrected values for HYPERNETS
+  # if(grepl("RHOW_HYPERNETS", file_name)){
+
+  #   # Get sensors in wide file
+  #   sensors <- unique(df_mean$sensor)
+  #   sensor_not_Hyp <- sensors[!grepl("Hyp", sensors)]
+
+  #   # Load and prep BRDF corrected HYPERNETS data
+  #   BRDF_corr <- read_csv("data/BRDF_corr/HYPERNETS_all_rhow_BRDF_corr.csv", show_col_types = FALSE) |> 
+  #     # dplyr::rename(sensor_YY = sensor_Y) |> 
+  #     filter(sensor_Y == sensor_not_Hyp) |> 
+  #     pivot_longer(cols = matches("1|2|3|4|5|6|7|8|9"), names_to = "wavelength", values_to = "BRDF_corr") |> 
+  #     mutate(wavelength = as.numeric(wavelength),
+  #             date = as.POSIXct(date, tz = "UTC+2")) |> 
+  #     filter(sensor == "Hyp") |> 
+  #     dplyr::select(date, wavelength, BRDF_corr) |> 
+  #     filter(!is.na(BRDF_corr))
+
+  #   # if(sensor_Y %in% c("HYPERPRO", "TRIOS", "AQUA")){
+  #   #   date_sub_int <- 5
+  #   # } else {
+  #   #   date_sub_int <- 6
+  #   # }
+
+  #   # Merge with main data
+  #   match_base <- match_base |> 
+  #     mutate(date = gsub("T", " ", sapply(str_split(file_name, "_"), "[[", date_sub_int))) |> 
+  #     mutate(date = as.POSIXct(date, format = "%Y%m%d %H%M%S", tz = "UTC+2")) |> 
+  #     left_join(BRDF_corr, by = c("date",  "wavelength"))
+
+  #   # Check that the merge worked
+  #   if(nrow(match_base[is.na(match_base$BRDF_corr),]) > 0) stop("Merge with BRDF correction file did not work correctly.")
+    
+  #   # Clean and exit
+  #   match_base <- match_base |> 
+  #     mutate(Hyp = case_when(!is.na(BRDF_corr) ~ BRDF_corr, TRUE ~ Hyp)) |> 
+  #     dplyr::select(-date, -BRDF_corr)
+
+  #   # Smooth out a duplicate bug
+  #   # if(sensor_Y == "S3_all") {
+  #   #   match_base <- match_base |> 
+  #   #     summarise(Hyp = mean(Hyp, na.rm = TRUE), S3_all = mean(S3_all, na.rm = TRUE), 
+  #   #               .by = c("file_name", "wavelength", "wavelength_group"))
+  #   }
+  # }
+  
   # Exit
   # message(paste0("Finished loading : ", file_name))
   return(df_mean)
@@ -81,7 +127,7 @@ load_matchup_mean <- function(file_name){
 
 # Load a single matchup file directly into long format
 # file_name <- file.path(folder_path, file_uniq_list$file_name)[1]
-# file_name <- "/home/calanus/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_20260504/RHOW_HYPERNETS_vs_PACE_V30/HYPERNETS_vs_PACE_V30_vs_20240809T090000_RHOW.csv"
+# file_name <- "~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/tara_matchups_results_20260504/RHOW_HYPERNETS_vs_PACE_V30/HYPERNETS_vs_PACE_V30_vs_20240809T090000_RHOW.csv"
 load_matchup_long <- function(file_name){
   
   df_mean <- load_matchup_mean(file_name)

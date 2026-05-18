@@ -386,8 +386,8 @@ process_sensor("RHOW", "OLCI", "global")
 process_sensor("RHOW", "OCI", "global")
 
 # Load outlier reports
-outliers_sat <- read_csv("meta/satellite_outliers.csv") |> distinct()
-outliers_insitu <- read_csv("meta/in_situ_outliers.csv") |> distinct()
+outliers_sat <- read_csv("meta/satellite_outliers.csv", show_col_types = FALSE) |> distinct()
+outliers_insitu <- read_csv("meta/in_situ_outliers.csv", show_col_types = FALSE) |> distinct()
 
 # Decide which wavelengths to compare with wavebands
 wave_length_bands <- c(380, 400, 412, 443, 490, 510, 560, 620, 673, 700)
@@ -425,7 +425,7 @@ global_count_var_name <- global_stats_all |>
 global_match_mean <- global_stats_all |> 
   filter(sensor_X %in% c("HYPERNETS", "TRIOS", "HYPERPRO")) |> 
   filter(var_name == "RHOW") |>
-  filter(Wavelength_nm >= 380, Wavelength_nm <= 600) |>
+  filter(Wavelength_nm >= 400, Wavelength_nm <= 600) |>
   summarise(Slope = mean(Slope, na.rm = TRUE),
             Bias_mean = mean(Bias, na.rm = TRUE),
             Bias_abs = mean(abs(Bias), na.rm = TRUE),
@@ -435,7 +435,7 @@ global_match_mean <- global_stats_all |>
 global_match_mean_mean <- global_stats_all |> 
   filter(sensor_X %in% c("HYPERNETS", "TRIOS", "HYPERPRO")) |> 
   filter(var_name == "RHOW") |>
-  filter(Wavelength_nm >= 380, Wavelength_nm <= 600) |>
+  filter(Wavelength_nm >= 400, Wavelength_nm <= 600) |>
   filter(!(sensor_Y %in% c("HYPERNETS", "TRIOS", "HYPERPRO"))) |> 
   summarise(Slope = mean(Slope, na.rm = TRUE),
             Bias_mean = mean(Bias, na.rm = TRUE),
@@ -446,7 +446,7 @@ global_match_mean_mean <- global_stats_all |>
 global_match_sat_mean <- global_stats_all |> 
   filter(sensor_X %in% c("HYPERNETS", "TRIOS", "HYPERPRO")) |> 
   filter(var_name == "RHOW") |>
-  filter(Wavelength_nm >= 380, Wavelength_nm <= 600) |>
+  filter(Wavelength_nm >= 400, Wavelength_nm <= 600) |>
   filter(!(sensor_Y %in% c("HYPERNETS", "TRIOS", "HYPERPRO"))) |> 
   summarise(Slope = mean(Slope, na.rm = TRUE),
             Bias_mean = mean(Bias, na.rm = TRUE),
