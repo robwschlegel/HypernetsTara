@@ -572,6 +572,8 @@ base_stats <- function(x_vec, y_vec){
                       RMSE = NA,
                       MSA = NA,
                       MAPE = NA,
+                      MRD = NA,
+                      MARD = NA,
                       Bias = NA,
                       Error = NA))
   }
@@ -585,6 +587,12 @@ base_stats <- function(x_vec, y_vec){
   # Calculate MSA (Mean Squared Adjustment)
   msa <- mean(abs(y_clean - x_clean), na.rm = TRUE)
   
+  # Calculate median absolute relative difference
+  mard <- median(abs(y_clean - x_clean)/x_clean)
+
+  # Calculate median relative difference
+  mrd <- median((y_clean - x_clean)/x_clean)
+
   # Calculate linear slope
   lin_fit <- lm(y_clean ~ x_clean)
   slope <- coef(lin_fit)[2]
@@ -610,6 +618,8 @@ base_stats <- function(x_vec, y_vec){
                          RMSE = round(rmse, 6),
                          MSA = round(msa, 6),
                          MAPE = round(mape, 2),
+                         MRD = round(mrd, 6),
+                         MARD = round(mard, 6),
                          Bias = round(bias_perc, 2),
                          Error = round(error_perc, 2))
   return(df_stats)
@@ -974,6 +984,8 @@ process_matchup_file <- function(file_path){
                              Slope_log = df_stats$Slope_log,
                              Bias = df_stats$Bias,
                              Error = df_stats$Error,
+                             MRD = df_stats$MRD,
+                             MARD = df_stats$MARD,
                              RMSE = df_stats$RMSE,
                              MSA = df_stats$MSA,
                              MAPE = df_stats$MAPE)
@@ -1056,9 +1068,9 @@ process_sensor <- function(var_name, sensor_Z, stat_choice = "matchup"){
                                          TRUE ~ NA),
              .after = diff_time) |> 
       mutate(dist_limit = case_when(sensor_X %in% c("Hyp", "TRIOS", "HYPERPRO") & sensor_Y %in% c("Hyp", "TRIOS", "HYPERPRO") ~ 10,
-                                    sensor_X == "HYPERPRO" & !(sensor_Y %in% c("Hyp", "TRIOS", "HYPERPRO")) ~ 40,
+                                    sensor_X == "HYPERPRO" & !(sensor_Y %in% c("Hyp", "TRIOS", "HYPERPRO")) ~ 21, # Allow one Aqua match at 20.01
                                     sensor_X %in% c("Hyp", "TRIOS") & !(sensor_Y %in% c("Hyp", "TRIOS", "HYPERPRO")) ~ 10,
-                                    sensor_Y == "HYPERPRO" & !(sensor_X %in% c("Hyp", "TRIOS", "HYPERPRO")) ~ 40,
+                                    sensor_Y == "HYPERPRO" & !(sensor_X %in% c("Hyp", "TRIOS", "HYPERPRO")) ~ 21, # Allow one Aqua match at 20.01
                                     sensor_Y %in% c("Hyp", "TRIOS") & !(sensor_X %in% c("Hyp", "TRIOS", "HYPERPRO")) ~ 10,
                                     TRUE ~ NA),
              .after = dist)
@@ -1204,6 +1216,8 @@ global_stats <- function(var_name, sensor_X, sensor_Y){
                           Slope_log = df_stats_XY$Slope_log,
                           Bias = df_stats_XY$Bias,
                           Error = df_stats_XY$Error,
+                          MRD = df_stats_XY$MRD,
+                          MARD = df_stats_XY$MARD,
                           RMSE = df_stats_XY$RMSE,
                           MSA = df_stats_XY$MSA,
                           MAPE = df_stats_XY$MAPE)
@@ -1218,6 +1232,8 @@ global_stats <- function(var_name, sensor_X, sensor_Y){
                           Slope_log = df_stats_YX$Slope_log,
                           Bias = df_stats_YX$Bias,
                           Error = df_stats_YX$Error,
+                          MRD = df_stats_YX$MRD,
+                          MARD = df_stats_YX$MARD,
                           RMSE = df_stats_YX$RMSE,
                           MSA = df_stats_YX$MSA,
                           MAPE = df_stats_YX$MAPE)
