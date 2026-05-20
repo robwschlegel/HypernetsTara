@@ -408,12 +408,12 @@ wave_length_bands <- c(380, 400, 412, 443, 490, 510, 560, 620, 673, 700)
 
 # Load in situ and PACE data separately to filter specific wavebands
 # NB: Careful with the exact indexing of files here
-global_stats_wavelengths <- map_dfr(dir("output", pattern = "global", full.names = TRUE)[c(2:6, 8)], read_csv) |> 
+global_stats_wavelengths <- map_dfr(dir("output", pattern = "global", full.names = TRUE)[c(2:6, 8)], read_csv, show_col_types = FALSE) |> 
   filter(Wavelength_nm %in% wave_length_bands)
 
 # Load all global stats
 # NB: Careful with the exact indexing of files here
-global_stats_all <- map_dfr(dir("output", pattern = "global", full.names = TRUE)[c(7, 9, 10)], read_csv) |> 
+global_stats_all <- map_dfr(dir("output", pattern = "global", full.names = TRUE)[c(7, 9, 10)], read_csv, show_col_types = FALSE) |> 
   bind_rows(global_stats_wavelengths)
 write_csv(global_stats_all, file = "output/global_stats_all.csv")
 
@@ -444,9 +444,17 @@ global_match_mean <- global_stats_all |>
             Bias_mean = mean(Bias, na.rm = TRUE),
             Bias_abs = mean(abs(Bias), na.rm = TRUE),
             Error = mean(Error, na.rm = TRUE), .by = c("var_name", "sensor_X", "sensor_Y"))
+global_match_mean_red <- global_stats_all |> 
+  filter(sensor_X %in% c("HYPERNETS", "TRIOS", "HYPERPRO")) |> 
+  filter(var_name == "RHOW") |>
+  filter(Wavelength_nm > 600) |>
+  summarise(Slope = mean(Slope, na.rm = TRUE),
+            MRD_mean = mean(MRD, na.rm = TRUE),
+            MRD_abs = mean(abs(MRD), na.rm = TRUE),
+            MARD = mean(MARD, na.rm = TRUE), .by = c("var_name", "sensor_X", "sensor_Y"))
 
-# Mean again
-global_match_mean_mean <- global_stats_all |> 
+# Mean just for in situ systems
+global_match_is_mean <- global_stats_all |> 
   filter(sensor_X %in% c("HYPERNETS", "TRIOS", "HYPERPRO")) |> 
   filter(var_name == "RHOW") |>
   filter(Wavelength_nm >= 400, Wavelength_nm <= 600) |>
@@ -455,6 +463,16 @@ global_match_mean_mean <- global_stats_all |>
             Bias_mean = mean(Bias, na.rm = TRUE),
             Bias_abs = mean(abs(Bias), na.rm = TRUE),
             Error = mean(Error, na.rm = TRUE), .by = c("var_name", "sensor_X"))
+global_match_is_mean_red <- global_stats_all |> 
+  filter(sensor_X %in% c("HYPERNETS", "TRIOS", "HYPERPRO")) |> 
+  filter(var_name == "RHOW") |>
+  filter(Wavelength_nm > 600) |>
+  filter(sensor_Y != "S3B") |> 
+  filter(!(sensor_Y %in% c("HYPERNETS", "TRIOS", "HYPERPRO"))) |> 
+  summarise(Slope = mean(Slope, na.rm = TRUE),
+            MRD_mean = mean(MRD, na.rm = TRUE),
+            MRD_abs = mean(abs(MRD), na.rm = TRUE),
+            MARD = mean(MARD, na.rm = TRUE), .by = c("var_name", "sensor_X"))
 
 # Global mean matchups from the perspective of the satellites
 global_match_sat_mean <- global_stats_all |> 
@@ -466,6 +484,18 @@ global_match_sat_mean <- global_stats_all |>
             Bias_mean = mean(Bias, na.rm = TRUE),
             Bias_abs = mean(abs(Bias), na.rm = TRUE),
             Error = mean(Error, na.rm = TRUE), .by = c("sensor_Y"))
+global_match_sat_mean_red <- global_stats_all |> 
+  filter(sensor_X %in% c("HYPERNETS", "TRIOS", "HYPERPRO")) |> 
+  filter(var_name == "RHOW") |>
+  filter(Wavelength_nm > 600) |>
+  filter(!(sensor_Y %in% c("HYPERNETS", "TRIOS", "HYPERPRO"))) |> 
+  # Remove very poor HyperPRO vs S3B values based on only two matchups
+  mutate(MRD = case_when(sensor_X == "HYPERPRO" & sensor_Y == "S3B" ~ NA, TRUE ~ MRD),
+         MARD = case_when(sensor_X == "HYPERPRO" & sensor_Y == "S3B" ~ NA, TRUE ~ MARD)) |> 
+  summarise(Slope = mean(Slope, na.rm = TRUE),
+            MRD_mean = mean(MRD, na.rm = TRUE),
+            MRD_abs = mean(abs(MRD), na.rm = TRUE),
+            MARD = mean(MARD, na.rm = TRUE), .by = c("sensor_Y"))
 
 # Count of number of wavebands with negative or positive biases
 global_match_bias_sign <- global_stats_all |> 
@@ -492,6 +522,16 @@ global_waveband_mean <- global_stats_all |>
             Bias_mean = mean(Bias, na.rm = TRUE),
             Bias_abs = mean(abs(Bias), na.rm = TRUE),
             Error = mean(Error, na.rm = TRUE), .by = c("Wavelength_nm"))
+global_waveband_mean_red <- global_stats_all |> 
+  filter(sensor_X %in% c("HYPERNETS", "TRIOS", "HYPERPRO")) |> 
+  filter(!(sensor_Y %in% c("HYPERNETS", "TRIOS", "HYPERPRO"))) |> 
+  filter(sensor_Y != "S3B") |> 
+  filter(var_name == "RHOW") |>
+  filter(Wavelength_nm > 600) |>
+  summarise(Slope = mean(Slope, na.rm = TRUE),
+            MRD_mean = mean(MRD, na.rm = TRUE),
+            MRD_abs = mean(abs(MRD), na.rm = TRUE),
+            MARD = mean(MARD, na.rm = TRUE), .by = c("Wavelength_nm"))
 
 # Plot the global mean matchups per in situ sensor
 global_match_mean |> 
