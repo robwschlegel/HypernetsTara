@@ -143,7 +143,7 @@ process_sensor("RHOW", "OLCI")
 process_sensor("RHOW", "OCI")
 
 # Re-load all single matchups
-matchup_single_all <- map_dfr(dir("output", pattern = "matchup_stats_", full.names = TRUE), read_csv)
+matchup_single_all <- map_dfr(dir("output", pattern = "matchup_stats_", full.names = TRUE), read_csv, show_col_types = FALSE)
 
 # Just HyperPRO to look at the time differences
 matchup_single_all |> 
@@ -156,8 +156,8 @@ matchup_single_all |>
   filter(dist <= 10) |> 
   summarise(n())
   # summarise(range(diff_time)[1], range(diff_time)[2])
-  ggplot(aes(x = date, y = diff_time, colour = sensor_Y)) +
-  geom_point()
+  # ggplot(aes(x = date, y = diff_time, colour = sensor_Y)) +
+  # geom_point()
 
 # Date and time range of samples per sensor
 matchup_date_time_range <- matchup_single_all |> 
@@ -606,7 +606,7 @@ message("RMSE : ", round(sqrt(mean((y_vec - x_vec)^2, na.rm = TRUE)), 4))
 message("MSA : ", round(mean(abs(y_vec - x_vec), na.rm = TRUE), 4))
 message("MAPE (%) : ", round(mean(abs((y_vec - x_vec) / x_vec), na.rm = TRUE) * 100, 2))
 
-# Calculate Bias and Error (Pahlevan's method)
+# Calculate Bias and Error
 log_ratio <- log10(y_vec / x_vec)
 bias_pahlevan <- median(log_ratio, na.rm = TRUE)
 bias_pahlevan_final <- sign(bias_pahlevan) * (10^abs(bias_pahlevan) - 1)
@@ -621,3 +621,74 @@ match_base |> filter(wavelength == W_nm[8]) |>
   ggplot(aes(x = HYPERPRO, y = Hyp)) +
   geom_point(aes(colour = wavelength))
 
+
+# Check individual spatial matchups --------------------------------------
+
+# HyperPRO va Aqua on 2024-08-14 has a distance of 20 km
+
+# Load the base matchup file
+match_base <- load_matchup_mean(paste0(file_path_build("RHOW", "HYPERPRO", "AQUA"), "/HYPERPRO_vs_AQUA_vs_20240814T101100_RHOW.csv"))
+
+# Load HyperPRO SeaBass file for that day
+# start_time=10:11:59[GMT] ; end_time=10:16:54[GMT]  
+hyperpro_base <- proc_seaBass_HyperPRO("~/pCloudDrive/Documents/OMTAB/HYPERNETS/Tara/hyperpro_processed_data/V2_2025/TaraEuropa_HyperPro_20240814_Ed_Lu_Lw_Rrs_R2.sb")
+
+## Load MODIS-Aqua swathe for that day
+
+# Start by looking at the two different 20240814T swathes in the folder of downloaded L2 products
+# start = "2024-08-14T12:05:01.584Z" ; end = "2024-08-14T12:09:59.961Z"
+modis_base_meta1 <- ncdump::NetCDF("/media/calanus/HDD2TB/home/calanus/data/Tara_Images_satelites/MODIS/A/AQUA_MODIS.20240814T120501.L2.OC.nc")$attribute$global
+# start = "2024-08-14T12:10:01.438Z" ; end = "2024-08-14T12:14:59.815Z"
+modis_base_meta2 <- ncdump::NetCDF("/media/calanus/HDD2TB/home/calanus/data/Tara_Images_satelites/MODIS/A/AQUA_MODIS.20240814T121001.L2.OC.nc")$attribute$global
+library(terra)
+# Load the file whose timestep matches the matchups output
+modis_base_412 <- terra::rast("/media/calanus/HDD2TB/home/calanus/data/Tara_Images_satelites/MODIS/A/AQUA_MODIS.20240814T120501.L2.OC.nc", subds = "/geophysical_data/Rrs_412")
+modis_base_lon <- terra::rast("/media/calanus/HDD2TB/home/calanus/data/Tara_Images_satelites/MODIS/A/AQUA_MODIS.20240814T120501.L2.OC.nc", subds = "/navigation_data/longitude")
+modis_base_lat <- terra::rast("/media/calanus/HDD2TB/home/calanus/data/Tara_Images_satelites/MODIS/A/AQUA_MODIS.20240814T120501.L2.OC.nc", subds = "/navigation_data/latitude")
+print(modis_base_412)
+plot(modis_base_412)
+print(modis_base_lon)
+print(modis_base_lat)
+
+# Stack into a single SpatRaster (layers must have same dimensions)
+modis_stack <- c(modis_base_412, modis_base_lon, modis_base_lat)
+names(modis_stack) <- c("Rrs_412", "lon", "lat")
+
+# Convert stack to dataframe — each row is one pixel
+modis_df <- as.data.frame(modis_stack, na.rm = TRUE)   # na.rm drops fill pixels
+
+# Convert to a georeferenced SpatVector using the embedded lat/lon columns
+modis_pts <- vect(modis_df, geom = c("lon", "lat"), crs = "EPSG:4326")
+
+# Rasterise onto a regular WGS84 grid
+target_grid <- rast(ext(modis_pts), resolution = 0.01, crs = "EPSG:4326")
+modis_wgs84   <- rasterize(modis_pts, target_grid, field = "Rrs_412", fun = "mean")
+
+# Finally convert back to a data.frame for easier plotting
+modis_df_wgs84 <- as.data.frame(modis_wgs84, xy = TRUE) |>
+  rename(lon = x, lat = y, Rrs_412 = mean) |> 
+  filter(!is.na(Rrs_412))
+
+# Round lon and lat for easier plotting
+modis_df_round <- modis_df_wgs84 |> 
+  # mutate(lon = round(lon/0.04)*0.04,
+        #  lat = round(lat/0.04)*0.04) |> 
+  summarise(Rrs_412 = mean(Rrs_412, na.rm = TRUE), .by = c(lon, lat))
+
+# Plot
+modis_df_round |> 
+  filter(lon >= 12, lon <= 18, lat >= 36, lat <= 39) |> 
+  ggplot() +
+  geom_tile(aes(x = lon, y = lat, fill = Rrs_412)) +
+  annotation_borders(fill = "grey80") +
+  geom_point(data = match_base, aes(x = longitude, y = latitude, colour = sensor), size = 5) +
+  # geom_point(data = match_base[1,], aes(x = longitude, y = latitude), colour = "red", size = 3) +
+  # geom_point(data = match_base[2,], aes(x = longitude, y = latitude), colour = "green", size = 3) +
+  # geom_point()
+  scale_fill_viridis_c() +
+  coord_quickmap(xlim = c(12, 18), ylim = c(36, 39)) +
+  labs(title = "MODIS-Aqua Rrs at 412 nm on 2024-08-14",
+       subtitle = "There is a 20 km distance between these two points",
+       x = "Longitude", y = "Latitude", fill = "Rrs (1/sr)") +
+  theme_minimal() +
+  theme(title = element_text(size = 14), plot.subtitle = element_text(size = 14))
