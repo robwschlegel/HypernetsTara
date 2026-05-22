@@ -469,7 +469,7 @@ plot_matrix_error <- function(df, val_range){
   ggplot(data = df_round, aes(x = wavelength_clean, y = sensor_Y)) +
     geom_tile(aes(fill = Error), colour = "black") +
     geom_label(data = df, aes(label = sprintf("%.1f", round(Error, 1))), size = 3) +
-    labs(x = "Waveband (nm)", y = NULL, fill = "Error (%)") +
+    labs(x = "Waveband (nm)", y = NULL, fill = "ϵ (%)") +
     facet_grid(sensor_sat~sensor_X, scales = "free") +
     # scale_y_reverse() +
     scale_fill_viridis_c(limits = val_range, breaks = c(10, 20, 30), labels = c("10", "20", "30")) +
