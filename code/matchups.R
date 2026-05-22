@@ -146,18 +146,20 @@ process_sensor("RHOW", "OCI")
 matchup_single_all <- map_dfr(dir("output", pattern = "matchup_stats_", full.names = TRUE), read_csv, show_col_types = FALSE)
 
 # Just HyperPRO to look at the time differences
-matchup_single_all |> 
+matchup_hyperpro <- matchup_single_all |> 
   filter(sensor_X == "HYPERPRO") |> 
   filter(!(sensor_Y %in% c("Hyp", "TRIOS", "HYPERPRO"))) |> 
-  mutate(date = as.Date(dateTime_X)) |> 
+  # mutate(date = as.Date(dateTime_X)) |> 
   # arrange(-diff_time)
-  # arrange(-dist)
+  arrange(-dist) |> 
+  dplyr::select(-dist_limit, -diff_time_limit)
   # filter(diff_time <= 120) |> 
-  filter(dist <= 10) |> 
-  summarise(n())
+  # filter(dist <= 10) |> 
+  # summarise(n())
   # summarise(range(diff_time)[1], range(diff_time)[2])
   # ggplot(aes(x = date, y = diff_time, colour = sensor_Y)) +
   # geom_point()
+write_csv(matchup_hyperpro, "data/matchups_HYPERPRO.csv")
 
 # Date and time range of samples per sensor
 matchup_date_time_range <- matchup_single_all |> 
