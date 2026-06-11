@@ -560,13 +560,14 @@ base_stats <- function(x_vec, y_vec){
 
   # Check for too many negative or NA values before calculating stats
   valid_idx <- (x_vec > 0) & (y_vec > 0)
-  x_clean <- x_vec[valid_idx]
-  y_clean <- y_vec[valid_idx]
+  x_clean <- x_vec[!is.na(valid_idx)]
+  y_clean <- y_vec[!is.na(valid_idx)]
+  n_clean <- length(x_clean)
 
   # Return empty data.frame if too many issues
-  if(length(x_clean) < 2){
+  if(n_clean < 2){
     return(data.frame(row.names = NULL,
-                      n = length(x_clean),
+                      n = n_clean,
                       Slope = NA,
                       Slope_log = NA,
                       RMSE = NA,
@@ -612,7 +613,7 @@ base_stats <- function(x_vec, y_vec){
   
   # Combine int data.frame and exit
   df_stats <- data.frame(row.names = NULL,
-                         n = length(x_clean),
+                         n = n_clean,
                          Slope = round(slope, 2),
                          Slope_log = round(log_slope, 2),
                          RMSE = round(rmse, 6),
