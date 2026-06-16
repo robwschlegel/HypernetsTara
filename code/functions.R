@@ -7,15 +7,16 @@
 library(tidyverse)
 library(ncdf4)
 library(tidync)
+library(lmodel2)
 library(FNN) # Needed for fastest nearest neighbor searching
 library(fuzzyjoin) # For joining data based on nearest neighbor searching
 library(geosphere) # For determining distance between points
 library(ggtext) # For rich text labels
 library(ggimage) # For adding .jpg files to figures
 library(patchwork) # For complex paneling of figures
-library(furrr)
-library(future)
-# library(doParallel); registerDoParallel(cores = detectCores() - 2)
+# library(furrr)
+# library(future)
+library(doParallel); registerDoParallel(cores = detectCores() - 2)
 
 
 # Setup -------------------------------------------------------------------
@@ -188,16 +189,16 @@ load_matchups_folder <- function(var_name, sensor_X, sensor_Y, long = FALSE){
   file_list_clean <- file_list[!grepl("all|global", file_list)]
   
   # Load data
-  plan(multicore, workers = 14)   # use 4 cores
+  furrr::plan(multicore, workers = 10)   # use 10 cores
   if(long){
     # match_base <- plyr::ldply(file_list_clean, load_matchup_long, .parallel = TRUE)
-    match_base <- future_map_dfr(file_list_clean, load_matchup_long)
+    match_base <- furrr::future_map_dfr(file_list_clean, load_matchup_long)
     # print(unique(match_base$wavelength))
   } else {
     # match_base <- plyr::ldply(file_list_clean, load_matchup_mean, .parallel = TRUE)
-    match_base <- future_map_dfr(file_list_clean, load_matchup_mean)
+    match_base <- furrr::future_map_dfr(file_list_clean, load_matchup_mean)
   }
-  plan(sequential)
+  furrr::plan(sequential)
 
   # Exit
   return(match_base)
@@ -558,25 +559,47 @@ base_stats <- function(x_vec, y_vec){
   if(!is.numeric(x_vec)) stop("x_vec is not numeric")
   if(!is.numeric(y_vec)) stop("y_vec is not numeric")
 
+  # Remove paired values when either side is NA
+  valid_pairs <- !is.na(x_vec) & !is.na(y_vec)
+  x_valid <- x_vec[valid_pairs]
+  y_valid <- y_vec[valid_pairs]
+
   # Check for too many negative or NA values before calculating stats
-  valid_idx <- (x_vec > 0) & (y_vec > 0)
-  x_clean <- x_vec[!is.na(valid_idx)]
-  y_clean <- y_vec[!is.na(valid_idx)]
+  valid_idx <- (x_valid > 0) & (y_valid > 0)
+  x_clean <- x_valid[valid_idx]
+  y_clean <- y_valid[valid_idx]
   n_clean <- length(x_clean)
 
   # Return empty data.frame if too many issues
   if(n_clean < 2){
     return(data.frame(row.names = NULL,
-                      n = n_clean,
-                      Slope = NA,
-                      Slope_log = NA,
-                      RMSE = NA,
-                      MSA = NA,
-                      MAPE = NA,
-                      MRD = NA,
-                      MARD = NA,
-                      Bias = NA,
-                      Error = NA))
+                         n = n_clean,
+                         Slope = NA,
+                         Slope_log = NA,
+                         Slope_II_low = NA,
+                         Slope_II = NA,
+                         Slope_II_high = NA,
+                         Slope_II_int_low = NA,
+                         Slope_II_int = NA,
+                         Slope_II_int_high = NA,
+                         Slope_II_p = NA,
+                         Slope_II_slope_bias_sig = NA,
+                         Slope_II_int_bias_sig = NA,
+                         RMSE = NA,
+                         MSA = NA,
+                         MAPE = NA,
+                         MRD_25 = NA,
+                         MRD_50 = NA,
+                         MRD_75 = NA,
+                         MARD_25 = NA,
+                         MARD_50 = NA,
+                         MARD_75 = NA,
+                         Bias_25 = NA,
+                         Bias_50 = NA,
+                         Bias_75 = NA,
+                         Error_25 = NA,
+                         Error_50 = NA,
+                         Error_75 = NA))
   }
 
   # Calculate RMSE (Root Mean Square Error)
@@ -589,11 +612,32 @@ base_stats <- function(x_vec, y_vec){
   msa <- mean(abs(y_clean - x_clean), na.rm = TRUE)
   
   # Calculate median absolute relative difference
-  mard <- median(abs(y_clean - x_clean)/x_clean)
+  mard_25 <- quantile(abs(y_clean - x_clean)/x_clean, 0.25, na.rm = TRUE)
+  mard_50 <- quantile(abs(y_clean - x_clean)/x_clean, 0.50, na.rm = TRUE)
+  mard_75 <- quantile(abs(y_clean - x_clean)/x_clean, 0.75, na.rm = TRUE)
 
   # Calculate median relative difference
-  mrd <- median((y_clean - x_clean)/x_clean)
+  mrd_25 <- quantile((y_clean - x_clean)/x_clean, 0.25, na.rm = TRUE)
+  mrd_50 <- quantile((y_clean - x_clean)/x_clean, 0.50, na.rm = TRUE)
+  mrd_75 <- quantile((y_clean - x_clean)/x_clean, 0.75, na.rm = TRUE)
 
+  # Calculate Bias
+  log_ratio <- log10(y_clean / x_clean)
+  log_ratio_25 <- quantile(log_ratio, 0.25, na.rm = TRUE)
+  log_ratio_50 <- quantile(log_ratio, 0.50, na.rm = TRUE)
+  log_ratio_75 <- quantile(log_ratio, 0.75, na.rm = TRUE)
+  bias_perc_25 <- 100 * (sign(log_ratio_25) * (10^abs(log_ratio_25) - 1))
+  bias_perc_50 <- 100 * (sign(log_ratio_50) * (10^abs(log_ratio_50) - 1))
+  bias_perc_75 <- 100 * (sign(log_ratio_75) * (10^abs(log_ratio_75) - 1))
+  
+  # Calculate error
+  log_ratio_25_abs <- quantile(abs(log_ratio), 0.25, na.rm = TRUE)
+  log_ratio_50_abs <- quantile(abs(log_ratio), 0.50, na.rm = TRUE)
+  log_ratio_75_abs <- quantile(abs(log_ratio), 0.75, na.rm = TRUE)
+  error_perc_25 <- 100 * (10^log_ratio_25_abs - 1)
+  error_perc_50 <- 100 * (10^log_ratio_50_abs - 1)
+  error_perc_75 <- 100 * (10^log_ratio_75_abs - 1)
+  
   # Calculate linear slope
   lin_fit <- lm(y_clean ~ x_clean)
   slope <- coef(lin_fit)[2]
@@ -602,27 +646,74 @@ base_stats <- function(x_vec, y_vec){
   log_lin_fit <- lm(log10(y_clean) ~ log10(x_clean))
   log_slope <- coef(log_lin_fit)[2]
   
-  # Calculate Bias
-  log_ratio <- log10(y_clean / x_clean)
-  log_ratio_median <- median(log_ratio, na.rm = TRUE)
-  bias_perc <- 100 * (sign(log_ratio_median) * (10^abs(log_ratio_median) - 1))
+  # Calculate Model II weighted regression slope
+  # NB: To create a weghted comparison would require the data to be weighted in advance
+  # E.g.: df$w_x <- 1 / df$sd_x^2 OR df$w_xy <- 1 / (df$sd_x^2 + df$sd_y^2)
+  # model II regression cannt be run on data with no variance
+  # This is an issue for NIR HyperPRO data where the values are always the same
+  if(length(unique(round(x_clean, 8))) == 1 | length(unique(round(y_clean, 8))) == 1){
+    model_II_intercept <- NA; model_II_slope <- NA; model_II_p_perm <- NA
+    model_II_slope_lo <- NA; model_II_slope_hi <- NA; model_II_int_lo <- NA
+    model_II_int_hi <- NA; model_II_slope_bias_sig <- NA; model_II_int_bias_sig <- NA
+  } else {
+    model_II_fit <- lmodel2::lmodel2(y_clean ~ x_clean,
+                                     range.y = "relative", 
+                                     range.x = "relative",
+                                     nperm = 999)
+  # print(model_II_fit)
+
+  # Extract results for chosen method
+  model_II_method_choice <- "SMA" # Symetrical Major Axis
+  model_II_results <- model_II_fit$regression.results |>
+    filter(Method == model_II_method_choice)
+  model_II_ci <- model_II_fit$confidence.intervals |>
+    filter(Method == model_II_method_choice)
+
+  # Get specific results
+  model_II_intercept <- model_II_results$Intercept
+  model_II_slope <- model_II_results$Slope
+  model_II_p_perm <- model_II_results$`P-perm (1-tailed)`
+
+  model_II_slope_lo <- model_II_ci$`2.5%-Slope`
+  model_II_slope_hi <- model_II_ci$`97.5%-Slope`
+  model_II_int_lo <- model_II_ci$`2.5%-Intercept`
+  model_II_int_hi <- model_II_ci$`97.5%-Intercept`
   
-  # Calculate error
-  log_ratio_median_abs <- median(abs(log_ratio), na.rm = TRUE)
-  error_perc <- 100 * (10^log_ratio_median_abs - 1)
+  # Determine significance
+  model_II_slope_bias_sig <- model_II_slope_lo >= 1 || model_II_slope_hi <= 1
+  model_II_int_bias_sig <- model_II_int_lo >= 0 || model_II_int_hi <= 0
+  }
   
+
   # Combine int data.frame and exit
   df_stats <- data.frame(row.names = NULL,
                          n = n_clean,
-                         Slope = round(slope, 2),
-                         Slope_log = round(log_slope, 2),
+                         Slope = round(slope, 4),
+                         Slope_log = round(log_slope, 4),
+                         Slope_II_low = round(model_II_slope_lo, 4),
+                         Slope_II = round(model_II_slope, 4),
+                         Slope_II_high = round(model_II_slope_hi, 4),
+                         Slope_II_int_low = round(model_II_int_lo, 6),
+                         Slope_II_int = round(model_II_intercept, 6),
+                         Slope_II_int_high = round(model_II_int_hi, 6),
+                         Slope_II_p = round(model_II_p_perm, 4),
+                         Slope_II_slope_bias_sig = model_II_slope_bias_sig,
+                         Slope_II_int_bias_sig = model_II_int_bias_sig,
                          RMSE = round(rmse, 6),
                          MSA = round(msa, 6),
-                         MAPE = round(mape, 2),
-                         MRD = round(mrd, 6),
-                         MARD = round(mard, 6),
-                         Bias = round(bias_perc, 2),
-                         Error = round(error_perc, 2))
+                         MAPE = round(mape, 4),
+                         MRD_25 = round(mrd_25, 6),
+                         MRD_50 = round(mrd_50, 6),
+                         MRD_75 = round(mrd_75, 6),
+                         MARD_25 = round(mard_25, 6),
+                         MARD_50 = round(mard_50, 6),
+                         MARD_75 = round(mard_75, 6),
+                         Bias_25 = round(bias_perc_25, 4),
+                         Bias_50 = round(bias_perc_50, 4),
+                         Bias_75 = round(bias_perc_75, 4),
+                         Error_25 = round(error_perc_25, 4),
+                         Error_50 = round(error_perc_50, 4),
+                         Error_75 = round(error_perc_75, 4))
   return(df_stats)
 }
 
@@ -969,27 +1060,17 @@ process_matchup_file <- function(file_path){
         df_stats <- base_stats(x_vec, y_vec)
         
         # Create data.frame of results and add them to df_results
-        df_res <- data.frame(row.names = NULL,
-                             sensor_X = sensors[i],
-                             sensor_Y = sensors[j],
-                             lon_X = df_sensor_sub$longitude[[i]],
-                             lat_X = df_sensor_sub$latitude[[i]],
-                             lon_Y = df_sensor_sub$longitude[[j]],
-                             lat_Y = df_sensor_sub$latitude[[j]],
-                             dist = hav_dist,
-                             dateTime_X = df_sensor_sub$dateTime[[i]],
-                             dateTime_Y = df_sensor_sub$dateTime[[j]],
-                             diff_time = time_diff,
-                             n = nrow(df_sensor_wide),
-                             Slope = df_stats$Slope,
-                             Slope_log = df_stats$Slope_log,
-                             Bias = df_stats$Bias,
-                             Error = df_stats$Error,
-                             MRD = df_stats$MRD,
-                             MARD = df_stats$MARD,
-                             RMSE = df_stats$RMSE,
-                             MSA = df_stats$MSA,
-                             MAPE = df_stats$MAPE)
+        df_res <- df_stats |> 
+          mutate(sensor_X = sensors[i],
+                 sensor_Y = sensors[j],
+                 lon_X = df_sensor_sub$longitude[[i]],
+                 lat_X = df_sensor_sub$latitude[[i]],
+                 lon_Y = df_sensor_sub$longitude[[j]],
+                 lat_Y = df_sensor_sub$latitude[[j]],
+                 dist = hav_dist,
+                 dateTime_X = df_sensor_sub$dateTime[[i]],
+                 dateTime_Y = df_sensor_sub$dateTime[[j]],
+                 diff_time = time_diff, .before = "n")
         df_results <- rbind(df_results, df_res)
       }
     }
@@ -1017,13 +1098,69 @@ process_matchup_folder <- function(var_name, sensor_X, sensor_Y){
   file_list <- file_list[!grepl("all|global", file_list)]
   
   # Initialise results data.frame
-  plan(multicore, workers = 14)
-  # df_results <- plyr::ldply(file_list, process_matchup_file, .parallel = TRUE)
-  df_results <- future_map_dfr(file_list, process_matchup_file)
-  plan(sequential)
+  registerDoParallel(cores = 14)
+  df_results <- plyr::ldply(file_list, process_matchup_file, .parallel = TRUE)
+  # plan(multicore, workers = 14, seed=TRUE) # Already called on multi-core in parent function
+  # df_results <- future_map_dfr(file_list, process_matchup_file, .options = furrr_options(seed = TRUE))
+  # plan(sequential)
 
   # Exit
   return(df_results)
+}
+
+# Wrapper to be able to multicore across global stats
+process_global_wavelength <- function(matchup_filt, var_name, sensor_X, sensor_Y){
+
+  # Filter data
+  # matchup_filt <- filter(match_base, wavelength == wavelength_nm)
+  n_match <- nrow(matchup_filt)
+  
+  # Calculate stats
+  # if(n_match > 0){
+    
+  # Correct sensor labels as necessary
+  if(sensor_X == "HYPERNETS"){
+    sensor_X_col <- "Hyp"
+  } else {
+    sensor_X_col <- sensor_X
+  }
+  if(sensor_Y == "HYPERNETS"){
+    sensor_Y_col <- "Hyp"
+  } else {
+    sensor_Y_col <- sensor_Y
+  }
+  
+  # Create vectors from filtered columns
+  x_vec <- matchup_filt[[sensor_X_col]]
+  y_vec <- matchup_filt[[sensor_Y_col]]
+  
+  # Calculate statistics
+  df_stats_XY <- base_stats(x_vec, y_vec)
+  df_stats_YX <- base_stats(y_vec, x_vec)
+  
+  # Create named objects that differ from columna names to avoid naming bug
+  sensor_X_name <- sensor_X
+  sensor_Y_name <- sensor_Y
+
+  # Create data.frame of results and add them to df_results
+  df_XY <- df_stats_XY |> 
+    mutate(var_name = var_name,
+           sensor_X = sensor_X_name,
+           sensor_Y = sensor_Y_name,
+          #  Wavelength_nm = wavelength_nm,
+           n_w_nm = n_match, .before = "n")
+  df_YX <- df_stats_YX |> 
+    mutate(var_name = var_name,
+           sensor_X = sensor_Y_name,
+           sensor_Y = sensor_X_name,
+          #  Wavelength_nm = wavelength_nm,
+           n_w_nm = n_match, .before = "n")
+  df_both <- rbind(df_XY, df_YX) |> 
+    dplyr::rename(n_w_nm_clean = n)
+  return(df_both)
+  # } else {
+  #   print(paste0("No data for wavelength ", wavelength_nm))
+  # }
 }
 
 # Process multiple folders based on request
@@ -1031,7 +1168,7 @@ process_matchup_folder <- function(var_name, sensor_X, sensor_Y){
 # var_name = "ED"; sensor_Z = "HYPERPRO"
 # var_name = "RHOW"; sensor_Z = "HYPERPRO"
 # var_name = "RHOW"; sensor_Z = "OCI"
-# var_name = "RHOW"; sensor_Z = "OLCI"; stat_choice = "global"
+# var_name = "RHOW"; sensor_Z = "MODIS"; stat_choice = "global"
 process_sensor <- function(var_name, sensor_Z, stat_choice = "matchup"){
   
   # Create ply grid
@@ -1056,9 +1193,12 @@ process_sensor <- function(var_name, sensor_Z, stat_choice = "matchup"){
   }
   
   # Process matchups and save output
-  plan(multicore, workers = 14)
   if(stat_choice == "matchup"){
-    proc_res <- future_pmap_dfr(ply_grid, process_matchup_folder)
+    # registerDoParallel(cores = 14)
+    proc_res <- plyr::mdply(ply_grid, process_matchup_folder, .parallel = FALSE)
+    # proc_res <- furrr::future_pmap_dfr(ply_grid, process_matchup_folder, .options = furrr_options(seed = TRUE))
+    # plan(sequential)#, workers = 10)
+    # proc_res <- furrr::future_pmap_dfr(ply_grid, process_matchup_folder, .options = furrr_options(seed = TRUE))
     # Set time limits
     proc_res <- proc_res |> 
       mutate(diff_time_limit = case_when(sensor_X %in% c("Hyp", "TRIOS", "HYPERPRO") & sensor_Y %in% c("Hyp", "TRIOS", "HYPERPRO") ~ 20,
@@ -1084,21 +1224,24 @@ process_sensor <- function(var_name, sensor_Z, stat_choice = "matchup"){
     proc_res_unclean <- proc_res[!proc_res$file_name %in% proc_res_clean$file_name,]
     write_csv(proc_res_unclean, paste0("output/matchup_noQC_stats_",var_name,"_",sensor_Z,".csv"))
   } else {
-    # proc_res <- plyr::mdply(ply_grid, global_stats, .parallel = TRUE)
-    proc_res <- future_pmap_dfr(ply_grid, global_stats)
+    # registerDoParallel(cores = 14)
+    proc_res <- plyr::mdply(ply_grid, global_stats, .parallel = FALSE)
+    # plan(multicore, workers = 10)
+    # proc_res <- future_pmap_dfr(ply_grid, global_stats, .options = furrr_options(seed = TRUE))
     write_csv(proc_res, paste0("output/global_stats_",var_name,"_",sensor_Z,".csv"))
   }
-  plan(sequential)
+  # plan(sequential)
 }
 
 # Global stats per matchup wavelength
 # testers..
 # var_name = "ED"; sensor_X = "HYPERNETS"; sensor_Y = "TRIOS"
 # var_name = "LU"; sensor_X = "HYPERNETS"; sensor_Y = "TRIOS"
-# var_name = "RHOW"; sensor_X = "HYPERNETS"; sensor_Y = "TRIOS"
+# var_name = "RHOW"; sensor_X = "TRIOS"; sensor_Y = "HYPERPRO"
 # var_name = "RHOW"; sensor_X = "TRIOS"; sensor_Y = "VIIRS_N"
 # var_name = "RHOW"; sensor_X = "HYPERNETS"; sensor_Y = "PACE_V30"
 # var_name = "RHOW"; sensor_X = "HYPERNETS"; sensor_Y = "S3A"
+# var_name = "RHOW"; sensor_X = "HYPERPRO"; sensor_Y = "S3_all"
 global_stats <- function(var_name, sensor_X, sensor_Y){
   
   # Create multiple folder paths if requested
@@ -1161,7 +1304,9 @@ global_stats <- function(var_name, sensor_X, sensor_Y){
   file_list_no_out <- file_list_clean[!basename(file_list_clean) %in% outliers_all$file_name]
   
   # Load data
-  match_base <- map_dfr(file_list_no_out, load_matchup_long)
+  # match_base <- map_dfr(file_list_no_out, load_matchup_long)
+  match_base <- plyr::ldply(file_list_no_out, load_matchup_long, .parallel = TRUE)
+  if(!("wavelength" %in% colnames(match_base))) stop(paste("Wavelength column is missing from", var_name, sensor_X, sensor_Y))
   
   # Melt if S3_all
   if(sensor_Y == "S3_all"){
@@ -1174,82 +1319,20 @@ global_stats <- function(var_name, sensor_X, sensor_Y){
   # Get pre-determined wavelengths
   W_nm <- W_nm_out(sensor_Y, var_name)
   
-  # For loop that cycles through the requested wavelengths and calculates stats
-  df_results <- data.frame()
-  for(i in 1:length(W_nm)){
-    
-    # Get data.frame for matchup based on the wavelength of choice
-    matchup_filt <- filter(match_base, wavelength == W_nm[i])
-    n_match <- nrow(matchup_filt)
-    
-    # Calculate stats
-    if(n_match > 0){
-      
-      # Correct sensor labels as necessary
-      if(sensor_X == "HYPERNETS"){
-        sensor_X_col <- "Hyp"
-      } else {
-        sensor_X_col <- sensor_X
-      }
-      if(sensor_Y == "HYPERNETS"){
-        sensor_Y_col <- "Hyp"
-      } else {
-        sensor_Y_col <- sensor_Y
-      }
-      
-      # Create vectors from filtered columns
-      x_vec <- matchup_filt[[sensor_X_col]]
-      y_vec <- matchup_filt[[sensor_Y_col]]
-      
-      # Calculate statistics
-      df_stats_XY <- base_stats(x_vec, y_vec)
-      df_stats_YX <- base_stats(y_vec, x_vec)
-      
-      # Create data.frame of results and add them to df_results
-      df_XY <- data.frame(row.names = NULL,
-                          var_name = var_name,
-                          sensor_X = sensor_X,
-                          sensor_Y = sensor_Y,
-                          n_w_nm = n_match,
-                          n_w_nm_clean = df_stats_XY$n,
-                          Wavelength_nm = W_nm[i],
-                          Slope = df_stats_XY$Slope,
-                          Slope_log = df_stats_XY$Slope_log,
-                          Bias = df_stats_XY$Bias,
-                          Error = df_stats_XY$Error,
-                          MRD = df_stats_XY$MRD,
-                          MARD = df_stats_XY$MARD,
-                          RMSE = df_stats_XY$RMSE,
-                          MSA = df_stats_XY$MSA,
-                          MAPE = df_stats_XY$MAPE)
-      df_YX <- data.frame(row.names = NULL,
-                          var_name = var_name,
-                          sensor_X = sensor_Y,
-                          sensor_Y = sensor_X,
-                          n_w_nm = n_match,
-                          n_w_nm_clean = df_stats_YX$n,
-                          Wavelength_nm = W_nm[i],
-                          Slope = df_stats_YX$Slope,
-                          Slope_log = df_stats_YX$Slope_log,
-                          Bias = df_stats_YX$Bias,
-                          Error = df_stats_YX$Error,
-                          MRD = df_stats_YX$MRD,
-                          MARD = df_stats_YX$MARD,
-                          RMSE = df_stats_YX$RMSE,
-                          MSA = df_stats_YX$MSA,
-                          MAPE = df_stats_YX$MAPE)
-      df_temp <- rbind(df_XY, df_YX)
-      df_results <- rbind(df_results, df_temp)
-    } else {
-      print(paste0("No data for wavelength ", W_nm[i]))
-    }
-  }
-  
-  # Add matchup count and exit
-  df_results <- df_results |> 
+  # Filter data.frame accordingly
+  match_base_filt <- filter(match_base, wavelength %in% W_nm) #|> 
+    # mutate(wavelength_idx = wavelength, .before = wavelength)
+
+  # Get the requested wavelengths global stats, add matchup count, and exit
+  registerDoParallel(cores = 14)
+  # df_results <- plyr::ldply(W_nm, process_global_wavelength, .parallel = TRUE,
+  #                           match_base = match_base, var_name = var_name, sensor_X = sensor_X, sensor_Y = sensor_Y) |> 
+  df_results <- plyr::ddply(match_base_filt, c("wavelength"), process_global_wavelength, .parallel = TRUE,
+                            var_name = var_name, sensor_X = sensor_X, sensor_Y = sensor_Y, .drop = FALSE) |> 
     mutate(n_clean = length(file_list_clean),
            n_no_out = length(file_list_no_out),
-           .before = "n_w_nm")
+           .before = "n_w_nm") |> 
+    dplyr::select(var_name, sensor_X, sensor_Y, wavelength, everything())
   return(df_results)
 }
 
@@ -1314,7 +1397,7 @@ plot_matchup_Error_Bias <- function(df, var_name, x_sensor, y_sensor){
   pl_Error <- df |> 
     filter(!is.na(!!sym(x_sensor)), !is.na(!!sym(y_sensor))) |> 
     ggplot(aes_string(x = x_sensor, y = y_sensor)) +
-    geom_point(aes(colour = Error)) +
+    geom_point(aes(colour = Error_50)) +
     geom_abline(slope = 1, intercept = 0, color = "black", linetype = "dashed") +
     scale_colour_viridis_c(option = "D") +
     labs(title = paste(var_name,"-", x_sensor, "vs", y_sensor,"- Error"),
@@ -1327,7 +1410,7 @@ plot_matchup_Error_Bias <- function(df, var_name, x_sensor, y_sensor){
   pl_Bias <- df |>
     filter(!is.na(!!sym(x_sensor)), !is.na(!!sym(y_sensor))) |> 
     ggplot(aes_string(x = x_sensor, y = y_sensor)) +
-    geom_point(aes(colour = Bias)) +
+    geom_point(aes(colour = Bias_50)) +
     geom_abline(slope = 1, intercept = 0, color = "black", linetype = "dashed") +
     scale_colour_viridis_c(option = "A") +
     labs(title = paste(var_name,"-", x_sensor, "vs", y_sensor,"- Bias"),

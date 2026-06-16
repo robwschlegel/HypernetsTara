@@ -410,14 +410,27 @@ wave_length_bands <- c(380, 400, 412, 443, 490, 510, 560, 620, 673, 700)
 
 # Load in situ and PACE data separately to filter specific wavebands
 # NB: Careful with the exact indexing of files here
-global_stats_wavelengths <- map_dfr(dir("output", pattern = "global", full.names = TRUE)[c(2:6, 8)], read_csv, show_col_types = FALSE) |> 
-  filter(Wavelength_nm %in% wave_length_bands)
+global_stats_wavelengths <- map_dfr(dir("output", pattern = "global", full.names = TRUE)[c(3:7, 9)], read_csv, show_col_types = FALSE) |> 
+  filter(wavelength %in% wave_length_bands)
 
 # Load all global stats
 # NB: Careful with the exact indexing of files here
-global_stats_all <- map_dfr(dir("output", pattern = "global", full.names = TRUE)[c(7, 9, 10)], read_csv, show_col_types = FALSE) |> 
-  bind_rows(global_stats_wavelengths)
+global_stats_all <- map_dfr(dir("output", pattern = "global", full.names = TRUE)[c(8, 10, 11)], read_csv, show_col_types = FALSE) |> 
+  bind_rows(global_stats_wavelengths) |> 
+  arrange(var_name, sensor_X, sensor_Y, wavelength)
 write_csv(global_stats_all, file = "output/global_stats_all.csv")
+
+# Pretty file for easier upload to Google doc
+global_stats_all_pretty <- global_stats_all |> 
+  filter(sensor_X %in% c("HYPERNETS", "TRIOS", "HYPERPRO")) |> 
+  # filter(var_name == "RHOW") |>
+  # filter(Wavelength_nm >= 400, Wavelength_nm <= 600) |>
+  # filter(wavelength %in% wave_length_bands) |> 
+  mutate(Slope_II_CI = paste0(formatC(Slope_II, digits = 2, format = "f"), "±", 
+                              formatC(abs((Slope_II_high - Slope_II_low)/2), digits = 2, format = "f"))) |> 
+  dplyr::select(var_name, sensor_X, sensor_Y, wavelength, n_w_nm_clean, Slope_II_CI, Slope_II_slope_bias_sig, Bias_50, Error_50, MRD_50, MARD_50) |> 
+  arrange(var_name, sensor_X, sensor_Y, wavelength)
+write_csv(global_stats_all_pretty, file = "output/global_stats_all_pretty.csv")
 
 # Visualise difference between linear-space and log-space slopes
 # global_stats_all |> 
@@ -579,11 +592,11 @@ match_base |>
 # Check individual global values ------------------------------------------
 
 # Choose acordingly
-folder_path <- file_path_build("RHOW", "HYPERNETS", "HYPERPRO")
+folder_path <- file_path_build("ED", "HYPERNETS", "HYPERPRO")
 
 # List all files in directory
 file_list <- list.files(folder_path, pattern = "*.csv", full.names = TRUE)
-match_base_details <- read_csv("~/HypernetsTara/output/matchup_stats_RHOW_in_situ.csv") |>
+match_base_details <- read_csv("~/HypernetsTara/output/matchup_stats_ED_in_situ.csv") |>
   dplyr::select(file_name) |> distinct()
 file_list_clean <- file_list[basename(file_list) %in% match_base_details$file_name]
 
@@ -596,7 +609,7 @@ match_base <- map_dfr(file_list_clean, load_matchup_long)
 # W_nm <- c(380, 400, 412, 443, 490, 510, 560, 620, 673, 700)
 
 # Get data.frame for matchup based on the wavelength of choice
-(matchup_filt <- filter(match_base, wavelength == W_nm[10]))
+(matchup_filt <- filter(match_base, wavelength == W_nm[3]))
 
 # Create vectors from filtered columns
 (x_vec <- matchup_filt[["HYPERPRO"]])
@@ -619,9 +632,10 @@ error_pahlevan_final <- 10^error_pahlevan - 1
 message("Error (%) : ", round(error_pahlevan_final * 100, 2))
 
 # Plot data
-match_base |> filter(wavelength == W_nm[8]) |> 
+match_base |> filter(wavelength == W_nm[3]) |> 
   ggplot(aes(x = HYPERPRO, y = Hyp)) +
-  geom_point(aes(colour = wavelength))
+  geom_point(aes(colour = wavelength)) +
+  geom_smooth(method = "lm")
 
 
 # Check individual spatial matchups --------------------------------------
