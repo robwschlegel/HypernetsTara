@@ -189,16 +189,18 @@ load_matchups_folder <- function(var_name, sensor_X, sensor_Y, long = FALSE){
   file_list_clean <- file_list[!grepl("all|global", file_list)]
   
   # Load data
-  furrr::plan(multicore, workers = 10)   # use 10 cores
+  # furrr::plan(multicore, workers = 10)   # use 10 cores
   if(long){
-    # match_base <- plyr::ldply(file_list_clean, load_matchup_long, .parallel = TRUE)
-    match_base <- furrr::future_map_dfr(file_list_clean, load_matchup_long)
+    registerDoParallel(cores = 14)
+    match_base <- plyr::ldply(file_list_clean, load_matchup_long, .parallel = TRUE)
+    # match_base <- furrr::future_map_dfr(file_list_clean, load_matchup_long)
     # print(unique(match_base$wavelength))
   } else {
-    # match_base <- plyr::ldply(file_list_clean, load_matchup_mean, .parallel = TRUE)
-    match_base <- furrr::future_map_dfr(file_list_clean, load_matchup_mean)
+    registerDoParallel(cores = 14)
+    match_base <- plyr::ldply(file_list_clean, load_matchup_mean, .parallel = TRUE)
+    # match_base <- furrr::future_map_dfr(file_list_clean, load_matchup_mean)
   }
-  furrr::plan(sequential)
+  # furrr::plan(sequential)
 
   # Exit
   return(match_base)
@@ -1576,15 +1578,31 @@ plot_matchup_single_nm <- function(df, sensor_X, sensor_Y){
   pl_single <- pl_base +
     # Add 1:1 line
     geom_abline(slope = 1, intercept = 0, color = "black", linetype = "solid") +
-    # Add global stats linear model
-    geom_smooth(method = "lm", formula = y ~ x, colour = "white", alpha = 0.5, linewidth = 1.5, linetype = "solid", se = FALSE) +
-    geom_smooth(method = "lm", formula = y ~ x, colour = "black", linewidth = 1, linetype = "dashed", se = FALSE) +
+    # Add model II linear models and 95% CI
+    ## Bottom CI
+    geom_abline(slope = df_stats$Slope_II_low, intercept = df_stats$Slope_II_int_low, 
+                colour = "white", alpha = 0.5, linewidth = 1.5, linetype = "solid") +
+    geom_abline(slope = df_stats$Slope_II_low, intercept = df_stats$Slope_II_int_low, 
+                colour = "grey", linewidth = 1.0, linetype = "dashed") +
+    # Mid
+    geom_abline(slope = df_stats$Slope_II, intercept = df_stats$Slope_II_int, 
+                colour = "white", alpha = 0.5, linewidth = 1.5, linetype = "solid") +
+    geom_abline(slope = df_stats$Slope_II, intercept = df_stats$Slope_II_int, 
+                colour = "black", linewidth = 1.0, linetype = "dashed") +
+    ## Top CI
+    geom_abline(slope = df_stats$Slope_II_high, intercept = df_stats$Slope_II_int_high, 
+                colour = "white", alpha = 0.5, linewidth = 1.5, linetype = "solid") +
+    geom_abline(slope = df_stats$Slope_II_high, intercept = df_stats$Slope_II_int_high, 
+                colour = "grey", linewidth = 1.0, linetype = "dashed") +
+    # geom_smooth(method = "lm", formula = y ~ x, colour = "white", alpha = 0.5, linewidth = 1.5, linetype = "solid", se = FALSE) +
+    # geom_smooth(method = "lm", formula = y ~ x, colour = "black", linewidth = 1, linetype = "dashed", se = FALSE) +
     # Add global stats text
     annotate(geom = "text", x = 0, y = max_axis, hjust = 0, vjust = 1, size = 4,
              label = paste0("n: ", df_stats$n,
-                            "\nS: ", sprintf("%.2f", df_stats$Slope), 
-                            "\nβ: ", sprintf("%.1f", df_stats$Bias),
-                            "% \nϵ: ", sprintf("%.1f", df_stats$Error),"%")) +
+                            "\nS: ", sprintf("%.2f", df_stats$Slope_II), "±",
+                                sprintf("%.2f", abs((df_stats$Slope_II_high - df_stats$Slope_II_low)/2)), 
+                            "\nβ: ", sprintf("%.1f", df_stats$Bias_50),
+                            "% \nϵ: ", sprintf("%.1f", df_stats$Error_50),"%")) +
     # Make it pretty
     labs(x = paste0(sensor_X,"; ", var_labs$units_lab),
          y = paste0(sensor_Y,"; ", var_labs$units_lab),
@@ -1665,22 +1683,31 @@ plot_global_nm <- function(df, var_name, sensor_X, sensor_Y){
   pl_clean <- pl_base +
     # Add 1:1 line
     geom_abline(slope = 1, intercept = 0, color = "black", linetype = "solid") +
-    # Add global stats linear model
-    geom_smooth(method = "lm", formula = y ~ x, colour = "white", linewidth = 1.5, linetype = "solid", se = FALSE) +
-    geom_smooth(method = "lm", formula = y ~ x, colour = "black", linewidth = 1, linetype = "dashed", se = FALSE) +
-    # Add dashed linear model lines for each waveband
-    # geom_smooth(data = df_sub, method = "lm", formula = y ~ x, linewidth = 1, linetype = "dashed", se = FALSE,
-    #             aes(group = as.factor(wavelength)), colour = "black", show.legend = FALSE) +
-    # geom_smooth(data = df_sub, method = "lm", formula = y ~ x, linewidth = 1.5, linetype = "solid", se = FALSE,
-    #             aes(group = as.factor(wavelength)), colour = "white", alpha = 0.7, show.legend = FALSE) +
-    # geom_smooth(data = df_sub, method = "lm", formula = y ~ x, linewidth = 1, linetype = "dashed", se = FALSE,
-    #             aes(colour = wavelength_group, group = as.factor(wavelength)), alpha = 0.7, show.legend = FALSE) +
+    # Add model II linear models and 95% CI
+    ## Bottom CI
+    geom_abline(slope = df_stats$Slope_II_low, intercept = df_stats$Slope_II_int_low, 
+                colour = "white", alpha = 0.5, linewidth = 1.5, linetype = "solid") +
+    geom_abline(slope = df_stats$Slope_II_low, intercept = df_stats$Slope_II_int_low, 
+                colour = "grey", linewidth = 1.0, linetype = "dashed") +
+    # Mid
+    geom_abline(slope = df_stats$Slope_II, intercept = df_stats$Slope_II_int, 
+                colour = "white", alpha = 0.5, linewidth = 1.5, linetype = "solid") +
+    geom_abline(slope = df_stats$Slope_II, intercept = df_stats$Slope_II_int, 
+                colour = "black", linewidth = 1.0, linetype = "dashed") +
+    ## Top CI
+    geom_abline(slope = df_stats$Slope_II_high, intercept = df_stats$Slope_II_int_high, 
+                colour = "white", alpha = 0.5, linewidth = 1.5, linetype = "solid") +
+    geom_abline(slope = df_stats$Slope_II_high, intercept = df_stats$Slope_II_int_high, 
+                colour = "grey", linewidth = 1.0, linetype = "dashed") +
+    # geom_smooth(method = "lm", formula = y ~ x, colour = "white", alpha = 0.5, linewidth = 1.5, linetype = "solid", se = FALSE) +
+    # geom_smooth(method = "lm", formula = y ~ x, colour = "black", linewidth = 1, linetype = "dashed", se = FALSE) +
     # Add global stats text
     annotate(geom = "text", x = 0, y = max_axis, hjust = 0, vjust = 1, size = 4,
-             label = paste0("n: ", n_files,
-                            "\nS: ", sprintf("%.2f", df_stats$Slope), 
-                            "\nβ: ", sprintf("%.1f", df_stats$Bias),
-                            "% \nϵ: ", sprintf("%.1f", df_stats$Error),"%")) +
+             label = paste0("n: ", df_stats$n,
+                            "\nS: ", sprintf("%.2f", df_stats$Slope_II), "±",
+                                sprintf("%.2f", abs((df_stats$Slope_II_high - df_stats$Slope_II_low)/2)), 
+                            "\nβ: ", sprintf("%.1f", df_stats$Bias_50),
+                            "% \nϵ: ", sprintf("%.1f", df_stats$Error_50),"%")) +
     # Make it pretty
     labs(x = paste0(sensor_X_labs$sensor_lab,"; ", var_labs$units_lab),
          y = paste0(sensor_Y_labs$sensor_lab,"; ", var_labs$units_lab),

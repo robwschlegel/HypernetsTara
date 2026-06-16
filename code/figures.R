@@ -217,7 +217,7 @@ global_triptych_stack <- function(var_name, sensor_Z){
 # In situ
 global_triptych_stack("insitu", "HYPERPRO")
 global_triptych_stack("RHOW", "HYPERPRO")
- 
+
 # Remote
 global_triptych_stack("RHOW", "MODIS")
 global_triptych_stack("RHOW", "VIIRS")
@@ -279,8 +279,17 @@ pl_spect <- ggplot(data = pro_all_long, aes(x = wavelength, y = rhow, colour = s
   geom_point(data = filter(pro_all_long, sensor == "VIIRS SNPP"), size = 3, show.legend = FALSE) +
   geom_errorbar(data = filter(pro_all_long, sensor == "VIIRS SNPP"), 
                 aes(ymin = std_min, ymax = std_max), width = 5) +
+  # geom_errorbar(data = filter(pro_all_long, sensor == "HyperPRO", wavelength %in% seq(380, 700, 30)), 
+  #               aes(ymin = std_min, ymax = std_max), width = 5) +
+  # geom_errorbar(data = filter(pro_all_long, sensor == "So-Rad", wavelength %in% seq(385, 700, 30)), 
+  #               aes(ymin = std_min, ymax = std_max), width = 5) +
+  # geom_errorbar(data = filter(pro_all_long, sensor == "PACE v3.1", wavelength %in% seq(390, 700, 30)), 
+  #               aes(ymin = std_min, ymax = std_max), width = 5) +
+  # geom_ribbon(data = filter(pro_all_long, sensor != "VIIRS SNPP"), alpha = 0.1,
+  #             aes(ymin = std_min, ymax = std_max, fill = sensor)) +
   # scale_colour_brewer(palette = "Dark2") +
-  scale_colour_manual(values = c("darkred", "darkorange", "goldenrod", "skyblue", "dodgerblue", "royalblue", "limegreen")) +
+  scale_colour_manual(values = c("darkred", "darkorange", "goldenrod", "skyblue", "dodgerblue", "royalblue", "limegreen"), 
+                      aesthetics = c("colour", "fill")) +
   # scale_x_continuous(expand = FALSE) +
   guides(colour = guide_legend(override.aes = list(alpha = 1.0, linewidth = 3))) +
   labs(x = "Wavelength (nm)",
@@ -296,6 +305,7 @@ pl_spect <- ggplot(data = pro_all_long, aes(x = wavelength, y = rhow, colour = s
         axis.title.x = element_text(size = 12),
         axis.title.y = element_markdown(size = 12),
         axis.text = element_text(size = 10))
+# pl_spect
 
 # Prep each jpg
 pl_ld <- ggplot() +
